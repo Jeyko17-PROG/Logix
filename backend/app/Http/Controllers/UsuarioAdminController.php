@@ -1,0 +1,332 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Auditoria;
+use App\Models\Cliente;
+use App\Models\Plan;
+use App\Models\Role;
+use App\Models\User;
+use App\Models\UserFuncionalidad;
+use App\Support\Funcionalidades;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
+/**
+ * Panel del Super Administrador: gestión de usuarios y licencias.
+ * Todas las rutas de este controlador están protegidas por el middleware 'superadmin'.
+ */
+class UsuarioAdminController extends Controller
+{
+    /** Conteo de clientes por propietario (saltando el filtro multi-inquilino). */
+    private function clientesPorOwner(): \Illuminate\Support\Collection
+    {
+        return Cliente::withoutGlobalScopes()
+            ->selectRaw('owner_id, COUNT(*) as total')
+            ->groupBy('owner_id')
+            ->pluck('total', 'owner_id');
+    }
+
+    /** Serializa un usuario con sus datos de plan/estado/clientes. */
+    private function serializar(User $u, \Illuminate\Support\Collection $conteos): array
+    {
+        $limite = $u->limiteClientesEfectivo();
+        $usados = (int) ($conteos[$u->id] ?? 0);
+
+        return [
+            'id' => $u->id,
+            'name' => $u->name,
+            'tipo_documento' => $u->tipo_documento,
+            'numero_documento' => $u->numero_documento,
+            'email' => $u->email,
+            'telefono' => $u->telefono,
+            'rol' => $u->rol?->nombre,
+            'plan' => $u->plan ? ['id' => $u->plan->id, 'nombre' => $u->plan->nombre] : null,
+            'estado' => $u->estado,
+            'es_super_admin' => (bool) $u->es_super_admin,
+            'limite_clientes' => $limite === PHP_INT_MAX ? null : $limite,
+            'limite_manual' => $u->limite_clientes,
+            'clientes_usados' => $usados,
+            'clientes_disponibles' => $limite === PHP_INT_MAX ? null : max(0, $limite - $usados),
+            'fecha_registro' => $u->created_at?->toIso8601String(),
+            'ultimo_acceso' => $u->ultimo_acceso?->toIso8601String(),
+        ];
+    }
+
+    /** Listado de usuarios registrados (módulo "Usuarios Registrados"). */
+    public function index(Request $request): JsonResponse
+    {
+        $q = User::with('rol', 'plan');
+
+        if ($buscar = $request->query('buscar')) {
+            $q->where(function ($sub) use ($buscar) {
+                $sub->where('name', 'like', "%{$buscar}%")
+                    ->orWhere('email', 'like', "%{$buscar}%")
+                    ->orWhere('numero_documento', 'like', "%{$buscar}%");
+            });
+        }
+        if ($estado = $request->query('estado')) {
+            $q->where('estado', $estado);
+        }
+
+        $usuarios = $q->orderByDesc('id')->get();
+        $conteos = $this->clientesPorOwner();
+
+        return response()->json(
+            $usuarios->map(fn ($u) => $this->serializar($u, $conteos))->values()
+        );
+    }
+
+    /** Sección "Administración de Licencias": foco en plan / límite / consumo. */
+    public function licencias(): JsonResponse
+    {
+        $usuarios = User::with('plan')->orderByDesc('id')->get();
+        $conteos = $this->clientesPorOwner();
+
+        return response()->json(
+            $usuarios->map(fn ($u) => $this->serializar($u, $conteos))->values()
+        );
+    }
+
+    public function update(Request $request, User $usuario): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'tipo_documento' => ['nullable', 'in:CC,CE,NIT,PAS'],
+            'numero_documento' => ['nullable', 'string', 'max:50'],
+            'telefono' => ['nullable', 'string', 'max:50'],
+            'email' => ['required', 'email', 'unique:users,email,' . $usuario->id],
+        ]);
+
+        $usuario->update($data);
+        $conteos = $this->clientesPorOwner();
+
+        return response()->json($this->serializar($usuario->fresh('rol', 'plan'), $conteos));
+    }
+
+    public function cambiarEstado(Request $request, User $usuario): JsonResponse
+    {
+        if ($usuario->es_super_admin) {
+            return response()->json(['message' => 'No se puede cambiar el estado del Super Administrador.'], 422);
+        }
+
+        $data = $request->validate([
+            'estado' => ['required', 'in:ACTIVO,SUSPENDIDO,DESACTIVADO'],
+        ]);
+
+        $anterior = $usuario->estado;
+        $usuario->update([
+            'estado' => $data['estado'],
+            'activo' => $data['estado'] === 'ACTIVO',
+        ]);
+
+        // Si queda inactivo, revoca sus sesiones.
+        if ($data['estado'] !== 'ACTIVO') {
+            $usuario->tokens()->delete();
+        }
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'ESTADO', null, $anterior, $data['estado']);
+
+        $conteos = $this->clientesPorOwner();
+        return response()->json($this->serializar($usuario->fresh('rol', 'plan'), $conteos));
+    }
+
+    public function cambiarPlan(Request $request, User $usuario): JsonResponse
+    {
+        $data = $request->validate([
+            'plan_id' => ['required', 'exists:plans,id'],
+        ]);
+
+        $anterior = $usuario->plan?->nombre;
+        $usuario->update(['plan_id' => $data['plan_id']]);
+        $usuario->load('plan');
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'PLAN', null, $anterior, $usuario->plan?->nombre);
+
+        // Notifica al usuario afectado (notificación de usuario, solo él la ve).
+        app(\App\Services\Notificador::class)->aUsuario(
+            $usuario->id, 'PLAN', 'Tu plan fue actualizado',
+            "Tu plan ahora es {$usuario->plan?->nombre}."
+        );
+
+        $conteos = $this->clientesPorOwner();
+        return response()->json($this->serializar($usuario->fresh('rol', 'plan'), $conteos));
+    }
+
+    public function cambiarLimite(Request $request, User $usuario): JsonResponse
+    {
+        $data = $request->validate([
+            // null = volver a usar el límite del plan.
+            'limite_clientes' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $anterior = $usuario->limite_clientes;
+        $usuario->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'LIMITE', null, (string) $anterior, (string) ($data['limite_clientes'] ?? 'plan'));
+
+        $conteos = $this->clientesPorOwner();
+        return response()->json($this->serializar($usuario->fresh('rol', 'plan'), $conteos));
+    }
+
+    /**
+     * Eliminación LÓGICA: el usuario no podrá iniciar sesión; la información
+     * permanece para auditoría (soft delete).
+     */
+    public function eliminar(Request $request, User $usuario): JsonResponse
+    {
+        if ($usuario->es_super_admin) {
+            return response()->json(['message' => 'No se puede eliminar al Super Administrador.'], 422);
+        }
+
+        $usuario->tokens()->delete();
+        $usuario->update(['estado' => 'DESACTIVADO', 'activo' => false]);
+        $usuario->delete(); // soft delete
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'ELIMINAR', 'LOGICA', $usuario->email, $usuario->name);
+
+        return response()->json(['message' => 'Usuario eliminado (eliminación lógica). Su información queda disponible para auditoría.']);
+    }
+
+    /**
+     * Eliminación PERMANENTE: borra el usuario y TODA su información asociada
+     * (clientes, citas, facturas, inventario, productos, notas, etc.). Irreversible.
+     */
+    public function eliminarPermanente(Request $request, User $usuario): JsonResponse
+    {
+        if ($usuario->es_super_admin) {
+            return response()->json(['message' => 'No se puede eliminar al Super Administrador.'], 422);
+        }
+
+        $userId = $usuario->id;
+        $email = $usuario->email;
+        $nombre = $usuario->name;
+
+        // Tablas de datos del inquilino (por owner_id).
+        $tablas = [
+            'clientes', 'citas', 'facturas', 'notas', 'productos', 'movimientos_inventario',
+            'proveedores', 'categorias', 'bodegas', 'servicios', 'ordenes_compra',
+            'stock_por_bodega', 'documentos', 'horarios_laborales', 'bloqueos_agenda', 'ajustes_agenda',
+        ];
+
+        DB::transaction(function () use ($userId, $tablas, $usuario) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+            // Hijos (detalles) de los registros del propietario.
+            DB::table('factura_detalle')->whereIn('factura_id', fn ($q) => $q->select('id')->from('facturas')->where('owner_id', $userId))->delete();
+            DB::table('orden_compra_detalle')->whereIn('orden_compra_id', fn ($q) => $q->select('id')->from('ordenes_compra')->where('owner_id', $userId))->delete();
+            DB::table('producto_proveedor')->whereIn('producto_id', fn ($q) => $q->select('id')->from('productos')->where('owner_id', $userId))->delete();
+
+            foreach ($tablas as $t) {
+                DB::table($t)->where('owner_id', $userId)->delete();
+            }
+
+            DB::table('notificaciones')->where('user_id', $userId)->delete();
+            DB::table('user_funcionalidades')->where('user_id', $userId)->delete();
+            $usuario->tokens()->delete();
+            $usuario->forceDelete();
+
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        });
+
+        Auditoria::registrar($request->user()->id, null, 'ELIMINAR', 'PERMANENTE', $email, $nombre);
+
+        return response()->json(['message' => "Usuario {$email} y toda su información fueron eliminados permanentemente."]);
+    }
+
+    // ===== Control de Funcionalidades (por usuario) =====
+
+    /** Matriz de funcionalidades de un usuario: catálogo + estado efectivo + override. */
+    public function funcionalidades(User $usuario): JsonResponse
+    {
+        $overrides = UserFuncionalidad::where('user_id', $usuario->id)->pluck('estado', 'clave');
+
+        $items = [];
+        foreach (Funcionalidades::CATALOGO as $clave => $label) {
+            $items[] = [
+                'clave' => $clave,
+                'label' => $label,
+                'estado' => Funcionalidades::estadoEfectivo($usuario, $clave),
+                'override' => $overrides[$clave] ?? null,
+                'por_plan' => Funcionalidades::estadoPorPlan($usuario->plan?->nombre, $clave),
+            ];
+        }
+
+        return response()->json([
+            'usuario' => ['id' => $usuario->id, 'name' => $usuario->name, 'plan' => $usuario->plan?->nombre],
+            'estados' => Funcionalidades::ESTADOS,
+            'items' => $items,
+        ]);
+    }
+
+    /** Guarda overrides de funcionalidades de un usuario. */
+    public function guardarFuncionalidades(Request $request, User $usuario): JsonResponse
+    {
+        $data = $request->validate([
+            'clave' => ['required', 'string', 'in:' . implode(',', array_keys(Funcionalidades::CATALOGO))],
+            'estado' => ['required', 'in:' . implode(',', Funcionalidades::ESTADOS)],
+        ]);
+
+        $anterior = Funcionalidades::estadoEfectivo($usuario, $data['clave']);
+
+        UserFuncionalidad::updateOrCreate(
+            ['user_id' => $usuario->id, 'clave' => $data['clave']],
+            ['estado' => $data['estado']],
+        );
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'FUNCIONALIDAD', $data['clave'], $anterior, $data['estado']);
+
+        return $this->funcionalidades($usuario->fresh('plan'));
+    }
+
+    /** Restablece las funcionalidades del usuario a los valores por defecto de su plan. */
+    public function aplicarPlanFuncionalidades(Request $request, User $usuario): JsonResponse
+    {
+        UserFuncionalidad::where('user_id', $usuario->id)->delete();
+        Auditoria::registrar($request->user()->id, $usuario->id, 'FUNCIONALIDAD', '*', 'override', 'plan:' . ($usuario->plan?->nombre ?? '-'));
+
+        return $this->funcionalidades($usuario->fresh('plan'));
+    }
+
+    /** Bitácora de cambios del Super Administrador. */
+    public function auditorias(): JsonResponse
+    {
+        $registros = Auditoria::with(['admin:id,name', 'usuario:id,name,email'])
+            ->latest()
+            ->limit(200)
+            ->get()
+            ->map(fn ($a) => [
+                'id' => $a->id,
+                'admin' => $a->admin?->name,
+                'usuario' => $a->usuario?->name,
+                'usuario_email' => $a->usuario?->email,
+                'accion' => $a->accion,
+                'funcionalidad' => $a->funcionalidad,
+                'estado_anterior' => $a->estado_anterior,
+                'estado_nuevo' => $a->estado_nuevo,
+                'fecha' => $a->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json($registros);
+    }
+
+    public function restablecerPassword(Request $request, User $usuario): JsonResponse
+    {
+        $data = $request->validate([
+            // Si no envían contraseña, se genera una temporal.
+            'password' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        $nueva = $data['password'] ?? Str::password(10);
+        $usuario->update(['password' => Hash::make($nueva)]);
+        $usuario->tokens()->delete(); // cierra sesiones activas
+
+        return response()->json([
+            'message' => 'Contraseña restablecida correctamente.',
+            'password_temporal' => $nueva,
+        ]);
+    }
+}

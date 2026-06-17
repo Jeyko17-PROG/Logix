@@ -1,0 +1,224 @@
+<?php
+
+use App\Http\Controllers\AdjuntoController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BodegaController;
+use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\CitaController;
+use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\ConfiguracionAgendaController;
+use App\Http\Controllers\DocumentoController;
+use App\Http\Controllers\ExtraccionController;
+use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\FeatureController;
+use App\Http\Controllers\FirmaController;
+use App\Http\Controllers\NotaController;
+use App\Http\Controllers\NotificacionController;
+use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\OrdenCompraController;
+use App\Http\Controllers\PortalController;
+use App\Http\Controllers\PlanController;
+use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\ServicioController;
+use App\Http\Controllers\UsuarioAdminController;
+use Illuminate\Support\Facades\Route;
+
+// --- Salud / prueba de conexión ---
+Route::get('/ping', function () {
+    return response()->json([
+        'message' => 'conectado',
+        'app' => config('app.name'),
+        'time' => now()->toIso8601String(),
+    ]);
+});
+
+// --- Autenticación (público) ---
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+
+// --- BLOQUE C: Portal público de reservas (sin autenticación, destino del QR) ---
+// Versión POR USUARIO: cada negocio tiene su slug único en la URL.
+Route::prefix('publico/{slug}')->group(function () {
+    Route::get('negocio', [PortalController::class, 'negocio']);
+    Route::get('servicios', [PortalController::class, 'servicios']);
+    Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
+    Route::post('reservar', [PortalController::class, 'reservar']);
+    Route::get('mis-citas', [PortalController::class, 'misCitas']);
+    Route::post('citas/{cita}/cancelar', [PortalController::class, 'cancelar']);
+});
+
+// Compatibilidad: enlace antiguo sin slug → negocio principal.
+Route::prefix('publico')->group(function () {
+    Route::get('servicios', [PortalController::class, 'servicios']);
+    Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
+    Route::post('reservar', [PortalController::class, 'reservar']);
+    Route::get('mis-citas', [PortalController::class, 'misCitas']);
+    Route::post('citas/{cita}/cancelar', [PortalController::class, 'cancelar']);
+});
+
+// --- Rutas protegidas (requieren token Sanctum) ---
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Perfil del usuario autenticado
+    Route::put('/perfil', [ProfileController::class, 'update']);
+    Route::post('/perfil/foto', [ProfileController::class, 'uploadFoto']);
+    Route::put('/perfil/password', [ProfileController::class, 'cambiarPassword']);
+
+    // Catálogo de planes (visible para usuarios autenticados: dashboard, "actualizar plan")
+    Route::get('/planes', [PlanController::class, 'index']);
+
+    // Funcionalidades del usuario autenticado (el frontend oculta/restringe módulos)
+    Route::get('/mis-funcionalidades', [FeatureController::class, 'mias']);
+
+    // ===== Panel del Super Administrador (solo super-admin) =====
+    Route::middleware('superadmin')->prefix('admin')->group(function () {
+        // Usuarios registrados
+        Route::get('usuarios', [UsuarioAdminController::class, 'index']);
+        Route::put('usuarios/{usuario}', [UsuarioAdminController::class, 'update']);
+        Route::post('usuarios/{usuario}/estado', [UsuarioAdminController::class, 'cambiarEstado']);
+        Route::post('usuarios/{usuario}/plan', [UsuarioAdminController::class, 'cambiarPlan']);
+        Route::post('usuarios/{usuario}/limite', [UsuarioAdminController::class, 'cambiarLimite']);
+        Route::post('usuarios/{usuario}/restablecer-password', [UsuarioAdminController::class, 'restablecerPassword']);
+        Route::delete('usuarios/{usuario}', [UsuarioAdminController::class, 'eliminar']);
+        Route::delete('usuarios/{usuario}/permanente', [UsuarioAdminController::class, 'eliminarPermanente']);
+
+        // Control de Funcionalidades (por usuario)
+        Route::get('usuarios/{usuario}/funcionalidades', [UsuarioAdminController::class, 'funcionalidades']);
+        Route::put('usuarios/{usuario}/funcionalidades', [UsuarioAdminController::class, 'guardarFuncionalidades']);
+        Route::post('usuarios/{usuario}/funcionalidades/aplicar-plan', [UsuarioAdminController::class, 'aplicarPlanFuncionalidades']);
+
+        // Administración de licencias
+        Route::get('licencias', [UsuarioAdminController::class, 'licencias']);
+
+        // Bitácora de auditoría
+        Route::get('auditorias', [UsuarioAdminController::class, 'auditorias']);
+
+        // Gestión de planes
+        Route::post('planes', [PlanController::class, 'store']);
+        Route::put('planes/{plan}', [PlanController::class, 'update']);
+    });
+
+    // Ejemplo de ruta restringida por rol (RBAC) — solo Administrador
+    Route::get('/admin/ping', function () {
+        return response()->json(['message' => 'Hola, Administrador.']);
+    })->middleware('role:Administrador');
+
+    // ===== FASE 3: Inventario y Proveedores =====
+
+    // --- Lecturas: cualquier usuario autenticado ---
+    Route::get('categorias', [CategoriaController::class, 'index']);
+    Route::get('bodegas', [BodegaController::class, 'index'])->middleware('feature:inventario');
+    Route::get('productos', [ProductoController::class, 'index'])->middleware('feature:productos');
+    Route::get('productos/{producto}', [ProductoController::class, 'show'])->middleware('feature:productos');
+    Route::middleware('feature:inventario')->group(function () {
+        Route::get('inventario/stock', [InventarioController::class, 'stock']);
+        Route::get('inventario/movimientos', [InventarioController::class, 'movimientos']);
+        Route::get('inventario/alertas', [InventarioController::class, 'alertas']);
+    });
+
+    // --- Proveedores: Administrador y Ventas/Compras ---
+    Route::middleware('role:Administrador,Ventas/Compras')->group(function () {
+        // Lectura inteligente de documentos (autocompletar con la API de Claude) — solo planes con OCR
+        Route::post('proveedores/extraer', [ExtraccionController::class, 'proveedor'])->middleware('feature:ocr');
+        Route::apiResource('proveedores', ProveedorController::class)->parameters(['proveedores' => 'proveedor'])->middleware('feature:proveedores');
+    });
+
+    // --- Escritura de inventario: Administrador y Almacenista ---
+    Route::middleware('role:Administrador,Almacenista')->group(function () {
+        Route::apiResource('categorias', CategoriaController::class)->only(['store', 'update', 'destroy']);
+        Route::apiResource('bodegas', BodegaController::class)->only(['store', 'update', 'destroy'])->middleware('feature:inventario');
+        Route::post('bodegas/{bodega}/principal', [BodegaController::class, 'definirPrincipal'])->middleware('feature:inventario');
+        Route::post('productos/{producto}/update', [ProductoController::class, 'update'])->middleware('feature:productos'); // multipart (imagen)
+        Route::apiResource('productos', ProductoController::class)->only(['store', 'update', 'destroy'])->middleware('feature:productos');
+
+        Route::post('inventario/movimientos', [InventarioController::class, 'registrarMovimiento'])->middleware('feature:inventario');
+        Route::post('inventario/minimo', [InventarioController::class, 'definirMinimo'])->middleware('feature:inventario');
+    });
+
+    // ===== BLOQUE A: Clientes (CRM) =====
+    Route::middleware(['role:Administrador,Ventas/Compras,Empleado', 'feature:clientes'])->group(function () {
+        Route::apiResource('clientes', ClienteController::class);
+    });
+
+    // ===== BLOQUE B: Agenda, Citas y Servicios =====
+    Route::get('servicios', [ServicioController::class, 'index']);
+    Route::get('citas', [CitaController::class, 'index']);
+    Route::get('citas/disponibilidad', [CitaController::class, 'disponibilidad']);
+    Route::get('citas/{cita}', [CitaController::class, 'show']);
+    Route::get('agenda/configuracion', [ConfiguracionAgendaController::class, 'index']);
+
+    Route::middleware(['role:Administrador,Empleado', 'feature:agenda'])->group(function () {
+        Route::post('citas', [CitaController::class, 'store']);
+        Route::put('citas/{cita}', [CitaController::class, 'update']);
+        Route::post('citas/{cita}/reprogramar', [CitaController::class, 'reprogramar']);
+        Route::post('citas/{cita}/confirmar', [CitaController::class, 'confirmar']);
+        Route::post('citas/{cita}/cancelar', [CitaController::class, 'cancelar']);
+    });
+
+    // Configuración de servicios y calendario (solo Administrador)
+    Route::middleware('role:Administrador')->group(function () {
+        Route::post('servicios', [ServicioController::class, 'store']);
+        Route::put('servicios/{servicio}', [ServicioController::class, 'update']);
+        Route::delete('servicios/{servicio}', [ServicioController::class, 'destroy']);
+        Route::put('agenda/ajustes', [ConfiguracionAgendaController::class, 'guardarAjustes']);
+        Route::put('agenda/horarios', [ConfiguracionAgendaController::class, 'guardarHorarios']);
+        Route::post('agenda/bloqueos', [ConfiguracionAgendaController::class, 'crearBloqueo']);
+        Route::delete('agenda/bloqueos/{bloqueo}', [ConfiguracionAgendaController::class, 'eliminarBloqueo']);
+    });
+
+    // ===== FASE 4: Documentación y Firma electrónica =====
+
+    // Órdenes de compra (Administrador y Ventas/Compras)
+    Route::middleware('role:Administrador,Ventas/Compras')->group(function () {
+        Route::get('ordenes-compra', [OrdenCompraController::class, 'index']);
+        Route::post('ordenes-compra', [OrdenCompraController::class, 'store']);
+        Route::get('ordenes-compra/{orden}', [OrdenCompraController::class, 'show']);
+        Route::post('ordenes-compra/{orden}/recibir', [OrdenCompraController::class, 'recibir']);
+        Route::post('ordenes-compra/{orden}/pdf', [DocumentoController::class, 'generarOrdenCompra']);
+    });
+
+    // Gestión documental (adjuntos) de proveedores y clientes — solo planes con gestión documental
+    Route::middleware('feature:documental')->group(function () {
+        Route::get('adjuntos', [AdjuntoController::class, 'index']);
+        Route::post('adjuntos', [AdjuntoController::class, 'store']);
+        Route::post('adjuntos/{adjunto}/reemplazar', [AdjuntoController::class, 'reemplazar']);
+        Route::delete('adjuntos/{adjunto}', [AdjuntoController::class, 'destroy']);
+    });
+
+    // Documentos y firma (lectura para todos; firma para Administrador)
+    Route::get('documentos', [DocumentoController::class, 'index']);
+    Route::middleware('role:Administrador')->group(function () {
+        Route::post('documentos/{documento}/firma', [FirmaController::class, 'iniciar']);
+        Route::patch('firmas/{firma}', [FirmaController::class, 'actualizarEstado']);
+    });
+
+    // ===== FASE 5: Reportes, Dashboard y Exportación =====
+    Route::get('reportes/dashboard', [ReporteController::class, 'dashboard']);
+    Route::get('reportes/inventario/excel', [ReporteController::class, 'exportarInventarioExcel'])->middleware('feature:exportacion');
+
+    // ===== BLOQUE D: Facturación a clientes + Notificaciones =====
+    Route::middleware('feature:facturacion')->group(function () {
+        Route::get('facturas', [FacturaController::class, 'index']);
+        Route::get('facturas/{factura}', [FacturaController::class, 'show']);
+        Route::middleware('role:Administrador,Ventas/Compras')->group(function () {
+            Route::post('facturas', [FacturaController::class, 'store']);
+            Route::post('facturas/{factura}/pdf', [FacturaController::class, 'generarPdf'])->middleware('feature:pdf');
+            Route::post('facturas/{factura}/enviar', [FacturaController::class, 'enviar'])->middleware('feature:correos');
+        });
+    });
+
+    // Notificaciones (del usuario actual)
+    Route::get('notificaciones', [NotificacionController::class, 'index']);
+    Route::get('notificaciones/no-leidas', [NotificacionController::class, 'noLeidas']);
+    Route::post('notificaciones/marcar-leidas', [NotificacionController::class, 'marcarLeidas']);
+
+    // ===== BLOQUE E: Bloc de notas =====
+    Route::apiResource('notas', NotaController::class)->except('show')->middleware('feature:notas');
+});

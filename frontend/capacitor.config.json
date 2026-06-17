@@ -1,0 +1,17 @@
+{
+  "appId": "com.logix.app",
+  "appName": "Logix",
+  "webDir": "dist",
+  "backgroundColor": "#0f172a",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#0f172aff",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

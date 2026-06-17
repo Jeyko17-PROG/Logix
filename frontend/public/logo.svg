@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="lx" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#lx)"/>
+  <!-- Caja / inventario (isométrico) -->
+  <path d="M64 28 L98 46 V82 L64 100 L30 82 V46 Z" fill="#ffffff" fill-opacity="0.12"/>
+  <path d="M64 28 L98 46 L64 64 L30 46 Z" fill="#ffffff" fill-opacity="0.95"/>
+  <path d="M64 64 L98 46 V82 L64 100 Z" fill="#ffffff" fill-opacity="0.55"/>
+  <path d="M64 64 L30 46 V82 L64 100 Z" fill="#ffffff" fill-opacity="0.30"/>
+  <path d="M64 64 V100" stroke="#1d4ed8" stroke-opacity="0.25" stroke-width="2"/>
+</svg>

@@ -1,0 +1,150 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AjusteAgenda;
+use App\Models\BloqueoAgenda;
+use App\Models\Cita;
+use App\Models\HorarioLaboral;
+use App\Models\Scopes\OwnerScope;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Lógica de la agenda: disponibilidad en tiempo real y prevención de doble reserva.
+ */
+class AgendaService
+{
+    /**
+     * Calcula los horarios (slots) disponibles para una fecha dada.
+     *
+     * @return array<int, array{inicio:string, fin:string, disponible:bool}>
+     */
+    public function slotsDisponibles(Carbon $fecha, int $duracionMin, ?int $ownerId = null): array
+    {
+        $ownerId ??= Auth::id();
+        $ajustes = AjusteAgenda::actual($ownerId);
+        $buffer = $ajustes->buffer_min;
+
+        $diaSemana = (int) $fecha->dayOfWeek; // 0=domingo
+        $horarios = HorarioLaboral::withoutGlobalScope(OwnerScope::class)
+            ->where('owner_id', $ownerId)
+            ->where('dia_semana', $diaSemana)->where('activo', true)->get();
+
+        // Si el negocio aún no configuró horarios, usa una jornada por defecto (08:00–18:00)
+        // para que la agenda funcione desde el primer día.
+        if ($horarios->isEmpty() && $this->sinHorarios($ownerId)) {
+            $horarios = collect([new HorarioLaboral(['hora_inicio' => '08:00:00', 'hora_fin' => '18:00:00'])]);
+        }
+
+        $citas = $this->citasDelDia($fecha, $ownerId);
+        $bloqueos = $this->bloqueosDelDia($fecha, $ownerId);
+
+        $slots = [];
+        foreach ($horarios as $horario) {
+            $cursor = $fecha->copy()->setTimeFromTimeString($horario->hora_inicio);
+            $finJornada = $fecha->copy()->setTimeFromTimeString($horario->hora_fin);
+
+            while ($cursor->copy()->addMinutes($duracionMin)->lte($finJornada)) {
+                $slotInicio = $cursor->copy();
+                $slotFin = $cursor->copy()->addMinutes($duracionMin);
+
+                $disponible = ! $this->seSolapaConCitas($slotInicio, $slotFin, $citas)
+                    && ! $this->seSolapaConBloqueos($slotInicio, $slotFin, $bloqueos)
+                    && $slotInicio->isFuture();
+
+                $slots[] = [
+                    'inicio' => $slotInicio->toIso8601String(),
+                    'fin' => $slotFin->toIso8601String(),
+                    'disponible' => $disponible,
+                ];
+
+                $cursor->addMinutes($duracionMin + $buffer);
+            }
+        }
+
+        return $slots;
+    }
+
+    /**
+     * Verifica que un rango sea reservable; lanza ValidationException si no.
+     * Esta es la garantía contra la DOBLE RESERVA.
+     */
+    public function asegurarDisponible(Carbon $inicio, Carbon $fin, ?int $ignorarCitaId = null, ?int $ownerId = null): void
+    {
+        $ownerId ??= Auth::id();
+
+        if ($fin->lte($inicio)) {
+            throw ValidationException::withMessages(['fin' => ['La hora de fin debe ser posterior al inicio.']]);
+        }
+
+        // ¿Dentro del horario laboral del día?
+        // Si el negocio NO tiene horarios configurados, no se restringe por jornada
+        // (un usuario nuevo debe poder agendar sin configurar la agenda primero).
+        if (! $this->sinHorarios($ownerId)) {
+            $diaSemana = (int) $inicio->dayOfWeek;
+            $dentroJornada = HorarioLaboral::withoutGlobalScope(OwnerScope::class)
+                ->where('owner_id', $ownerId)
+                ->where('dia_semana', $diaSemana)->where('activo', true)
+                ->get()
+                ->contains(function ($h) use ($inicio, $fin) {
+                    $hi = $inicio->copy()->setTimeFromTimeString($h->hora_inicio);
+                    $hf = $inicio->copy()->setTimeFromTimeString($h->hora_fin);
+                    return $inicio->gte($hi) && $fin->lte($hf);
+                });
+
+            if (! $dentroJornada) {
+                throw ValidationException::withMessages(['inicio' => ['El horario está fuera de la jornada laboral.']]);
+            }
+        }
+
+        // ¿Choca con un bloqueo?
+        if ($this->seSolapaConBloqueos($inicio, $fin, $this->bloqueosDelDia($inicio, $ownerId))) {
+            throw ValidationException::withMessages(['inicio' => ['Ese horario está bloqueado.']]);
+        }
+
+        // ¿Choca con otra cita activa? (doble reserva)
+        $citas = $this->citasDelDia($inicio, $ownerId)->reject(fn ($c) => $c->id === $ignorarCitaId);
+        if ($this->seSolapaConCitas($inicio, $fin, $citas)) {
+            throw ValidationException::withMessages(['inicio' => ['Ya existe una cita en ese horario.']]);
+        }
+    }
+
+    /** ¿El negocio aún no tiene NINGÚN horario laboral configurado? */
+    private function sinHorarios(?int $ownerId): bool
+    {
+        return HorarioLaboral::withoutGlobalScope(OwnerScope::class)
+            ->where('owner_id', $ownerId)
+            ->where('activo', true)
+            ->count() === 0;
+    }
+
+    private function citasDelDia(Carbon $fecha, ?int $ownerId)
+    {
+        return Cita::withoutGlobalScope(OwnerScope::class)
+            ->where('owner_id', $ownerId)
+            ->whereDate('inicio', $fecha->toDateString())
+            ->whereIn('estado', Cita::ESTADOS_ACTIVOS)
+            ->get(['id', 'inicio', 'fin']);
+    }
+
+    private function bloqueosDelDia(Carbon $fecha, ?int $ownerId)
+    {
+        return BloqueoAgenda::withoutGlobalScope(OwnerScope::class)
+            ->where('owner_id', $ownerId)
+            ->whereDate('inicio', '<=', $fecha->toDateString())
+            ->whereDate('fin', '>=', $fecha->toDateString())
+            ->get();
+    }
+
+    private function seSolapaConCitas(Carbon $inicio, Carbon $fin, $citas): bool
+    {
+        return $citas->contains(fn ($c) => $inicio->lt($c->fin) && $fin->gt($c->inicio));
+    }
+
+    private function seSolapaConBloqueos(Carbon $inicio, Carbon $fin, $bloqueos): bool
+    {
+        return $bloqueos->contains(fn ($b) => $inicio->lt($b->fin) && $fin->gt($b->inicio));
+    }
+}
