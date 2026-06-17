@@ -34,7 +34,11 @@ ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
+# Crear la base de datos SQLite y darle permisos a Apache (www-data)
+RUN mkdir -p /var/www/html/database && touch /var/www/html/database/database.sqlite && chown -R www-data:www-data /var/www/html/database
+
 # Exponer el puerto por defecto de Render
 EXPOSE 80
 
-CMD ["apache2-foreground"]
+# Ejecutar migraciones antes de arrancar Apache
+CMD php artisan migrate --force && apache2-foreground
