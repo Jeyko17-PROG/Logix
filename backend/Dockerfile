@@ -40,5 +40,5 @@ RUN mkdir -p /var/www/html/database && touch /var/www/html/database/database.sql
 # Exponer el puerto por defecto de Render
 EXPOSE 80
 
-# Ejecutar migraciones antes de arrancar Apache
-CMD php artisan migrate --force && apache2-foreground
+# Ejecutar migraciones y sembrar datos base (roles, planes, super-admin) antes de arrancar Apache
+CMD php artisan migrate --force --seed && apache2-foreground
