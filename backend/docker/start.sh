@@ -40,6 +40,13 @@ if [ -f "$DB_DIR/database.sqlite" ]; then
   fi
 fi
 
+# Limpiar caché de configuración y otras caches inmediatamente después de cambiar .env
+echo "Limpiando caches de Laravel para que lea la nueva DB_DATABASE..."
+php artisan config:clear || true
+php artisan cache:clear || true
+php artisan route:clear || true
+php artisan view:clear || true
+
 # Ejecutar migraciones y sembrado (forzado en producción)
 php artisan config:clear || true
 php artisan migrate --force || true
