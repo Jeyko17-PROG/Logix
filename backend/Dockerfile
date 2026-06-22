@@ -30,6 +30,11 @@ RUN composer install --no-interaction --optimize-autoloader --no-dev --ignore-pl
 # Configurar los permisos correctos para Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
+# Asegurar permisos también para la carpeta database (SQLite)
+RUN mkdir -p /var/www/html/database \
+    && chown -R www-data:www-data /var/www/html/database \
+    && chmod -R 775 /var/www/html/database
+
 # Apuntar Apache a la carpeta pública de Laravel
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
@@ -38,5 +43,7 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.
 # Exponer el puerto por defecto de Render
 EXPOSE 80
 
-# Ejecutar migraciones y sembrar datos base (roles, planes, super-admin) antes de arrancar Apache
-CMD php artisan migrate --force --seed && apache2-foreground
+# Copiar el script de arranque que fija permisos y ejecuta migraciones, luego arranca Apache
+COPY docker/start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+CMD /usr/local/bin/start.sh
