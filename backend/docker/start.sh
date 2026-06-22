@@ -47,10 +47,12 @@ php artisan cache:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
 
-# Ejecutar migraciones y sembrado (forzado en producción)
-php artisan config:clear || true
-php artisan migrate --force || true
+# Ejecutar migraciones ahora que DB_DATABASE apunta a /tmp
+echo "Ejecutando migraciones (forzadas) y seed básico..."
+# No suprimimos errores para que aparezcan en los logs si algo falla
+php artisan migrate --force
 php artisan db:seed --class=AdminUserSeeder --force || true
+# Migraciones ya ejecutadas arriba
 
 # Arrancar Apache en primer plano
 exec apache2-foreground
