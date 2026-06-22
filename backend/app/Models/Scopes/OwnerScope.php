@@ -22,7 +22,7 @@ class OwnerScope implements Scope
         $user = Auth::user();
 
         if ($user && ! $user->esSuperAdmin()) {
-            $builder->where($model->getTable() . '.owner_id', $user->id);
+            $builder->where($model->getTable() . '.owner_id', $user->workspaceOwnerId());
         }
     }
 }

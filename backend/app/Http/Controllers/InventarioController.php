@@ -17,6 +17,9 @@ class InventarioController extends Controller
     public function stock(Request $request)
     {
         $q = StockBodega::with(['producto:id,sku,nombre,stock_minimo', 'bodega:id,nombre']);
+        if ($request->user()?->estaLimitadoABodega()) {
+            $q->where('bodega_id', $request->user()->bodega_id);
+        }
         if ($bodega = $request->query('bodega_id')) {
             $q->where('bodega_id', $bodega);
         }
@@ -34,6 +37,12 @@ class InventarioController extends Controller
             'bodegaDestino:id,nombre',
             'usuario:id,name',
         ]);
+        if ($request->user()?->estaLimitadoABodega()) {
+            $q->where(function ($sub) use ($request) {
+                $sub->where('bodega_origen_id', $request->user()->bodega_id)
+                    ->orWhere('bodega_destino_id', $request->user()->bodega_id);
+            });
+        }
         if ($producto = $request->query('producto_id')) {
             $q->where('producto_id', $producto);
         }
@@ -45,7 +54,12 @@ class InventarioController extends Controller
      */
     public function alertas()
     {
-        return StockBodega::with(['producto:id,sku,nombre', 'bodega:id,nombre'])
+        $q = StockBodega::with(['producto:id,sku,nombre', 'bodega:id,nombre']);
+        if (request()->user()?->estaLimitadoABodega()) {
+            $q->where('bodega_id', request()->user()->bodega_id);
+        }
+
+        return $q
             ->where('stock_minimo', '>', 0)
             ->whereColumn('cantidad', '<=', 'stock_minimo')
             ->orderBy('cantidad')
@@ -63,6 +77,9 @@ class InventarioController extends Controller
             'stock_minimo' => ['required', 'numeric', 'min:0'],
         ]);
 
+        if ($request->user()?->estaLimitadoABodega() && (int) $data['bodega_id'] !== (int) $request->user()->bodega_id) {
+            abort(403, 'No tienes acceso a otro establecimiento.');
+        }
         $stock = StockBodega::firstOrCreate(
             ['producto_id' => $data['producto_id'], 'bodega_id' => $data['bodega_id']],
             ['cantidad' => 0, 'costo_promedio' => 0]
@@ -88,6 +105,13 @@ class InventarioController extends Controller
         ]);
 
         $userId = $request->user()->id;
+        if ($request->user()?->estaLimitadoABodega()) {
+            foreach (['bodega_origen_id', 'bodega_destino_id'] as $campo) {
+                if (! empty($data[$campo]) && (int) $data[$campo] !== (int) $request->user()->bodega_id) {
+                    abort(403, 'No tienes acceso a otro establecimiento.');
+                }
+            }
+        }
 
         $movimiento = match ($data['tipo']) {
             'ENTRADA' => $this->kardex->entrada(

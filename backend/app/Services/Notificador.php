@@ -42,12 +42,14 @@ class Notificador
      * un correo no es una notificación de panel y, si se guardara con user_id null,
      * se filtraría a TODOS los usuarios. Solo deja traza en el log si falla.
      */
-    public function correo(string $para, string $asunto, string $titulo, array $lineas, ?string $adjuntoPath = null, string $tipo = 'ADMIN'): void
+    public function correo(string $para, string $asunto, string $titulo, array $lineas, ?string $adjuntoPath = null, string $tipo = 'ADMIN'): bool
     {
         try {
             Mail::to($para)->send(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath));
+            return true;
         } catch (\Throwable $e) {
             Log::warning('No se pudo enviar el correo de Logix', ['para' => $para, 'error' => $e->getMessage()]);
+            return false;
         }
     }
 }

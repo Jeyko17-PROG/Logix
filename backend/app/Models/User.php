@@ -32,6 +32,8 @@ class User extends Authenticatable
         'activo',
         'estado',
         'es_super_admin',
+        'workspace_owner_id',
+        'bodega_id',
     ];
 
     protected $hidden = [
@@ -65,10 +67,34 @@ class User extends Authenticatable
         return $this->esSuperAdmin() || $this->tieneRol('Administrador', 'Usuario');
     }
 
+    /** Dueño operativo del workspace: el usuario mismo o el administrador que creó al empleado. */
+    public function workspaceOwnerId(): int
+    {
+        return (int) ($this->workspace_owner_id ?: $this->id);
+    }
+
+    /** Un empleado queda limitado a la bodega/local asignado. */
+    public function estaLimitadoABodega(): bool
+    {
+        return ! $this->esSuperAdmin()
+            && ! $this->tieneRol('Administrador', 'Usuario')
+            && ! empty($this->bodega_id);
+    }
+
     /** Plan de suscripción del usuario. */
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class, 'plan_id');
+    }
+
+    public function workspaceOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'workspace_owner_id');
+    }
+
+    public function bodega(): BelongsTo
+    {
+        return $this->belongsTo(Bodega::class, 'bodega_id');
     }
 
     /**

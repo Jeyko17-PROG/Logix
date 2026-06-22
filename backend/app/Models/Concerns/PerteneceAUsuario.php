@@ -20,7 +20,7 @@ trait PerteneceAUsuario
 
         static::creating(function ($model) {
             if (empty($model->owner_id) && Auth::check()) {
-                $model->owner_id = Auth::id();
+                $model->owner_id = Auth::user()->workspaceOwnerId();
             }
         });
     }

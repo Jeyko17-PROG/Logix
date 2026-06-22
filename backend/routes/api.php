@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('superadmin')->prefix('admin')->group(function () {
         // Usuarios registrados
         Route::get('usuarios', [UsuarioAdminController::class, 'index']);
+        Route::post('usuarios', [UsuarioAdminController::class, 'crearEmpleado']);
         Route::put('usuarios/{usuario}', [UsuarioAdminController::class, 'update']);
         Route::post('usuarios/{usuario}/estado', [UsuarioAdminController::class, 'cambiarEstado']);
         Route::post('usuarios/{usuario}/plan', [UsuarioAdminController::class, 'cambiarPlan']);
@@ -103,6 +104,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // Gestión de planes
         Route::post('planes', [PlanController::class, 'store']);
         Route::put('planes/{plan}', [PlanController::class, 'update']);
+    });
+
+    // Equipo del negocio: el Administrador/Usuario dueño puede crear empleados por establecimiento.
+    Route::middleware('role:Administrador,Usuario')->prefix('equipo')->group(function () {
+        Route::post('usuarios', [UsuarioAdminController::class, 'crearEmpleado']);
+        Route::get('auditorias', [UsuarioAdminController::class, 'auditorias']);
     });
 
     // Ejemplo de ruta restringida por rol (RBAC) — solo Administrador
@@ -206,11 +213,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===== BLOQUE D: Facturación a clientes + Notificaciones =====
     Route::middleware('feature:facturacion')->group(function () {
         Route::get('facturas', [FacturaController::class, 'index']);
+        Route::get('facturas/{factura}/pdf', [FacturaController::class, 'verPdf'])->middleware('feature:pdf');
         Route::get('facturas/{factura}', [FacturaController::class, 'show']);
         Route::middleware('role:Administrador,Ventas/Compras')->group(function () {
             Route::post('facturas', [FacturaController::class, 'store']);
             Route::post('facturas/{factura}/pdf', [FacturaController::class, 'generarPdf'])->middleware('feature:pdf');
             Route::post('facturas/{factura}/enviar', [FacturaController::class, 'enviar'])->middleware('feature:correos');
+            Route::post('facturas/{factura}/whatsapp', [FacturaController::class, 'whatsapp'])->middleware('feature:pdf');
         });
     });
 

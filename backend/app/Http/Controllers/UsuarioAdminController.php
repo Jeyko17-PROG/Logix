@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Auditoria;
+use App\Models\Bodega;
 use App\Models\Cliente;
 use App\Models\Plan;
 use App\Models\Role;
@@ -44,6 +45,8 @@ class UsuarioAdminController extends Controller
             'email' => $u->email,
             'telefono' => $u->telefono,
             'rol' => $u->rol?->nombre,
+            'workspace_owner_id' => $u->workspace_owner_id,
+            'bodega' => $u->bodega ? ['id' => $u->bodega->id, 'nombre' => $u->bodega->nombre] : null,
             'plan' => $u->plan ? ['id' => $u->plan->id, 'nombre' => $u->plan->nombre] : null,
             'estado' => $u->estado,
             'es_super_admin' => (bool) $u->es_super_admin,
@@ -59,7 +62,7 @@ class UsuarioAdminController extends Controller
     /** Listado de usuarios registrados (módulo "Usuarios Registrados"). */
     public function index(Request $request): JsonResponse
     {
-        $q = User::with('rol', 'plan');
+        $q = User::with('rol', 'plan', 'bodega');
 
         if ($buscar = $request->query('buscar')) {
             $q->where(function ($sub) use ($buscar) {
@@ -105,6 +108,40 @@ class UsuarioAdminController extends Controller
         $conteos = $this->clientesPorOwner();
 
         return response()->json($this->serializar($usuario->fresh('rol', 'plan'), $conteos));
+    }
+
+    /** Crea un empleado/administrador de sucursal dentro del workspace del usuario autenticado. */
+    public function crearEmpleado(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'password' => ['nullable', 'string', 'min:8'],
+            'rol_id' => ['required', 'exists:roles,id'],
+            'bodega_id' => ['required', 'exists:bodegas,id'],
+            'telefono' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $ownerId = $request->user()->workspaceOwnerId();
+        $bodega = Bodega::where('id', $data['bodega_id'])->firstOrFail();
+        abort_unless((int) $bodega->owner_id === $ownerId || $request->user()->esSuperAdmin(), 403, 'La bodega no pertenece a tu negocio.');
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $data['password'] ?? Str::password(12),
+            'rol_id' => $data['rol_id'],
+            'workspace_owner_id' => $ownerId,
+            'bodega_id' => $data['bodega_id'],
+            'telefono' => $data['telefono'] ?? null,
+            'activo' => true,
+            'estado' => 'ACTIVO',
+        ]);
+
+        Auditoria::registrar($request->user()->id, $user->id, 'USUARIO', 'CREAR_EMPLEADO', null, $bodega->nombre);
+
+        $conteos = $this->clientesPorOwner();
+        return response()->json($this->serializar($user->fresh('rol', 'plan', 'bodega'), $conteos), 201);
     }
 
     public function cambiarEstado(Request $request, User $usuario): JsonResponse
@@ -294,7 +331,37 @@ class UsuarioAdminController extends Controller
     /** Bitácora de cambios del Super Administrador. */
     public function auditorias(): JsonResponse
     {
-        $registros = Auditoria::with(['admin:id,name', 'usuario:id,name,email'])
+        $q = Auditoria::with(['admin:id,name', 'usuario:id,name,email', 'bodega:id,nombre']);
+        $actual = request()->user();
+
+        if ($actual && ! $actual->esSuperAdmin()) {
+            $idsEquipo = User::where('id', $actual->workspaceOwnerId())
+                ->orWhere('workspace_owner_id', $actual->workspaceOwnerId())
+                ->pluck('id');
+
+            $q->where(function ($sub) use ($idsEquipo) {
+                $sub->whereIn('admin_id', $idsEquipo)
+                    ->orWhereIn('usuario_id', $idsEquipo);
+            });
+
+            if ($actual->estaLimitadoABodega()) {
+                $q->where('bodega_id', $actual->bodega_id);
+            }
+        }
+
+        if ($bodegaId = request()->query('bodega_id')) {
+            $q->where('bodega_id', $bodegaId);
+        }
+        if ($usuarioId = request()->query('usuario_id')) {
+            $q->where(function ($sub) use ($usuarioId) {
+                $sub->where('admin_id', $usuarioId)->orWhere('usuario_id', $usuarioId);
+            });
+        }
+        if ($accion = request()->query('accion')) {
+            $q->where('accion', $accion);
+        }
+
+        $registros = $q
             ->latest()
             ->limit(200)
             ->get()
@@ -303,6 +370,7 @@ class UsuarioAdminController extends Controller
                 'admin' => $a->admin?->name,
                 'usuario' => $a->usuario?->name,
                 'usuario_email' => $a->usuario?->email,
+                'bodega' => $a->bodega?->nombre,
                 'accion' => $a->accion,
                 'funcionalidad' => $a->funcionalidad,
                 'estado_anterior' => $a->estado_anterior,

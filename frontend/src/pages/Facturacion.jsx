@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { API_BASE, api, getToken } from '../api/client'
 import FirmaPad from '../components/FirmaPad'
 import { useFeatures } from '../context/FeaturesContext'
 
@@ -7,7 +7,7 @@ const FIRMA_KEY = 'logix_firma'
 
 const ESTADO_COLOR = { EMITIDA: 'bg-emerald-600', PAGADA: 'bg-sky-600', ANULADA: 'bg-red-600', BORRADOR: 'bg-slate-600' }
 const IVA_FIJOS = [0, 5, 19]
-const LINEA_VACIA = { descripcion: '', cantidad: 1, precio_unitario: '', impuesto_porcentaje: 19, ivaCustom: false }
+const LINEA_VACIA = { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: '', impuesto_porcentaje: 19, ivaCustom: false }
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })
 
@@ -15,6 +15,7 @@ export default function Facturacion() {
   const { activa } = useFeatures()
   const [facturas, setFacturas] = useState([])
   const [clientes, setClientes] = useState([])
+  const [productos, setProductos] = useState([])
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -30,6 +31,7 @@ export default function Facturacion() {
   useEffect(() => {
     cargar()
     api('/clientes').then((d) => setClientes(d.data ?? d))
+    api('/productos').then((d) => setProductos(d.data ?? d)).catch(() => setProductos([]))
   }, [])
 
   // --- Manejo de líneas ---
@@ -40,6 +42,15 @@ export default function Facturacion() {
   const setIva = (i, val) => {
     if (val === 'custom') updateLinea(i, { ivaCustom: true })
     else updateLinea(i, { ivaCustom: false, impuesto_porcentaje: Number(val) })
+  }
+
+  const setProducto = (i, productoId) => {
+    const producto = productos.find((p) => String(p.id) === String(productoId))
+    updateLinea(i, {
+      producto_id: productoId,
+      descripcion: producto ? producto.nombre : '',
+      precio_unitario: producto ? producto.precio_venta : '',
+    })
   }
 
   // --- Totales en vivo ---
@@ -73,6 +84,7 @@ export default function Facturacion() {
         notas: cab.notas || null,
         lineas: lineas.map((l) => ({
           descripcion: l.descripcion,
+          producto_id: l.producto_id ? Number(l.producto_id) : null,
           cantidad: Number(l.cantidad),
           precio_unitario: Number(l.precio_unitario),
           impuesto_porcentaje: Number(l.impuesto_porcentaje) || 0,
@@ -84,14 +96,26 @@ export default function Facturacion() {
   }
 
   async function generarPdf(f) {
-    const r = await api(`/facturas/${f.id}/pdf`, { method: 'POST' })
-    window.open(r.pdf_url, '_blank')
+    await api(`/facturas/${f.id}/pdf`, { method: 'POST' })
+    const headers = { Accept: 'application/pdf' }
+    const token = getToken()
+    if (token) headers.Authorization = `Bearer ${token}`
+    const res = await fetch(`${API_BASE}/api/facturas/${f.id}/pdf`, { headers })
+    if (!res.ok) throw new Error('No se pudo abrir el PDF.')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
   }
   async function enviar(f) {
     const email = prompt('Enviar factura al correo:')
     if (!email) return
     const r = await api(`/facturas/${f.id}/enviar`, { method: 'POST', body: { email } })
     alert(r.mensaje)
+  }
+  async function enviarWhatsApp(f) {
+    const r = await api(`/facturas/${f.id}/whatsapp`, { method: 'POST' })
+    window.open(r.whatsapp_url, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -151,7 +175,13 @@ export default function Facturacion() {
             <div className="space-y-3 md:space-y-2">
               {lineas.map((l, i) => (
                 <div key={i} className="grid grid-cols-2 md:grid-cols-[1fr_90px_140px_150px_120px_36px] gap-3 rounded-xl border border-slate-800 bg-slate-800/30 p-3 md:border-0 md:bg-transparent md:p-1 md:items-center">
-                  <input required placeholder="Producto o servicio" value={l.descripcion} onChange={(e) => updateLinea(i, { descripcion: e.target.value })} className="input col-span-2 md:col-span-1" />
+                  <div className="col-span-2 md:col-span-1 grid gap-2">
+                    <select value={l.producto_id} onChange={(e) => setProducto(i, e.target.value)} className="input">
+                      <option value="">Servicio / texto libre</option>
+                      {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre} - stock {p.stock_total ?? 0}</option>)}
+                    </select>
+                    <input required placeholder="Producto o servicio" value={l.descripcion} onChange={(e) => updateLinea(i, { descripcion: e.target.value, producto_id: '' })} className="input" />
+                  </div>
                   <input type="number" min="0" step="0.01" placeholder="Cant." value={l.cantidad} onChange={(e) => updateLinea(i, { cantidad: e.target.value })} className="input md:text-right" />
                   <input type="number" min="0" step="0.01" placeholder="Ingrese el valor" value={l.precio_unitario} onChange={(e) => updateLinea(i, { precio_unitario: e.target.value })} className="input md:text-right" />
                   <div className="flex gap-1">
@@ -235,6 +265,7 @@ export default function Facturacion() {
                 <td className="p-3"><span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[f.estado]}`}>{f.estado}</span></td>
                 <td className="p-3 text-right whitespace-nowrap">
                   <button onClick={() => generarPdf(f)} className="text-sky-400 hover:underline mr-3">PDF</button>
+                  <button onClick={() => enviarWhatsApp(f)} className="text-lime-400 hover:underline mr-3">WhatsApp</button>
                   <button onClick={() => enviar(f)} className="text-emerald-400 hover:underline">Enviar</button>
                 </td>
               </tr>

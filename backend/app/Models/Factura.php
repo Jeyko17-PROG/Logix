@@ -16,6 +16,7 @@ class Factura extends Model
 
     protected $fillable = [
         'owner_id',
+        'bodega_id',
         'numero', 'cliente_id', 'fecha', 'subtotal', 'impuestos', 'total',
         'estado', 'pdf_url', 'firma_url', 'notas', 'created_by',
     ];
@@ -35,5 +36,10 @@ class Factura extends Model
     public function detalles(): HasMany
     {
         return $this->hasMany(FacturaDetalle::class, 'factura_id');
+    }
+
+    public function bodega(): BelongsTo
+    {
+        return $this->belongsTo(Bodega::class, 'bodega_id');
     }
 }

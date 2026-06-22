@@ -8,9 +8,14 @@ use Illuminate\Http\Request;
 
 class BodegaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return Bodega::with('responsable:id,name')
+        $q = Bodega::with('responsable:id,name');
+        if ($request->user()?->estaLimitadoABodega()) {
+            $q->where('id', $request->user()->bodega_id);
+        }
+
+        return $q
             ->orderByDesc('es_principal')->orderBy('nombre')->get();
     }
 
@@ -28,12 +33,14 @@ class BodegaController extends Controller
 
     public function update(Request $request, Bodega $bodega)
     {
+        $this->autorizarBodega($request, $bodega);
         $bodega->update($this->validar($request));
         return $bodega;
     }
 
-    public function destroy(Bodega $bodega)
+    public function destroy(Request $request, Bodega $bodega)
     {
+        $this->autorizarBodega($request, $bodega);
         // Solo se pueden eliminar bodegas vacías (sin existencias).
         $tieneStock = StockBodega::where('bodega_id', $bodega->id)->where('cantidad', '>', 0)->exists();
         if ($tieneStock) {
@@ -45,8 +52,9 @@ class BodegaController extends Controller
     }
 
     /** Define esta bodega como la principal del usuario (las demás dejan de serlo). */
-    public function definirPrincipal(Bodega $bodega)
+    public function definirPrincipal(Request $request, Bodega $bodega)
     {
+        $this->autorizarBodega($request, $bodega);
         Bodega::where('id', '!=', $bodega->id)->update(['es_principal' => false]);
         $bodega->update(['es_principal' => true]);
 
@@ -61,5 +69,12 @@ class BodegaController extends Controller
             'responsable_id' => ['nullable', 'exists:users,id'],
             'activo' => ['boolean'],
         ]);
+    }
+
+    private function autorizarBodega(Request $request, Bodega $bodega): void
+    {
+        if ($request->user()?->estaLimitadoABodega() && (int) $request->user()->bodega_id !== (int) $bodega->id) {
+            abort(403, 'No tienes acceso a otro establecimiento.');
+        }
     }
 }
