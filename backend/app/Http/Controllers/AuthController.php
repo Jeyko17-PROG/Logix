@@ -34,8 +34,8 @@ class AuthController extends Controller
         $rolId = Role::where('nombre', 'Usuario')->value('id')
             ?? Role::where('nombre', 'Administrador')->value('id');
 
-        // Plan por defecto: Normal.
-        $planId = Plan::where('nombre', 'Normal')->value('id');
+        // Plan por defecto: Gratuito.
+        $planId = Plan::where('nombre', 'Gratuito')->value('id');
 
         $user = User::create([
             'name' => $data['name'],

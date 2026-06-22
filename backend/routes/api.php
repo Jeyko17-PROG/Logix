@@ -109,6 +109,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Equipo del negocio: el Administrador/Usuario dueño puede crear empleados por establecimiento.
     Route::middleware('role:Administrador,Usuario')->prefix('equipo')->group(function () {
         Route::post('usuarios', [UsuarioAdminController::class, 'crearEmpleado']);
+        Route::post('usuarios/quick', [UsuarioAdminController::class, 'crearEmpleadoRapido']);
         Route::get('auditorias', [UsuarioAdminController::class, 'auditorias']);
     });
 
@@ -217,6 +218,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('facturas/{factura}', [FacturaController::class, 'show']);
         Route::middleware('role:Administrador,Ventas/Compras')->group(function () {
             Route::post('facturas', [FacturaController::class, 'store']);
+            Route::put('facturas/{factura}', [FacturaController::class, 'update']);
+            Route::delete('facturas/{factura}', [FacturaController::class, 'destroy']);
             Route::post('facturas/{factura}/pdf', [FacturaController::class, 'generarPdf'])->middleware('feature:pdf');
             Route::post('facturas/{factura}/enviar', [FacturaController::class, 'enviar'])->middleware('feature:correos');
             Route::post('facturas/{factura}/whatsapp', [FacturaController::class, 'whatsapp'])->middleware('feature:pdf');
@@ -231,3 +234,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===== BLOQUE E: Bloc de notas =====
     Route::apiResource('notas', NotaController::class)->except('show')->middleware('feature:notas');
 });
+
+// Public webhooks for payment providers (no auth). Protect with provider signature in production.
+Route::post('webhooks/payments/{provider}', [\App\Http\Controllers\PaymentWebhookController::class, 'handle']);

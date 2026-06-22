@@ -21,6 +21,8 @@ export default function Facturacion() {
   const [guardando, setGuardando] = useState(false)
 
   const [cab, setCab] = useState({ cliente_id: '', fecha: new Date().toISOString().slice(0, 10), notas: '' })
+  const [currency, setCurrency] = useState('COP')
+  const [exchangeRate, setExchangeRate] = useState('')
   const [lineas, setLineas] = useState([{ ...LINEA_VACIA }])
   const [firma, setFirma] = useState(null)
 
@@ -82,6 +84,8 @@ export default function Facturacion() {
         cliente_id: cab.cliente_id,
         fecha: cab.fecha,
         notas: cab.notas || null,
+        currency: currency || 'COP',
+        exchange_rate: exchangeRate || null,
         lineas: lineas.map((l) => ({
           descripcion: l.descripcion,
           producto_id: l.producto_id ? Number(l.producto_id) : null,
@@ -156,6 +160,21 @@ export default function Facturacion() {
                 <input type="date" value={cab.fecha} onChange={(e) => setCab({ ...cab, fecha: e.target.value })} className="input" />
               </label>
             </div>
+              <div className="mt-3 grid sm:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="mb-1 block text-sm text-slate-300">Divisa</span>
+                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="input">
+                    <option value="COP">Pesos (COP)</option>
+                    <option value="USD">USD (Dólares)</option>
+                  </select>
+                </label>
+                {currency === 'USD' && (
+                  <label className="block">
+                    <span className="mb-1 block text-sm text-slate-300">Tipo de cambio (opcional)</span>
+                    <input type="number" step="0.000001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="input" placeholder="Ej: 0.00027" />
+                  </label>
+                )}
+              </div>
           </section>
 
           {/* Sección: productos / servicios */}

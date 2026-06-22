@@ -19,6 +19,7 @@ class Factura extends Model
         'bodega_id',
         'numero', 'cliente_id', 'fecha', 'subtotal', 'impuestos', 'total',
         'estado', 'pdf_url', 'firma_url', 'notas', 'created_by',
+        'currency', 'exchange_rate',
     ];
 
     protected $casts = [
@@ -26,6 +27,7 @@ class Factura extends Model
         'subtotal' => 'decimal:2',
         'impuestos' => 'decimal:2',
         'total' => 'decimal:2',
+        'exchange_rate' => 'decimal:6',
     ];
 
     public function cliente(): BelongsTo

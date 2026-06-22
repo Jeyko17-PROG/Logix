@@ -36,18 +36,19 @@
             <tr>
                 <td>{{ $d->descripcion }}</td>
                 <td class="right">{{ number_format($d->cantidad, 2) }}</td>
-                <td class="right">${{ number_format($d->precio_unitario, 2) }}</td>
+                @php $sym = ($factura->currency ?? 'COP') === 'USD' ? 'USD ' : '$'; @endphp
+                <td class="right">{{ $sym }}{{ number_format($d->precio_unitario, 2) }}</td>
                 <td class="right">{{ number_format($d->impuesto_porcentaje, 0) }}%</td>
-                <td class="right">${{ number_format($d->subtotal, 2) }}</td>
+                <td class="right">{{ $sym }}{{ number_format($d->subtotal, 2) }}</td>
             </tr>
             @endforeach
         </tbody>
     </table>
 
     <table style="margin-top:12px;width:40%;float:right;">
-        <tr><td>Subtotal</td><td class="right">${{ number_format($factura->subtotal, 2) }}</td></tr>
-        <tr><td>Impuestos</td><td class="right">${{ number_format($factura->impuestos, 2) }}</td></tr>
-        <tr class="tot"><td>TOTAL</td><td class="right">${{ number_format($factura->total, 2) }}</td></tr>
+        <tr><td>Subtotal</td><td class="right">{{ $sym }}{{ number_format($factura->subtotal, 2) }}</td></tr>
+        <tr><td>Impuestos</td><td class="right">{{ $sym }}{{ number_format($factura->impuestos, 2) }}</td></tr>
+        <tr class="tot"><td>TOTAL</td><td class="right">{{ $sym }}{{ number_format($factura->total, 2) }}</td></tr>
     </table>
 
     @if (!empty($firma))

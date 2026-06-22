@@ -18,6 +18,7 @@ export default function Usuarios() {
   const [editando, setEditando] = useState(null) // usuario en modal de edición
   const [viendo, setViendo] = useState(null)     // usuario en modal de detalle
   const [eliminando, setEliminando] = useState(null) // usuario en modal de eliminación
+  const [openQuick, setOpenQuick] = useState(false)
 
   async function cargar() {
     setCargando(true); setError('')
@@ -61,6 +62,7 @@ export default function Usuarios() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Usuarios registrados</h1>
         <div className="flex gap-2">
+          <button onClick={() => setOpenQuick(true)} className="rounded-lg bg-blue-600 hover:bg-blue-500 px-4 text-sm font-semibold">Agregar Empleado</button>
           <input value={buscar} onChange={(e) => setBuscar(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && cargar()}
             placeholder="Buscar nombre, correo, documento…" className="input max-w-xs" />
@@ -145,6 +147,7 @@ export default function Usuarios() {
       {editando && <ModalEditar usuario={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar() }} />}
       {viendo && <ModalVer usuario={viendo} onClose={() => setViendo(null)} />}
       {eliminando && <ModalEliminar usuario={eliminando} onClose={() => setEliminando(null)} onEliminado={() => { setEliminando(null); cargar() }} />}
+      {openQuick && <ModalQuick onClose={() => setOpenQuick(false)} />}
     </div>
   )
 }
@@ -268,6 +271,35 @@ function ModalEditar({ usuario, onClose, onGuardado }) {
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
             <button type="submit" disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">{guardando ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function ModalQuick({ onClose }) {
+  const [nombre, setNombre] = useState('')
+  const [apellido, setApellido] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  async function guardar(e) {
+    e.preventDefault(); setGuardando(true)
+    try {
+      await api('/equipo/usuarios/quick', { method: 'POST', body: { nombre, apellido } })
+      onClose()
+    } catch (err) { alert(err.message || 'No se pudo crear el empleado.'); setGuardando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-3">Agregar empleado rápido</h2>
+        <form onSubmit={guardar} className="space-y-3">
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" className="input" required />
+          <input value={apellido} onChange={(e) => setApellido(e.target.value)} placeholder="Apellido" className="input" required />
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
+            <button type="submit" disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">{guardando ? 'Creando…' : 'Crear'}</button>
           </div>
         </form>
       </div>

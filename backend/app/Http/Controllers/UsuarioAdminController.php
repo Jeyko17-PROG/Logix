@@ -144,6 +144,50 @@ class UsuarioAdminController extends Controller
         return response()->json($this->serializar($user->fresh('rol', 'plan', 'bodega'), $conteos), 201);
     }
 
+    /**
+     * Crear empleado rápido: sólo nombre y apellido, opcional bodega_id.
+     * El empleado queda atado al workspace del administrador y a la bodega del admin
+     * si no se especifica `bodega_id`.
+     */
+    public function crearEmpleadoRapido(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:255'],
+            'apellido' => ['required', 'string', 'max:255'],
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
+        ]);
+
+        $ownerId = $request->user()->workspaceOwnerId();
+
+        // Determina la bodega destino: la provista (si pertenece) o la del admin
+        $bodegaId = $data['bodega_id'] ?? $request->user()->bodega_id;
+        if ($bodegaId) {
+            $bodega = Bodega::where('id', $bodegaId)->firstOrFail();
+            abort_unless((int) $bodega->owner_id === $ownerId || $request->user()->esSuperAdmin(), 403, 'La bodega no pertenece a tu negocio.');
+        } else {
+            $bodega = Bodega::where('owner_id', $ownerId)->first();
+            $bodegaId = $bodega?->id ?? null;
+        }
+
+        $rolId = Role::where('nombre', 'Empleado')->value('id') ?? Role::where('nombre', 'Usuario')->value('id');
+
+        $user = User::create([
+            'name' => trim($data['nombre'] . ' ' . $data['apellido']),
+            'email' => Str::slug($data['nombre'] . '.' . $data['apellido']) . '.' . Str::random(4) . '@noemail.local',
+            'password' => Str::password(12),
+            'rol_id' => $rolId,
+            'workspace_owner_id' => $ownerId,
+            'bodega_id' => $bodegaId,
+            'activo' => true,
+            'estado' => 'ACTIVO',
+        ]);
+
+        Auditoria::registrar($request->user()->id, $user->id, 'USUARIO', 'CREAR_EMPLEADO_RAPIDO', null, $bodega?->nombre ?? null);
+
+        $conteos = $this->clientesPorOwner();
+        return response()->json($this->serializar($user->fresh('rol', 'plan', 'bodega'), $conteos), 201);
+    }
+
     public function cambiarEstado(Request $request, User $usuario): JsonResponse
     {
         if ($usuario->es_super_admin) {

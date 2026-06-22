@@ -50,6 +50,8 @@ class FacturaController extends Controller
             'lineas.*.impuesto_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // Firma digital: data URL (data:image/png;base64,...) dibujada o subida.
             'firma' => ['nullable', 'string'],
+            'currency' => ['nullable', 'in:COP,USD'],
+            'exchange_rate' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         return DB::transaction(function () use ($data, $request) {
@@ -89,6 +91,8 @@ class FacturaController extends Controller
                 'subtotal' => $subtotal,
                 'impuestos' => $impuestos,
                 'total' => $subtotal + $impuestos,
+                'currency' => $data['currency'] ?? 'COP',
+                'exchange_rate' => $data['exchange_rate'] ?? null,
                 'estado' => 'EMITIDA',
                 'notas' => $data['notas'] ?? null,
                 'created_by' => $request->user()->id,
@@ -122,6 +126,138 @@ class FacturaController extends Controller
             Auditoria::registrar($request->user()->id, null, 'FACTURA', 'EMITIR', null, $factura->numero, $bodegaId);
 
             return response()->json($factura->load(['cliente:id,nombre_completo,email,telefono', 'detalles']), 201);
+        });
+    }
+
+    /**
+     * Actualiza una factura existente (editar líneas y metadatos).
+     * Ajusta el stock usando KardexService en base a la diferencia entre
+     * líneas antiguas y nuevas.
+     */
+    public function update(Request $request, Factura $factura)
+    {
+        $this->autorizarBodega($factura);
+
+        $data = $request->validate([
+            'fecha' => ['nullable', 'date'],
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
+            'impuesto_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'notas' => ['nullable', 'string'],
+            'lineas' => ['nullable', 'array', 'min:1'],
+            'lineas.*.descripcion' => ['required_with:lineas', 'string', 'max:255'],
+            'lineas.*.producto_id' => ['nullable', 'exists:productos,id'],
+            'lineas.*.cantidad' => ['required_with:lineas', 'numeric', 'gt:0'],
+            'lineas.*.precio_unitario' => ['required_with:lineas', 'numeric', 'min:0'],
+            'lineas.*.impuesto_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'currency' => ['nullable', 'in:COP,USD'],
+            'exchange_rate' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        return DB::transaction(function () use ($data, $request, $factura) {
+            $bodegaId = $this->resolverBodegaFactura($request, $data['bodega_id'] ?? $factura->bodega_id);
+
+            // Si vienen lineas, calcular subtotal/impuestos/total y ajustar stock por diferencias.
+            if (! empty($data['lineas'])) {
+                $pctGeneral = $data['impuesto_porcentaje'] ?? 0;
+
+                $subtotal = 0;
+                $impuestos = 0;
+                $nuevas = [];
+                foreach ($data['lineas'] as $l) {
+                    $base = round($l['cantidad'] * $l['precio_unitario'], 2);
+                    $pct = $l['impuesto_porcentaje'] ?? $pctGeneral;
+                    $impLinea = round($base * $pct / 100, 2);
+                    $subtotal += $base;
+                    $impuestos += $impLinea;
+
+                    $nuevas[] = [
+                        'producto_id' => $l['producto_id'] ?? null,
+                        'descripcion' => $l['descripcion'],
+                        'cantidad' => $l['cantidad'],
+                        'precio_unitario' => $l['precio_unitario'],
+                        'impuesto_porcentaje' => $pct,
+                        'subtotal' => $base,
+                        'impuesto' => $impLinea,
+                    ];
+                }
+
+                // Mapear cantidades por producto (solo aquellos con producto_id)
+                $oldMap = [];
+                foreach ($factura->detalles as $d) {
+                    if ($d->producto_id) {
+                        $oldMap[$d->producto_id] = ($oldMap[$d->producto_id] ?? 0) + (float) $d->cantidad;
+                    }
+                }
+
+                $newMap = [];
+                foreach ($nuevas as $d) {
+                    if (! empty($d['producto_id'])) {
+                        $newMap[$d['producto_id']] = ($newMap[$d['producto_id']] ?? 0) + (float) $d['cantidad'];
+                    }
+                }
+
+                // Ajustes por producto: si diff>0 => salida, diff<0 => entrada
+                $productoIds = array_unique(array_merge(array_keys($oldMap), array_keys($newMap)));
+                foreach ($productoIds as $pid) {
+                    $oldCant = $oldMap[$pid] ?? 0.0;
+                    $newCant = $newMap[$pid] ?? 0.0;
+                    $diff = $newCant - $oldCant;
+                    if ($diff > 0) {
+                        $this->kardex->salida((int) $pid, $bodegaId, (float) $diff, $request->user()->id, 'VENTA_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                    } elseif ($diff < 0) {
+                        $this->kardex->entrada((int) $pid, $bodegaId, (float) abs($diff),  $request->user()->id, 'DEVOLUCION_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                    }
+                }
+
+                // Reemplaza detalles (fácil y consistente)
+                $factura->detalles()->delete();
+                foreach ($nuevas as $d) {
+                    $factura->detalles()->create($d);
+                }
+
+                $factura->subtotal = $subtotal;
+                $factura->impuestos = $impuestos;
+                $factura->total = $subtotal + $impuestos;
+            }
+
+            $updates = [];
+            if (isset($data['fecha'])) $updates['fecha'] = $data['fecha'];
+            if (isset($data['notas'])) $updates['notas'] = $data['notas'];
+            if (isset($data['currency'])) $updates['currency'] = $data['currency'];
+            if (array_key_exists('exchange_rate', $data)) $updates['exchange_rate'] = $data['exchange_rate'];
+
+            if (! empty($updates)) {
+                $factura->update($updates);
+            } else {
+                $factura->save();
+            }
+
+            Auditoria::registrar($request->user()->id, null, 'FACTURA', 'EDITAR', null, $factura->numero, $bodegaId);
+
+            return response()->json($factura->fresh('detalles'));
+        });
+    }
+
+    /**
+     * Elimina (soft) una factura y devuelve el stock de los productos involucrados.
+     */
+    public function destroy(Request $request, Factura $factura)
+    {
+        $this->autorizarBodega($factura);
+
+        return DB::transaction(function () use ($request, $factura) {
+            $bodegaId = $factura->bodega_id;
+
+            foreach ($factura->detalles as $d) {
+                if (! empty($d->producto_id) && (float) $d->cantidad > 0) {
+                    $this->kardex->entrada((int) $d->producto_id, $bodegaId, (float) $d->cantidad, $request->user()->id, 'REVERSO_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                }
+            }
+
+            $factura->delete();
+            Auditoria::registrar($request->user()->id, null, 'FACTURA', 'ELIMINAR', null, $factura->numero, $bodegaId);
+
+            return response()->json(['message' => 'Factura eliminada y stock restaurado.']);
         });
     }
 
