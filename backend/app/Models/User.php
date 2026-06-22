@@ -37,6 +37,11 @@ class User extends Authenticatable
     ];
 
     protected $hidden = [
+    
+    public function credits()
+    {
+        return $this->hasMany(\App\Models\UserCredit::class, 'user_id');
+    }
         'password',
         'remember_token',
     ];

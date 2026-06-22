@@ -74,6 +74,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Catálogo de planes (visible para usuarios autenticados: dashboard, "actualizar plan")
     Route::get('/planes', [PlanController::class, 'index']);
 
+    // Crédito por uso (paquetes y saldo)
+    Route::get('/credit-packages', [App\Http\Controllers\CreditController::class, 'indexPackages']);
+    Route::get('/credits', [App\Http\Controllers\CreditController::class, 'myCredits']);
+    Route::post('/credits/create-session', [App\Http\Controllers\CreditController::class, 'createSession']);
+
     // Funcionalidades del usuario autenticado (el frontend oculta/restringe módulos)
     Route::get('/mis-funcionalidades', [FeatureController::class, 'mias']);
 

@@ -7,6 +7,7 @@ use App\Models\Auditoria;
 use App\Models\Factura;
 use App\Services\Notificador;
 use App\Services\KardexService;
+use App\Services\CreditService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class FacturaController extends Controller
 {
-    public function __construct(private Notificador $notificador, private KardexService $kardex) {}
+    public function __construct(private Notificador $notificador, private KardexService $kardex, private CreditService $creditService) {}
 
     public function index(Request $request)
     {

@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Models\CreditPackage;
 
 /**
  * Panel del Super Administrador: gestión de usuarios y licencias.

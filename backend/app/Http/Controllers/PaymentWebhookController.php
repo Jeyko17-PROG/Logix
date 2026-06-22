@@ -6,6 +6,7 @@ use App\Models\Auditoria;
 use App\Models\Plan;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Services\CreditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -15,6 +16,8 @@ class PaymentWebhookController extends Controller
      * Endpoint genérico para recibir webhooks de pasarelas.
      * Ejemplo de payload aceptado (flexible): { status: 'SUCCESS', user_email: 'x@x.com', plan: 'Medio' }
      */
+    public function __construct(private CreditService $creditService) {}
+
     public function handle(Request $request, string $provider)
     {
         $raw = $request->getContent();
@@ -99,6 +102,22 @@ class PaymentWebhookController extends Controller
                     Auditoria::registrar(null, $user->id, 'PAGO', strtoupper($provider) . '_WEBHOOK', $old, $plan->nombre);
                     $tx->user_id = $user->id;
                     $tx->plan_id = $plan->id;
+                }
+            }
+
+            // Soporte compra de créditos: si el payload incluye credit_package_id
+            $creditPackageId = $data['credit_package_id'] ?? $data['metadata']['credit_package_id'] ?? $data['package_id'] ?? null;
+            if ($creditPackageId) {
+                // Determine module & credits via CreditPackage model
+                try {
+                    $package = \App\Models\CreditPackage::find($creditPackageId);
+                    if ($package) {
+                        // Acredita créditos al usuario
+                        $this->creditService->creditUser($user->id, $package->module, (int) $package->credits, $tx->id, $package->id, 'Compra de créditos via webhook');
+                        Auditoria::registrar(null, $user->id, 'PAGO', strtoupper($provider) . '_CREDIT', null, "+{$package->credits} {$package->module}");
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Error al acreditar créditos: ' . $e->getMessage());
                 }
             }
 
