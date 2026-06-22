@@ -37,25 +37,25 @@ class User extends Authenticatable
     ];
 
     protected $hidden = [
-    
-    public function credits()
-    {
-        return $this->hasMany(\App\Models\UserCredit::class, 'user_id');
-    }
         'password',
         'remember_token',
     ];
 
-    protected function casts(): array
+    /**
+     * Relaciones
+     */
+    public function credits()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'ultimo_acceso' => 'datetime',
-            'password' => 'hashed',
-            'activo' => 'boolean',
-            'es_super_admin' => 'boolean',
-        ];
+        return $this->hasMany(\App\Models\UserCredit::class, 'user_id');
     }
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'ultimo_acceso' => 'datetime',
+        'password' => 'hashed',
+        'activo' => 'boolean',
+        'es_super_admin' => 'boolean',
+    ];
 
     /** El administrador principal que supervisa todas las cuentas. */
     public function esSuperAdmin(): bool
