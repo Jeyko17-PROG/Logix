@@ -48,10 +48,11 @@ php artisan route:clear || true
 php artisan view:clear || true
 
 # Ejecutar migraciones ahora que DB_DATABASE apunta a /tmp
-echo "Ejecutando migraciones (forzadas) y seed básico..."
+echo "Ejecutando migraciones (forzadas) y seed (todos los seeders registrados)..."
 # No suprimimos errores para que aparezcan en los logs si algo falla
 php artisan migrate --force
-php artisan db:seed --class=AdminUserSeeder --force || true
+# Sembrar todos los seeders registrados en DatabaseSeeder
+php artisan db:seed --force || true
 # Migraciones ya ejecutadas arriba
 
 # Arrancar Apache en primer plano
