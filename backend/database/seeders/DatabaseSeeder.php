@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             PlanSeeder::class,
             AdminUserSeeder::class,
+            CreditPackagesSeeder::class,
         ]);
     }
 }

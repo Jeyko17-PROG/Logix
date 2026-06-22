@@ -22,6 +22,24 @@ if [ -f "$DB_DIR/database.sqlite" ]; then
   cp "$DB_DIR/database.sqlite" "$PROJECT_DIR/backups/database.sqlite.$(date +%F_%H%M%S)" || true
 fi
 
+# Workaround Render Free: copiar sqlite a /tmp (si existe) y apuntar .env a /tmp
+if [ -f "$DB_DIR/database.sqlite" ]; then
+  echo "Copiando database.sqlite a /tmp para evitar readonly filesystem..."
+  cp "$DB_DIR/database.sqlite" /tmp/database.sqlite || true
+  chmod 664 /tmp/database.sqlite || true
+  chown "$WEB_USER":"$WEB_USER" /tmp/database.sqlite || true
+
+  if [ -f "$PROJECT_DIR/.env" ]; then
+    # Reemplazar o añadir DB_DATABASE en .env
+    if grep -q '^DB_DATABASE=' "$PROJECT_DIR/.env"; then
+      sed -i "s|^DB_DATABASE=.*|DB_DATABASE=/tmp/database.sqlite|" "$PROJECT_DIR/.env" || true
+    else
+      echo "DB_DATABASE=/tmp/database.sqlite" >> "$PROJECT_DIR/.env" || true
+    fi
+    export DB_DATABASE=/tmp/database.sqlite
+  fi
+fi
+
 # Ejecutar migraciones y sembrado (forzado en producción)
 php artisan config:clear || true
 php artisan migrate --force || true
