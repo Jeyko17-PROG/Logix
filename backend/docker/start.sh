@@ -5,55 +5,41 @@ PROJECT_DIR="/var/www/html"
 DB_DIR="$PROJECT_DIR/database"
 WEB_USER="www-data"
 
-# Asegurar directorios y permisos
+echo "=== Iniciando tareas de arranque en Render ==="
+
+# Asegurar directorios base
 mkdir -p "$DB_DIR"
-chown -R "$WEB_USER":"$WEB_USER" "$DB_DIR" || true
-chmod -R 777 "$DB_DIR" || true
+mkdir -p "$PROJECT_DIR/storage"
+mkdir -p "$PROJECT_DIR/bootstrap/cache"
 
-# Permisos para storage y cache
-chown -R "$WEB_USER":"$WEB_USER" "$PROJECT_DIR/storage" || true
-chmod -R 775 "$PROJECT_DIR/storage" || true
-chown -R "$WEB_USER":"$WEB_USER" "$PROJECT_DIR/bootstrap/cache" || true
-chmod -R 775 "$PROJECT_DIR/bootstrap/cache" || true
-
-# Backup rápido del sqlite si existe
+# Copiar sqlite original a /tmp si existe en el build
 if [ -f "$DB_DIR/database.sqlite" ]; then
-  mkdir -p "$PROJECT_DIR/backups"
-  cp "$DB_DIR/database.sqlite" "$PROJECT_DIR/backups/database.sqlite.$(date +%F_%H%M%S)" || true
-fi
-
-# Workaround Render Free: copiar sqlite a /tmp (si existe) y apuntar .env a /tmp
-if [ -f "$DB_DIR/database.sqlite" ]; then
-  echo "Copiando database.sqlite a /tmp para evitar readonly filesystem..."
+  echo "Copiando database.sqlite a /tmp para habilitar escritura..."
   cp "$DB_DIR/database.sqlite" /tmp/database.sqlite || true
-  chmod 664 /tmp/database.sqlite || true
-  chown "$WEB_USER":"$WEB_USER" /tmp/database.sqlite || true
-
-  if [ -f "$PROJECT_DIR/.env" ]; then
-    # Reemplazar o añadir DB_DATABASE en .env
-    if grep -q '^DB_DATABASE=' "$PROJECT_DIR/.env"; then
-      sed -i "s|^DB_DATABASE=.*|DB_DATABASE=/tmp/database.sqlite|" "$PROJECT_DIR/.env" || true
-    else
-      echo "DB_DATABASE=/tmp/database.sqlite" >> "$PROJECT_DIR/.env" || true
-    fi
-    export DB_DATABASE=/tmp/database.sqlite
-  fi
+else
+  echo "No se encontró base de datos previa, creando una vacía en /tmp..."
+  touch /tmp/database.sqlite || true
 fi
 
-# Limpiar caché de configuración y otras caches inmediatamente después de cambiar .env
-echo "Limpiando caches de Laravel para que lea la nueva DB_DATABASE..."
+# 🚨 EL FIX CLAVE: Permisos agresivos 777 para que el backend pueda escribir sin restricciones
+chmod 777 /tmp || true
+chmod 777 /tmp/database.sqlite || true
+chown "$WEB_USER":"$WEB_USER" /tmp/database.sqlite || true
+
+# Forzar la variable de entorno a nivel del sistema operativo por si acaso
+export DB_DATABASE=/tmp/database.sqlite
+
+# Limpiar absolutamente todas las cachés viejas
+echo "Limpiando caches de Laravel..."
 php artisan config:clear || true
 php artisan cache:clear || true
 php artisan route:clear || true
 php artisan view:clear || true
 
-# Ejecutar migraciones ahora que DB_DATABASE apunta a /tmp
-echo "Ejecutando migraciones (forzadas) y seed (todos los seeders registrados)..."
-# No suprimimos errores para que aparezcan en los logs si algo falla
-php artisan migrate --force
-# Sembrar todos los seeders registrados en DatabaseSeeder
+# Ejecutar migraciones y seeders sobre la base de datos de /tmp
+echo "Ejecutando migraciones y seeders..."
+php artisan migrate --force || true
 php artisan db:seed --force || true
-# Migraciones ya ejecutadas arriba
 
-# Arrancar Apache en primer plano
+echo "=== Tareas completadas con éxito — Lanzando Apache ==="
 exec apache2-foreground
