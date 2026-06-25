@@ -66,6 +66,11 @@ class Producto extends Model
         return $this->hasMany(MovimientoInventario::class, 'producto_id');
     }
 
+    public function serviceOrderDetails(): HasMany
+    {
+        return $this->hasMany(ServiceOrderDetail::class, 'producto_id');
+    }
+
     /**
      * Stock total sumando todas las bodegas.
      */
@@ -76,5 +81,28 @@ class Producto extends Model
             return (float) $this->stocks->sum('cantidad');
         }
         return (float) $this->stocks()->sum('cantidad');
+    }
+
+    /**
+     * Verifica si es un servicio (no descuenta stock).
+     */
+    public function esServicio(): bool
+    {
+        return (bool) $this->is_service;
+    }
+
+    /**
+     * Retorna la comisión (si aplica) o null.
+     */
+    public function obtenerComision(): ?array
+    {
+        if (!$this->has_commission) {
+            return null;
+        }
+
+        return [
+            'tipo' => $this->commission_type,
+            'valor' => $this->commission_value,
+        ];
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdjuntoController;
+use App\Http\Controllers\AssetVehicleController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BodegaController;
 use App\Http\Controllers\CategoriaController;
@@ -15,14 +16,17 @@ use App\Http\Controllers\FirmaController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\OperablesEmployeeController;
 use App\Http\Controllers\OrdenCompraController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ServicioController;
+use App\Http\Controllers\ServiceOrderController;
 use App\Http\Controllers\UsuarioAdminController;
 use Illuminate\Support\Facades\Route;
 
@@ -235,6 +239,36 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notificaciones', [NotificacionController::class, 'index']);
     Route::get('notificaciones/no-leidas', [NotificacionController::class, 'noLeidas']);
     Route::post('notificaciones/marcar-leidas', [NotificacionController::class, 'marcarLeidas']);
+
+    // ===== BLOQUE NUEVO: Sistema POS Híbrido (Servicios + Productos) =====
+    Route::middleware('feature:servicios')->group(function () {
+        // Empleados operables (mecánicos, estilistas, técnicos, etc)
+        Route::get('empleados/tipos', [OperablesEmployeeController::class, 'tipos']);
+        Route::apiResource('empleados', OperablesEmployeeController::class, ['parameters' => ['empleados' => 'operablesEmployee']]);
+
+        // Activos/Vehículos (motos, autos, celulares, etc)
+        Route::get('activos/tipos', [AssetVehicleController::class, 'tipos']);
+        Route::get('activos/buscar-placa', [AssetVehicleController::class, 'buscarPorPlaca']);
+        Route::get('activos/{assetVehicle}/hoja-vida', [AssetVehicleController::class, 'hojaDeVida']);
+        Route::apiResource('activos', AssetVehicleController::class, ['parameters' => ['activos' => 'assetVehicle']]);
+
+        // Órdenes de servicio (el nuevo motor de facturación)
+        Route::get('ordenes-servicio/estados', [ServiceOrderController::class, 'estados']);
+        Route::get('ordenes-servicio/buscar', [ServiceOrderController::class, 'buscarPorPlacaOOrden']);
+        Route::post('ordenes-servicio/{serviceOrder}/detalles', [ServiceOrderController::class, 'agregarDetalle']);
+        Route::put('ordenes-servicio/{serviceOrder}/detalles/{detail}', [ServiceOrderController::class, 'actualizarDetalle']);
+        Route::delete('ordenes-servicio/{serviceOrder}/detalles/{detail}', [ServiceOrderController::class, 'eliminarDetalle']);
+        Route::post('ordenes-servicio/{serviceOrder}/preparar-facturacion', [ServiceOrderController::class, 'prepararFacturacion']);
+        Route::post('ordenes-servicio/{serviceOrder}/completar', [ServiceOrderController::class, 'completar']);
+        Route::apiResource('ordenes-servicio', ServiceOrderController::class, ['parameters' => ['ordenes-servicio' => 'serviceOrder']]);
+
+        // Reportes: Comisiones y Hoja de vida
+        Route::get('reportes/liquidaciones-comisiones', [ReportController::class, 'liquidacionesComisiones']);
+        Route::post('reportes/liquidaciones-comisiones/{liquidacion}/marcar-pagada', [ReportController::class, 'marcarPagada']);
+        Route::post('reportes/generar-liquidacion', [ReportController::class, 'generarLiquidacion']);
+        Route::get('reportes/hoja-vida-activo', [ReportController::class, 'hojaDeVidaActivo']);
+        Route::get('reportes/comisiones-por-empleado', [ReportController::class, 'comisionesPorEmpleado']);
+    });
 
     // ===== BLOQUE E: Bloc de notas =====
     Route::apiResource('notas', NotaController::class)->except('show')->middleware('feature:notas');
