@@ -30,8 +30,8 @@ class CreateCommissionLiquidationsTable extends Migration
             $table->index('owner_id');
             $table->index('operables_employee_id');
             $table->index('estado');
-            $table->unique(['operables_employee_id', 'fecha_inicio', 'fecha_fin']);
-        });
+            $table->unique(['operables_employee_id', 'fecha_inicio', 'fecha_fin'], 'comm_liq_emp_dates_unique');
+        }); // <-- ¡Esta llave y paréntesis hacían falta para cerrar el Schema::create!
     }
 
     /**
