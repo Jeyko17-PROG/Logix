@@ -22,6 +22,10 @@ class Producto extends Model
         'codigo_barras',
         'nombre',
         'descripcion',
+        'is_service',
+        'has_commission',
+        'commission_type',
+        'commission_value',
         'precio_costo',
         'precio_venta',
         'imagen_url',
@@ -33,6 +37,9 @@ class Producto extends Model
         'precio_costo' => 'decimal:2',
         'precio_venta' => 'decimal:2',
         'activo' => 'boolean',
+        'is_service' => 'boolean',
+        'has_commission' => 'boolean',
+        'commission_value' => 'decimal:2',
     ];
 
     protected $appends = ['stock_total'];
