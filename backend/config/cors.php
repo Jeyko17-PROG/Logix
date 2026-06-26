@@ -21,7 +21,7 @@ return [
     'https://logix-git-main-jeyko17-progl-ogix.vercel.app',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins' => ['*'],
 
     'allowed_headers' => ['*'],
 
