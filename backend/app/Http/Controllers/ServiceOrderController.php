@@ -97,7 +97,7 @@ class ServiceOrderController extends Controller
     }
 
     /**
-     * Agregar un detalle a la orden.
+     * Agregar un detalle a la orden y descontar del inventario si es repuesto.
      */
     public function agregarDetalle(Request $request, ServiceOrder $serviceOrder): JsonResponse
     {
@@ -111,6 +111,18 @@ class ServiceOrderController extends Controller
             'comision_value' => ['nullable', 'numeric', 'min:0'],
             'notas' => ['nullable', 'string'],
         ]);
+
+        // --- SISTEMA DE INVENTARIO AUTOMÁTICO ---
+        $producto = Producto::find($data['producto_id']);
+        
+        // Solo descuenta si no está configurado como servicio/mano de obra
+        if ($producto && !$producto->is_service) {
+            if ($producto->stock < $data['cantidad']) {
+                return response()->json(['error' => "Stock insuficiente en tienda. Disponibles: {$producto->stock}"], 422);
+            }
+            $producto->decrement('stock', $data['cantidad']);
+        }
+        // ----------------------------------------
 
         $subtotal = $data['cantidad'] * $data['precio_unitario'];
         $data['subtotal'] = $subtotal;
@@ -131,7 +143,7 @@ class ServiceOrderController extends Controller
     }
 
     /**
-     * Actualizar un detalle de la orden (incluyendo comisiones en caliente).
+     * Actualizar un detalle de la orden.
      */
     public function actualizarDetalle(Request $request, ServiceOrder $serviceOrder, ServiceOrderDetail $detail): JsonResponse
     {
@@ -142,6 +154,22 @@ class ServiceOrderController extends Controller
             'tipo_comision' => ['nullable', 'in:percentage,fixed'],
             'comision_value' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        // Ajustar inventario si cambia la cantidad del repuesto
+        if (isset($data['cantidad'])) {
+            $producto = Producto::find($detail->producto_id);
+            if ($producto && !$producto->is_service) {
+                $diferencia = $data['cantidad'] - $detail->cantidad;
+                if ($diferencia > 0) {
+                    if ($producto->stock < $diferencia) {
+                        return response()->json(['error' => "Stock insuficiente para aumentar la cantidad. Disponibles: {$producto->stock}"], 422);
+                    }
+                    $producto->decrement('stock', $diferencia);
+                } elseif ($diferencia < 0) {
+                    $producto->increment('stock', abs($diferencia));
+                }
+            }
+        }
 
         if (isset($data['cantidad']) && isset($data['precio_unitario'])) {
             $data['subtotal'] = $data['cantidad'] * $data['precio_unitario'];
@@ -161,13 +189,20 @@ class ServiceOrderController extends Controller
     }
 
     /**
-     * Eliminar un detalle.
+     * Eliminar un detalle y devolver el stock al inventario.
      */
     public function eliminarDetalle(ServiceOrder $serviceOrder, ServiceOrderDetail $detail): JsonResponse
     {
+        // --- RESTABLECER INVENTARIO ---
+        $producto = Producto::find($detail->producto_id);
+        if ($producto && !$producto->is_service) {
+            $producto->increment('stock', $detail->cantidad);
+        }
+        // ------------------------------
+
         $detail->delete();
         $serviceOrder->recalculateTotals();
-        return response()->json(['message' => 'Detalle eliminado.']);
+        return response()->json(['message' => 'Detalle eliminado y stock devuelto a inventario.']);
     }
 
     /**
@@ -184,7 +219,7 @@ class ServiceOrderController extends Controller
     }
 
     /**
-     * Marcar como completada y registrar hoja de vida.
+     * Marcar como completada y registrar hoja de vida de la moto de forma automática.
      */
     public function completar(Request $request, ServiceOrder $serviceOrder): JsonResponse
     {
@@ -193,7 +228,7 @@ class ServiceOrderController extends Controller
             'estado_salida' => ['nullable', 'string', 'max:255'],
         ]);
 
-        // Registrar en hoja de vida si hay asset
+        // Registrar en hoja de vida (AssetHistory) automáticamente si hay vehículo asociado
         if ($serviceOrder->asset_vehicle_id) {
             AssetHistory::create([
                 'asset_vehicle_id' => $serviceOrder->asset_vehicle_id,
