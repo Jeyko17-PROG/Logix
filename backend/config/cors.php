@@ -18,8 +18,7 @@ return [
 
     // Allow your Vercel frontend origin for requests
     'allowed_origins' => [
-        env('FRONTEND_URL', 'https://logix-delta.vercel.app'),
-        'https://logix-delta.vercel.app',
+    'https://logix-git-main-jeyko17-progl-ogix.vercel.app',
     ],
 
     'allowed_origins_patterns' => [],
