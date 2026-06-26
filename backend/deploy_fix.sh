@@ -131,3 +131,5 @@ echo "Mostrando últimas 80 líneas de log (storage/logs/laravel.log):"
 tail -n 80 storage/logs/laravel.log || echo "No se pudo leer laravel.log"
 
 echo "Hecho. Intenta iniciar sesión con $ADMIN_EMAIL / $ADMIN_PASS"
+
+php artisan migrate --force
