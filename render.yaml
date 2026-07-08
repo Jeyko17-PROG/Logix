@@ -25,3 +25,32 @@ services:
         value: database
       - key: FILESYSTEM_DISK
         value: public
+      # --- Correo transaccional (envio de facturas) ---
+      # MAIL_USERNAME y MAIL_PASSWORD se configuran como secretos en el dashboard de Render.
+      # Ejemplos: Gmail (smtp.gmail.com:587 + App Password) o Brevo (smtp-relay.brevo.com:587).
+      - key: MAIL_MAILER
+        value: smtp
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: '587'
+      - key: MAIL_ENCRYPTION
+        value: tls
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_ADDRESS
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: Logix POS
+      # --- Pasarela de pagos Wompi (PSE, Nequi, tarjetas) ---
+      # Llaves del comercio en comercios.wompi.co; se configuran como secretos.
+      - key: WOMPI_PUBLIC_KEY
+        sync: false
+      - key: WOMPI_INTEGRITY_SECRET
+        sync: false
+      - key: WOMPI_EVENTS_SECRET
+        sync: false
+      - key: WOMPI_REDIRECT_URL
+        sync: false

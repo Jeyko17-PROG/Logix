@@ -182,9 +182,19 @@ class AuthController extends Controller
      */
     public function me(Request $request): JsonResponse
     {
-        return response()->json(
-            $request->user()->load('rol.permisos', 'plan', 'bodega', 'workspaceOwner')
-        );
+        $user = $request->user()->load('rol.permisos', 'plan', 'bodega', 'workspaceOwner');
+
+        // Estado de cobro SaaS del workspace (el del dueño si es un empleado):
+        // el frontend usa esto para mostrar la pasarela de pago cuando la membresía vence.
+        $owner = $user->billingOwner();
+        $user->setAttribute('facturacion_saas', [
+            'modo_cobro' => $owner->modo_cobro,
+            'membresia_vence_at' => $owner->membresia_vence_at?->toIso8601String(),
+            'membresia_vencida' => $owner->membresiaVencida(),
+            'creditos_facturacion' => (int) ($owner->credits()->where('module', 'facturacion')->value('credits') ?? 0),
+        ]);
+
+        return response()->json($user);
     }
 
     /**

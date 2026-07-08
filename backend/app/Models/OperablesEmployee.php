@@ -16,6 +16,7 @@ class OperablesEmployee extends Model
 
     protected $fillable = [
         'owner_id',
+        'user_id',
         'nombre',
         'apellido',
         'email',
@@ -35,6 +36,12 @@ class OperablesEmployee extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /** Cuenta de acceso (login) vinculada a este empleado, si la tiene. */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function serviceOrderDetails(): HasMany

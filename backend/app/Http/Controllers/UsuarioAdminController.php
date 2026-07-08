@@ -50,6 +50,9 @@ class UsuarioAdminController extends Controller
             'bodega' => $u->bodega ? ['id' => $u->bodega->id, 'nombre' => $u->bodega->nombre] : null,
             'plan' => $u->plan ? ['id' => $u->plan->id, 'nombre' => $u->plan->nombre] : null,
             'estado' => $u->estado,
+            'modo_cobro' => $u->modo_cobro,
+            'membresia_vence_at' => $u->membresia_vence_at?->toIso8601String(),
+            'membresia_vencida' => $u->membresiaVencida(),
             'es_super_admin' => (bool) $u->es_super_admin,
             'limite_clientes' => $limite === PHP_INT_MAX ? null : $limite,
             'limite_manual' => $u->limite_clientes,
@@ -103,6 +106,9 @@ class UsuarioAdminController extends Controller
             'numero_documento' => ['nullable', 'string', 'max:50'],
             'telefono' => ['nullable', 'string', 'max:50'],
             'email' => ['required', 'email', 'unique:users,email,' . $usuario->id],
+            // Cobro SaaS: membresía mensual o prepago ($500 por factura).
+            'modo_cobro' => ['nullable', 'in:membresia,prepago'],
+            'membresia_vence_at' => ['nullable', 'date'],
         ]);
 
         $usuario->update($data);
@@ -121,11 +127,19 @@ class UsuarioAdminController extends Controller
             'rol_id' => ['required', 'exists:roles,id'],
             'bodega_id' => ['required', 'exists:bodegas,id'],
             'telefono' => ['nullable', 'string', 'max:50'],
+            // Ficha de empleado del taller (mecánico/técnico) a la que se vincula esta cuenta.
+            'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
         ]);
 
         $ownerId = $request->user()->workspaceOwnerId();
         $bodega = Bodega::where('id', $data['bodega_id'])->firstOrFail();
         abort_unless((int) $bodega->owner_id === $ownerId || $request->user()->esSuperAdmin(), 403, 'La bodega no pertenece a tu negocio.');
+
+        $empleadoTaller = null;
+        if (! empty($data['operables_employee_id'])) {
+            $empleadoTaller = \App\Models\OperablesEmployee::withoutGlobalScopes()->findOrFail($data['operables_employee_id']);
+            abort_unless((int) $empleadoTaller->owner_id === $ownerId || $request->user()->esSuperAdmin(), 403, 'El empleado no pertenece a tu negocio.');
+        }
 
         $user = User::create([
             'name' => $data['name'],
@@ -138,6 +152,11 @@ class UsuarioAdminController extends Controller
             'activo' => true,
             'estado' => 'ACTIVO',
         ]);
+
+        // Vincula la cuenta de acceso con la ficha del taller (el rol Mecanico filtra sus órdenes por aquí).
+        if ($empleadoTaller) {
+            $empleadoTaller->update(['user_id' => $user->id]);
+        }
 
         Auditoria::registrar($request->user()->id, $user->id, 'USUARIO', 'CREAR_EMPLEADO', null, $bodega->nombre);
 

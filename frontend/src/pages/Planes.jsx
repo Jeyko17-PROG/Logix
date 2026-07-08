@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useFeatures } from '../context/FeaturesContext'
@@ -14,12 +15,48 @@ export default function Planes() {
   const [planes, setPlanes] = useState([])
   const [editando, setEditando] = useState(null)
   const [cargando, setCargando] = useState(true)
+  const [pagando, setPagando] = useState(null)
+  const [paquetes, setPaquetes] = useState([])
+  const [creditos, setCreditos] = useState({})
+  const [searchParams] = useSearchParams()
+  const vencida = searchParams.get('vencida') === '1' || user?.facturacion_saas?.membresia_vencida
 
   async function cargar() {
     setCargando(true)
-    try { setPlanes(await api('/planes')) } finally { setCargando(false) }
+    try {
+      setPlanes(await api('/planes'))
+      // Billetera de pago por uso: paquetes de recarga y saldo actual.
+      const [pkgs, creds] = await Promise.all([
+        api('/credit-packages?module=facturacion').catch(() => []),
+        api('/credits').catch(() => ({})),
+      ])
+      setPaquetes(pkgs || [])
+      setCreditos(creds || {})
+    } finally { setCargando(false) }
   }
   useEffect(() => { cargar() }, [])
+
+  /** Abre el checkout de Wompi (PSE, Nequi, tarjeta) para pagar el plan. */
+  async function pagarPlan(p) {
+    setPagando(`plan-${p.id}`)
+    try {
+      const r = await api(`/planes/${p.id}/checkout`, { method: 'POST' })
+      window.location.href = r.checkoutUrl
+    } catch (err) {
+      alert(err.message || 'No se pudo iniciar el pago.')
+    } finally { setPagando(null) }
+  }
+
+  /** Abre el checkout de Wompi para recargar la billetera (pago por uso). */
+  async function recargar(pkg) {
+    setPagando(`pkg-${pkg.id}`)
+    try {
+      const r = await api('/credits/create-session', { method: 'POST', body: { package_id: pkg.id } })
+      window.location.href = r.checkoutUrl
+    } catch (err) {
+      alert(err.message || 'No se pudo iniciar la recarga.')
+    } finally { setPagando(null) }
+  }
 
   async function guardar(p) {
     const body = {
@@ -36,6 +73,23 @@ export default function Planes() {
 
   return (
     <div>
+      {/* Aviso de membresía vencida: pantalla de pasarela de pago */}
+      {vencida && !esSuper && (
+        <div className="mb-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
+          <h2 className="text-lg font-bold text-red-300">⚠️ Tu membresía venció</h2>
+          <p className="text-sm text-red-200/80 mt-1">
+            Las funciones del POS están bloqueadas hasta que renueves tu plan.
+            Elige un plan abajo y paga con PSE, Nequi o tarjeta — el acceso se
+            reactiva automáticamente al confirmarse el pago.
+          </p>
+          {user?.facturacion_saas?.membresia_vence_at && (
+            <p className="text-xs text-red-200/60 mt-2">
+              Venció el {new Date(user.facturacion_saas.membresia_vence_at).toLocaleDateString('es-CO')}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold">Planes de suscripción</h1>
         {esSuper && <button onClick={() => setEditando({ ...PLANTILLA, orden: planes.length })}
@@ -58,11 +112,40 @@ export default function Planes() {
               <ul className="mt-4 space-y-1 text-sm text-slate-300 flex-1">
                 {(p.incluye ?? []).map((i, k) => <li key={k}>✓ {i}</li>)}
               </ul>
-              {esSuper && (
+              {esSuper ? (
                 <button onClick={() => setEditando(p)} className="mt-5 w-full rounded-lg bg-slate-700 hover:bg-slate-600 py-2 text-sm font-semibold">Editar plan</button>
+              ) : p.activo && Number(p.precio_mensual) > 0 && (
+                <button onClick={() => pagarPlan(p)} disabled={pagando === `plan-${p.id}`}
+                  className="mt-5 w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-2 text-sm font-semibold">
+                  {pagando === `plan-${p.id}` ? 'Abriendo pago…' : (user?.plan?.id === p.id ? 'Renovar (PSE / Nequi / Tarjeta)' : 'Pagar este plan')}
+                </button>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pago por uso: billetera y recargas ($500 COP por factura) */}
+      {!esSuper && paquetes.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xl font-bold mb-1">Pago por uso (billetera)</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            ¿No quieres membresía mensual? Recarga saldo y paga <span className="text-white font-semibold">$500 COP por cada factura</span> que generes.
+            Saldo actual: <span className="text-emerald-400 font-bold">{creditos.facturacion ?? 0} facturas disponibles</span>.
+          </p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {paquetes.map((pkg) => (
+              <div key={pkg.id} className="rounded-2xl border border-slate-800 bg-slate-800/40 p-5 flex flex-col">
+                <h3 className="font-bold">{pkg.name}</h3>
+                <p className="text-2xl font-extrabold mt-1">{COP(pkg.price_cop)}</p>
+                <p className="text-sm text-slate-400 flex-1">{pkg.credits} facturas ({COP(Math.round(pkg.price_cop / pkg.credits))} c/u)</p>
+                <button onClick={() => recargar(pkg)} disabled={pagando === `pkg-${pkg.id}`}
+                  className="mt-4 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 py-2 text-sm font-semibold">
+                  {pagando === `pkg-${pkg.id}` ? 'Abriendo pago…' : 'Recargar'}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

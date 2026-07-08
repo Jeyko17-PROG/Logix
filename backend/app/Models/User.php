@@ -26,6 +26,8 @@ class User extends Authenticatable
         'password',
         'rol_id',
         'plan_id',
+        'modo_cobro',
+        'membresia_vence_at',
         'limite_clientes',
         'foto_perfil_url',
         'telefono',
@@ -55,6 +57,7 @@ class User extends Authenticatable
         'password' => 'hashed',
         'activo' => 'boolean',
         'es_super_admin' => 'boolean',
+        'membresia_vence_at' => 'datetime',
     ];
 
     /** El administrador principal que supervisa todas las cuentas. */
@@ -76,6 +79,51 @@ class User extends Authenticatable
     public function workspaceOwnerId(): int
     {
         return (int) ($this->workspace_owner_id ?: $this->id);
+    }
+
+    /** Rol Mecánico/Técnico: solo ve sus órdenes asignadas, sin acceso a facturación ni precios. */
+    public function esMecanico(): bool
+    {
+        return $this->tieneRol('Mecanico');
+    }
+
+    /**
+     * Usuario responsable del cobro SaaS del workspace:
+     * el dueño (workspace_owner) si este usuario es un empleado, o él mismo.
+     */
+    public function billingOwner(): User
+    {
+        if ($this->workspace_owner_id && $this->workspaceOwner) {
+            return $this->workspaceOwner;
+        }
+        return $this;
+    }
+
+    /**
+     * ¿La membresía mensual está vencida?
+     * Solo aplica en modo 'membresia' y cuando hay fecha de vencimiento registrada
+     * (NULL = cuenta sin control de vencimiento, no se bloquea).
+     */
+    public function membresiaVencida(): bool
+    {
+        return $this->modo_cobro === 'membresia'
+            && $this->membresia_vence_at !== null
+            && $this->membresia_vence_at->isPast();
+    }
+
+    /** Registra una renovación: extiende la membresía un mes desde hoy (o desde el vencimiento futuro). */
+    public function renovarMembresia(int $meses = 1): void
+    {
+        $base = ($this->membresia_vence_at && $this->membresia_vence_at->isFuture())
+            ? $this->membresia_vence_at
+            : now();
+
+        $this->forceFill([
+            'membresia_vence_at' => $base->copy()->addMonths($meses),
+            'modo_cobro' => 'membresia',
+            'estado' => 'ACTIVO',
+            'activo' => true,
+        ])->save();
     }
 
     /** Un empleado queda limitado a la bodega/local asignado. */

@@ -42,8 +42,13 @@ export async function api(path, { method = 'GET', body, isForm = false } = {}) {
   const data = res.status === 204 ? null : await res.json().catch(() => null)
 
   if (!res.ok) {
+    // Membresía vencida: el backend bloquea las funciones operativas con 402.
+    // Se lleva al usuario a la pantalla de planes/pago para que renueve.
+    if (res.status === 402 && data?.codigo === 'MEMBRESIA_VENCIDA' && !window.location.pathname.startsWith('/planes')) {
+      window.location.href = '/planes?vencida=1'
+    }
     const message = data?.message || 'Ocurrió un error en la solicitud.'
-    throw { status: res.status, message, errors: data?.errors || {} }
+    throw { status: res.status, message, codigo: data?.codigo, errors: data?.errors || {} }
   }
 
   return data

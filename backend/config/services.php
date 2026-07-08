@@ -41,4 +41,14 @@ return [
         'model' => env('ANTHROPIC_MODEL', 'claude-opus-4-8'),
     ],
 
+    // Pasarela de pagos Wompi (Bancolombia): PSE, Nequi, tarjetas.
+    // Las llaves se obtienen en comercios.wompi.co; el dinero se liquida en la
+    // cuenta bancaria registrada en el panel de Wompi (no se configura aquí).
+    'wompi' => [
+        'public_key' => env('WOMPI_PUBLIC_KEY'),          // pub_prod_xxx o pub_test_xxx
+        'integrity_secret' => env('WOMPI_INTEGRITY_SECRET'), // firma de integridad del checkout
+        'events_secret' => env('WOMPI_EVENTS_SECRET'),    // firma de los webhooks (eventos)
+        'redirect_url' => env('WOMPI_REDIRECT_URL'),      // a dónde vuelve el cliente tras pagar
+    ],
+
 ];

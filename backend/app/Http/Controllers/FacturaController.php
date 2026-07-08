@@ -20,6 +20,7 @@ class FacturaController extends Controller
 
     public function index(Request $request)
     {
+        $this->bloquearMecanico($request);
         $q = Factura::with('cliente:id,nombre_completo,email,telefono');
         if ($request->user()?->estaLimitadoABodega()) {
             $q->where('bodega_id', $request->user()->bodega_id);
@@ -32,6 +33,7 @@ class FacturaController extends Controller
 
     public function show(Factura $factura)
     {
+        $this->bloquearMecanico(request());
         return $factura->load(['cliente', 'detalles']);
     }
 
@@ -55,8 +57,12 @@ class FacturaController extends Controller
             'exchange_rate' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        return DB::transaction(function () use ($data, $request) {
+        $factura = DB::transaction(function () use ($data, $request) {
             $bodegaId = $this->resolverBodegaFactura($request, $data['bodega_id'] ?? null);
+
+            // Pago por uso: en modo prepago cada factura consume 1 crédito ($500 COP).
+            // Si no hay saldo, la venta se detiene aquí (422) y no se crea nada.
+            $this->cobrarUsoPorFactura($request->user());
 
             // IVA general usado como respaldo cuando una linea no define el suyo.
             $pctGeneral = $data['impuesto_porcentaje'] ?? 0;
@@ -126,8 +132,14 @@ class FacturaController extends Controller
 
             Auditoria::registrar($request->user()->id, null, 'FACTURA', 'EMITIR', null, $factura->numero, $bodegaId);
 
-            return response()->json($factura->load(['cliente:id,nombre_completo,email,telefono', 'detalles']), 201);
+            return $factura->load(['cliente:id,nombre_completo,email,telefono', 'detalles']);
         });
+
+        // Envío automático del PDF al correo del cliente. Si el correo falla,
+        // la venta NO se revierte: queda registrado en el log y se puede reenviar.
+        $this->enviarFacturaAutomatica($factura);
+
+        return response()->json($factura, 201);
     }
 
     /**
@@ -376,6 +388,76 @@ class FacturaController extends Controller
             'mensaje' => $mensaje,
             'pdf_public_url' => $urlPdf,
         ]);
+    }
+
+    /** El rol Mecanico no tiene acceso a la facturación (montos ni listados). */
+    private function bloquearMecanico(Request $request): void
+    {
+        if ($request->user()?->esMecanico()) {
+            abort(403, 'Tu rol no tiene acceso a la facturación.');
+        }
+    }
+
+    /**
+     * Modalidad "pago por uso": si el dueño del workspace está en modo prepago,
+     * cada factura emitida consume 1 crédito de facturación ($500 COP).
+     */
+    private function cobrarUsoPorFactura(\App\Models\User $user): void
+    {
+        $owner = $user->billingOwner();
+
+        if ($owner->esSuperAdmin() || $owner->modo_cobro !== 'prepago') {
+            return;
+        }
+
+        try {
+            $this->creditService->consume($owner->id, 'facturacion', 1);
+        } catch (ValidationException $e) {
+            throw ValidationException::withMessages([
+                'credits' => ['Saldo insuficiente en tu billetera: cada factura cuesta $500 COP (1 crédito). Recarga saldo para seguir facturando.'],
+            ]);
+        }
+    }
+
+    /**
+     * Envía el PDF de la factura al correo del cliente de forma automática.
+     * Nunca lanza excepciones: un fallo de correo no debe tumbar la venta.
+     */
+    private function enviarFacturaAutomatica(Factura $factura): void
+    {
+        try {
+            $email = $factura->cliente?->email;
+            if (! $email) {
+                return;
+            }
+
+            if (! $factura->pdf_url) {
+                $this->generarPdf($factura);
+                $factura->refresh();
+            }
+
+            $adjunto = $factura->pdf_url
+                ? Storage::disk('public')->path(str_replace('/storage/', '', $factura->pdf_url))
+                : null;
+
+            $this->notificador->correo(
+                $email,
+                "Factura {$factura->numero} - Logix",
+                "Factura {$factura->numero}",
+                [
+                    "Hola {$factura->cliente->nombre_completo},",
+                    "Gracias por tu compra. Adjuntamos tu factura {$factura->numero} por un total de \${$factura->total}.",
+                    'Si tienes alguna duda, responde a este correo.',
+                ],
+                $adjunto,
+                'FACTURA',
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Fallo el envío automático de la factura', [
+                'factura' => $factura->numero,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function siguienteNumero(): string

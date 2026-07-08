@@ -70,6 +70,69 @@ class ClienteController extends Controller
         return response()->json(array_merge($cliente->toArray(), $historial));
     }
 
+    /**
+     * Fidelización en el POS: al digitar la placa o la cédula, muestra cuántas
+     * veces ha venido el cliente, qué ha comprado y qué mecánicos lo atendieron.
+     * GET /pos/historial-cliente?q=ABC123 (placa, cédula o nombre)
+     */
+    public function historialPos(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+        if ($q === '') {
+            return response()->json(['message' => 'Indica una placa, cédula o nombre.'], 422);
+        }
+
+        // 1) Por placa del vehículo/activo.
+        $cliente = null;
+        $vehiculo = \App\Models\AssetVehicle::where('placa_identificador', 'like', "%{$q}%")->first();
+        if ($vehiculo) {
+            $cliente = Cliente::find($vehiculo->cliente_id);
+        }
+
+        // 2) Por cédula/documento o nombre.
+        if (! $cliente) {
+            $cliente = Cliente::where('numero_documento', $q)
+                ->orWhere(function ($sub) use ($q) {
+                    $sub->where('nombre_completo', 'like', "%{$q}%");
+                })
+                ->first();
+        }
+
+        if (! $cliente) {
+            return response()->json(['message' => 'No se encontró un cliente con esa placa o cédula.'], 404);
+        }
+
+        $ordenes = \App\Models\ServiceOrder::where('cliente_id', $cliente->id)
+            ->with('mecanicoAsignado:id,nombre,apellido', 'assetVehicle:id,placa_identificador,marca,modelo', 'details.operablesEmployee:id,nombre,apellido')
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        $facturas = \App\Models\Factura::where('cliente_id', $cliente->id)
+            ->orderByDesc('fecha')
+            ->limit(20)
+            ->get(['id', 'numero', 'fecha', 'total', 'estado']);
+
+        // Mecánicos que lo han atendido (por orden o por detalle), sin repetir.
+        $mecanicos = $ordenes
+            ->flatMap(fn ($o) => collect([$o->mecanicoAsignado])
+                ->merge($o->details->pluck('operablesEmployee')))
+            ->filter()
+            ->unique('id')
+            ->map(fn ($m) => ['id' => $m->id, 'nombre' => trim("{$m->nombre} {$m->apellido}")])
+            ->values();
+
+        return response()->json([
+            'cliente' => $cliente->only(['id', 'nombre_completo', 'tipo_documento', 'numero_documento', 'telefono', 'email']),
+            'vehiculo' => $vehiculo?->only(['id', 'placa_identificador', 'marca', 'modelo']),
+            'visitas' => \App\Models\ServiceOrder::where('cliente_id', $cliente->id)->count(),
+            'total_comprado' => (float) \App\Models\Factura::where('cliente_id', $cliente->id)->sum('total'),
+            'mecanicos' => $mecanicos,
+            'ordenes' => $ordenes,
+            'facturas' => $facturas,
+        ]);
+    }
+
     public function update(Request $request, Cliente $cliente)
     {
         $cliente->update($this->validar($request));

@@ -17,6 +17,7 @@ class RoleSeeder extends Seeder
             'Almacenista' => 'Acceso limitado al inventario, productos y movimientos.',
             'Ventas/Compras' => 'Acceso a proveedores, órdenes de compra y facturación.',
             'Empleado' => 'Gestiona agenda, citas y clientes asignados.',
+            'Mecanico' => 'Mecánico/Técnico del taller: solo ve sus órdenes asignadas, registra trabajos y repuestos; sin acceso a facturación ni precios.',
             'Cliente' => 'Acceso al portal: reservar y consultar sus propias citas.',
         ];
 
@@ -53,6 +54,7 @@ class RoleSeeder extends Seeder
             'Almacenista' => ['productos.ver', 'productos.gestionar', 'inventario.mover', 'reportes.ver'],
             'Ventas/Compras' => ['productos.ver', 'proveedores.ver', 'proveedores.gestionar', 'compras.gestionar', 'reportes.ver', 'clientes.ver', 'clientes.gestionar', 'facturacion.gestionar'],
             'Empleado' => ['agenda.ver', 'agenda.gestionar', 'clientes.ver', 'clientes.gestionar', 'productos.ver'],
+            'Mecanico' => ['productos.ver'],
             'Cliente' => [], // el portal usa endpoints propios, no permisos administrativos
         ];
 

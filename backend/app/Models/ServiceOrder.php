@@ -18,6 +18,7 @@ class ServiceOrder extends Model
         'owner_id',
         'cliente_id',
         'asset_vehicle_id',
+        'operables_employee_id',
         'numero_orden',
         'estado',
         'descripcion_trabajo',
@@ -58,6 +59,12 @@ class ServiceOrder extends Model
     public function assetVehicle(): BelongsTo
     {
         return $this->belongsTo(AssetVehicle::class, 'asset_vehicle_id');
+    }
+
+    /** Mecánico/técnico responsable de toda la orden. */
+    public function mecanicoAsignado(): BelongsTo
+    {
+        return $this->belongsTo(OperablesEmployee::class, 'operables_employee_id');
     }
 
     public function factura(): BelongsTo

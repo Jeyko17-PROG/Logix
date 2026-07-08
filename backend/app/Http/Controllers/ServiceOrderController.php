@@ -19,11 +19,15 @@ class ServiceOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = ServiceOrder::with([
-            'cliente:id,nombre',
+            'cliente:id,nombre_completo',
             'assetVehicle:id,placa_identificador,marca,modelo',
+            'mecanicoAsignado:id,nombre,apellido',
             'details.operablesEmployee:id,nombre,apellido',
             'details.producto:id,nombre,precio_venta',
         ]);
+
+        // Rol Mecanico: solo ve las órdenes que tiene asignadas.
+        $this->limitarAMecanico($request, $query);
 
         if ($estado = $request->query('estado')) {
             $query->where('estado', $estado);
@@ -37,7 +41,7 @@ class ServiceOrderController extends Controller
             $query->where(function ($w) use ($buscar) {
                 $w->where('numero_orden', 'like', "%{$buscar}%")
                     ->orWhere('descripcion_trabajo', 'like', "%{$buscar}%")
-                    ->orWhereHas('cliente', fn (Builder $q) => $q->where('nombre', 'like', "%{$buscar}%"));
+                    ->orWhereHas('cliente', fn (Builder $q) => $q->where('nombre_completo', 'like', "%{$buscar}%"));
             });
         }
 
@@ -50,11 +54,12 @@ class ServiceOrderController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $this->validar($request);
-        $data['owner_id'] = auth()->id();
-        $data['numero_orden'] = ServiceOrder::generarNumeroOrden(auth()->id());
+        $ownerId = $request->user()->workspaceOwnerId();
+        $data['owner_id'] = $ownerId;
+        $data['numero_orden'] = ServiceOrder::generarNumeroOrden($ownerId);
 
         $orden = ServiceOrder::create($data);
-        return response()->json($orden->load('cliente:id,nombre', 'assetVehicle:id,placa_identificador,marca,modelo'), 201);
+        return response()->json($orden->load('cliente:id,nombre_completo', 'assetVehicle:id,placa_identificador,marca,modelo', 'mecanicoAsignado:id,nombre,apellido'), 201);
     }
 
     /**
@@ -62,9 +67,12 @@ class ServiceOrderController extends Controller
      */
     public function show(ServiceOrder $serviceOrder): JsonResponse
     {
+        $this->autorizarMecanico($serviceOrder);
+
         return response()->json(
             $serviceOrder->load([
-                'cliente:id,nombre,telefono,email',
+                'cliente:id,nombre_completo,telefono,email',
+                'mecanicoAsignado:id,nombre,apellido,ci_cedula',
                 'assetVehicle:id,placa_identificador,marca,modelo,anio,color',
                 'details' => fn ($q) => $q->with([
                     'producto:id,nombre,precio_venta,is_service',
@@ -84,13 +92,21 @@ class ServiceOrderController extends Controller
             return response()->json(['error' => 'No se puede editar una orden facturada.'], 403);
         }
 
+        $this->autorizarMecanico($serviceOrder);
+
         $data = $request->validate([
             'descripcion_trabajo' => ['nullable', 'string'],
             'estado' => ['in:recibido,en_proceso,listo,facturado,cancelado'],
+            'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
             'fecha_entrega_estimada' => ['nullable', 'date'],
             'requiere_pago_anticipo' => ['boolean'],
             'monto_anticipo' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        // El mecánico solo registra diagnóstico/avance: no toca anticipos ni reasigna la orden.
+        if ($request->user()->esMecanico()) {
+            $data = array_intersect_key($data, array_flip(['descripcion_trabajo', 'estado']));
+        }
 
         $serviceOrder->update($data);
         return response()->json($serviceOrder->load('details'));
@@ -101,6 +117,8 @@ class ServiceOrderController extends Controller
      */
     public function agregarDetalle(Request $request, ServiceOrder $serviceOrder): JsonResponse
     {
+        $this->autorizarMecanico($serviceOrder);
+
         $data = $request->validate([
             'producto_id' => ['required', 'exists:productos,id'],
             'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
@@ -114,6 +132,13 @@ class ServiceOrderController extends Controller
 
         // --- SISTEMA DE INVENTARIO AUTOMÁTICO ---
         $producto = Producto::find($data['producto_id']);
+
+        // El mecánico no puede fijar precios ni comisiones: se usa el precio de lista del producto.
+        if ($request->user()->esMecanico()) {
+            $data['precio_unitario'] = (float) ($producto?->precio_venta ?? 0);
+            unset($data['tiene_comision'], $data['tipo_comision'], $data['comision_value']);
+            $data['tiene_comision'] = false;
+        }
         
         // Solo descuenta si no está configurado como servicio/mano de obra
         if ($producto && !$producto->is_service) {
@@ -147,6 +172,8 @@ class ServiceOrderController extends Controller
      */
     public function actualizarDetalle(Request $request, ServiceOrder $serviceOrder, ServiceOrderDetail $detail): JsonResponse
     {
+        $this->autorizarMecanico($serviceOrder);
+
         $data = $request->validate([
             'cantidad' => ['integer', 'min:1'],
             'precio_unitario' => ['numeric', 'min:0'],
@@ -154,6 +181,11 @@ class ServiceOrderController extends Controller
             'tipo_comision' => ['nullable', 'in:percentage,fixed'],
             'comision_value' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        // El mecánico solo puede ajustar cantidades, nunca precios ni comisiones.
+        if ($request->user()->esMecanico()) {
+            $data = array_intersect_key($data, array_flip(['cantidad']));
+        }
 
         // Ajustar inventario si cambia la cantidad del repuesto
         if (isset($data['cantidad'])) {
@@ -269,7 +301,7 @@ class ServiceOrderController extends Controller
 
         // Buscar por placa de activo
         $activos = \App\Models\AssetVehicle::where('placa_identificador', 'like', "%{$query}%")
-            ->with('cliente:id,nombre')
+            ->with('cliente:id,nombre_completo')
             ->limit(5)
             ->get();
 
@@ -303,10 +335,48 @@ class ServiceOrderController extends Controller
         return $request->validate([
             'cliente_id' => ['required', 'exists:clientes,id'],
             'asset_vehicle_id' => ['nullable', 'exists:assets_vehicles,id'],
+            'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
             'descripcion_trabajo' => ['nullable', 'string'],
             'fecha_entrega_estimada' => ['nullable', 'date'],
             'requiere_pago_anticipo' => ['boolean'],
             'monto_anticipo' => ['nullable', 'numeric', 'min:0'],
         ]);
+    }
+
+    /**
+     * Si el usuario tiene rol Mecanico, limita la consulta a las órdenes
+     * asignadas a su ficha de empleado (a nivel de orden o de detalle).
+     */
+    private function limitarAMecanico(Request $request, Builder $query): void
+    {
+        $user = $request->user();
+        if (! $user?->esMecanico()) {
+            return;
+        }
+
+        $empleadoIds = OperablesEmployee::where('user_id', $user->id)->pluck('id');
+
+        $query->where(function (Builder $q) use ($empleadoIds) {
+            $q->whereIn('operables_employee_id', $empleadoIds)
+                ->orWhereHas('details', fn (Builder $d) => $d->whereIn('operables_employee_id', $empleadoIds));
+        });
+    }
+
+    /** Aborta con 403 si un Mecanico intenta acceder a una orden que no tiene asignada. */
+    private function autorizarMecanico(ServiceOrder $serviceOrder): void
+    {
+        $user = request()->user();
+        if (! $user?->esMecanico()) {
+            return;
+        }
+
+        $empleadoIds = OperablesEmployee::where('user_id', $user->id)->pluck('id');
+
+        $asignada = $empleadoIds->contains($serviceOrder->operables_employee_id)
+            || $serviceOrder->details()->whereIn('operables_employee_id', $empleadoIds)->exists();
+
+        if (! $asignada) {
+            abort(403, 'Solo puedes ver las órdenes que tienes asignadas.');
+        }
     }
 }

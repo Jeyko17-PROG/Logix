@@ -66,6 +66,13 @@ const MENU = [
     ],
   },
   {
+    grupo: 'Taller y POS',
+    items: [
+      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios' },
+      { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
+    ],
+  },
+  {
     grupo: 'Clientes y Ventas',
     items: [
       { to: '/clientes', label: 'Clientes', icon: '👥', feat: 'clientes' },
@@ -107,6 +114,9 @@ const MENU = [
   },
 ]
 
+// Rutas permitidas para el rol Mecanico: solo su trabajo, sin dinero ni facturación.
+const RUTAS_MECANICO = ['/', '/taller', '/productos', '/notificaciones', '/perfil']
+
 // Sección visible únicamente para el Super Administrador.
 const MENU_SUPER_ADMIN = {
   grupo: 'Plataforma (Super Admin)',
@@ -137,10 +147,20 @@ export default function Layout() {
 
   // El Super Administrador ve además la sección de plataforma.
   const base = user?.es_super_admin ? [...MENU, MENU_SUPER_ADMIN] : MENU
+  const esMecanico = user?.rol?.nombre === 'Mecanico'
   // Oculta del menú las funcionalidades DESACTIVADAS para el usuario.
+  // El Mecánico solo ve sus órdenes y catálogo: nada de facturación ni dinero.
   const secciones = base
-    .map((s) => ({ ...s, items: s.items.filter((m) => !m.feat || visible(m.feat)) }))
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((m) =>
+        (!m.feat || visible(m.feat)) && (!esMecanico || RUTAS_MECANICO.includes(m.to))
+      ),
+    }))
     .filter((s) => s.items.length > 0)
+
+  // Estado de cobro SaaS (viene en /me): saldo prepago o vencimiento de membresía.
+  const saas = user?.facturacion_saas
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -155,6 +175,17 @@ export default function Layout() {
           }} />
         <span className="font-bold text-lg">Logix</span>
         <div className="ml-auto flex items-center gap-2">
+          {/* Saldo de la billetera (modo prepago) o aviso de membresía vencida */}
+          {saas?.modo_cobro === 'prepago' && !user?.es_super_admin && (
+            <NavLink to="/planes" className="hidden sm:flex items-center gap-1 text-xs rounded-full bg-sky-500/15 text-sky-300 px-3 py-1.5 hover:bg-sky-500/25">
+              💰 {saas.creditos_facturacion ?? 0} facturas
+            </NavLink>
+          )}
+          {saas?.membresia_vencida && !user?.es_super_admin && (
+            <NavLink to="/planes?vencida=1" className="flex items-center gap-1 text-xs rounded-full bg-red-500/20 text-red-300 px-3 py-1.5 hover:bg-red-500/30">
+              ⚠️ Membresía vencida
+            </NavLink>
+          )}
           <Campana />
           <span className="text-sm text-slate-400 hidden sm:block">{user?.name} · {user?.rol?.nombre ?? 'Sin rol'}</span>
           <button onClick={handleLogout} className="text-sm rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5">Salir</button>

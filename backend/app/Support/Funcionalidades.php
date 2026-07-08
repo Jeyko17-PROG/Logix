@@ -34,12 +34,18 @@ class Funcionalidades
         'exportacion' => 'Exportación de datos',
         'pdf' => 'Descarga de PDF',
         'correos' => 'Envío de correos',
+        'servicios' => 'Taller / Órdenes de Servicio',
+        'caja' => 'Caja y Gastos',
     ];
 
     public const ESTADOS = ['ACTIVADA', 'RESTRINGIDA', 'DESACTIVADA'];
 
-    /** Funcionalidades base disponibles en cualquier plan (incluido el Gratuito). */
-    private const BASE = ['dashboard', 'notificaciones', 'notas', 'calculadora'];
+    /**
+     * Funcionalidades base disponibles en cualquier plan (incluido el Gratuito).
+     * 'servicios' y 'caja' van en la base porque son el corazón del POS de taller
+     * (además, los planes ya guardados en BD no las incluyen y quedarían bloqueadas).
+     */
+    private const BASE = ['dashboard', 'notificaciones', 'notas', 'calculadora', 'servicios', 'caja'];
 
     /**
      * Funcionalidades ACTIVADAS por defecto según el plan.

@@ -1,0 +1,701 @@
+import { useCallback, useEffect, useState } from 'react'
+import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+
+const COP = (n) => '$' + Number(n ?? 0).toLocaleString('es-CO')
+
+const ESTADOS = {
+  recibido: { label: 'Recibido', clase: 'bg-sky-500/15 text-sky-300' },
+  en_proceso: { label: 'En Proceso', clase: 'bg-amber-500/15 text-amber-300' },
+  listo: { label: 'Listo', clase: 'bg-emerald-500/15 text-emerald-300' },
+  facturado: { label: 'Facturado', clase: 'bg-violet-500/15 text-violet-300' },
+  cancelado: { label: 'Cancelado', clase: 'bg-red-500/15 text-red-300' },
+}
+
+const Chip = ({ estado }) => (
+  <span className={`text-xs rounded-full px-2 py-0.5 whitespace-nowrap ${ESTADOS[estado]?.clase ?? 'bg-slate-700'}`}>
+    {ESTADOS[estado]?.label ?? estado}
+  </span>
+)
+
+export default function Taller() {
+  const { user } = useAuth()
+  const esMecanico = user?.rol?.nombre === 'Mecanico'
+  const [tab, setTab] = useState('ordenes')
+
+  const tabs = [
+    { id: 'ordenes', label: '🔧 Órdenes de Servicio' },
+    ...(!esMecanico ? [
+      { id: 'vehiculos', label: '🏍️ Vehículos / Activos' },
+      { id: 'empleados', label: '👨‍🔧 Empleados del Taller' },
+    ] : []),
+  ]
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-1">Taller</h1>
+      <p className="text-slate-400 text-sm mb-5">
+        {esMecanico
+          ? 'Tus órdenes asignadas: registra el trabajo realizado y los repuestos usados.'
+          : 'Órdenes de servicio, hoja de vida de vehículos y equipo de mecánicos.'}
+      </p>
+
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${tab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+            {t.label}
+          </button>
+        ))}
+        {!esMecanico && <BuscadorHistorial />}
+      </div>
+
+      {tab === 'ordenes' && <Ordenes esMecanico={esMecanico} />}
+      {tab === 'vehiculos' && !esMecanico && <Vehiculos />}
+      {tab === 'empleados' && !esMecanico && <Empleados />}
+    </div>
+  )
+}
+
+/* ============ Fidelización: historial por placa o cédula ============ */
+function BuscadorHistorial() {
+  const [q, setQ] = useState('')
+  const [datos, setDatos] = useState(null)
+  const [error, setError] = useState('')
+
+  async function buscar(e) {
+    e.preventDefault()
+    if (!q.trim()) return
+    setError('')
+    try { setDatos(await api(`/pos/historial-cliente?q=${encodeURIComponent(q.trim())}`)) }
+    catch (err) { setError(err.message || 'No encontrado.') }
+  }
+
+  return (
+    <>
+      <form onSubmit={buscar} className="ml-auto flex gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Historial: placa o cédula…"
+          className="input !mt-0 w-48 sm:w-56" />
+        <button className="rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-2 text-sm">🔎</button>
+      </form>
+      {error && <p className="w-full text-red-400 text-sm">{error}</p>}
+      {datos && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setDatos(null)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold">{datos.cliente.nombre_completo}</h2>
+                <p className="text-sm text-slate-400">
+                  {datos.cliente.tipo_documento} {datos.cliente.numero_documento} · {datos.cliente.telefono}
+                  {datos.vehiculo && <> · {datos.vehiculo.marca} {datos.vehiculo.modelo} ({datos.vehiculo.placa_identificador})</>}
+                </p>
+              </div>
+              <button onClick={() => setDatos(null)} className="text-slate-400 hover:text-white text-xl">✕</button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 my-4">
+              <div className="rounded-xl bg-slate-800/60 p-3 text-center">
+                <p className="text-2xl font-extrabold">{datos.visitas}</p><p className="text-xs text-slate-400">Visitas al taller</p>
+              </div>
+              <div className="rounded-xl bg-slate-800/60 p-3 text-center">
+                <p className="text-2xl font-extrabold">{COP(datos.total_comprado)}</p><p className="text-xs text-slate-400">Total comprado</p>
+              </div>
+              <div className="rounded-xl bg-slate-800/60 p-3 text-center">
+                <p className="text-sm font-semibold mt-1">{datos.mecanicos.map((m) => m.nombre).join(', ') || '—'}</p>
+                <p className="text-xs text-slate-400">Mecánicos que lo atendieron</p>
+              </div>
+            </div>
+
+            <h3 className="font-semibold text-sm mb-2">Últimas órdenes</h3>
+            {datos.ordenes.length === 0 && <p className="text-slate-500 text-sm">Sin órdenes registradas.</p>}
+            {datos.ordenes.map((o) => (
+              <div key={o.id} className="flex items-center justify-between border-b border-slate-800 py-2 text-sm">
+                <span>{o.numero_orden} · {o.asset_vehicle?.placa_identificador ?? ''}</span>
+                <span className="text-slate-400">{new Date(o.created_at).toLocaleDateString('es-CO')}</span>
+                <Chip estado={o.estado} />
+                <span className="font-semibold">{COP(o.total)}</span>
+              </div>
+            ))}
+
+            <h3 className="font-semibold text-sm mt-4 mb-2">Últimas facturas</h3>
+            {datos.facturas.length === 0 && <p className="text-slate-500 text-sm">Sin facturas.</p>}
+            {datos.facturas.map((f) => (
+              <div key={f.id} className="flex items-center justify-between border-b border-slate-800 py-2 text-sm">
+                <span>{f.numero}</span>
+                <span className="text-slate-400">{new Date(f.fecha).toLocaleDateString('es-CO')}</span>
+                <span className="font-semibold">{COP(f.total)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/* ============ Órdenes de servicio ============ */
+function Ordenes({ esMecanico }) {
+  const [ordenes, setOrdenes] = useState([])
+  const [estado, setEstado] = useState('')
+  const [buscar, setBuscar] = useState('')
+  const [cargando, setCargando] = useState(true)
+  const [creando, setCreando] = useState(false)
+  const [abierta, setAbierta] = useState(null) // orden en detalle
+
+  const cargar = useCallback(async () => {
+    setCargando(true)
+    try {
+      const p = new URLSearchParams()
+      if (estado) p.set('estado', estado)
+      if (buscar) p.set('buscar', buscar)
+      const r = await api(`/ordenes-servicio?${p}`)
+      setOrdenes(r.data ?? [])
+    } finally { setCargando(false) }
+  }, [estado, buscar])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select value={estado} onChange={(e) => setEstado(e.target.value)} className="input !mt-0 w-44">
+          <option value="">Todos los estados</option>
+          {Object.entries(ESTADOS).map(([v, e]) => <option key={v} value={v}>{e.label}</option>)}
+        </select>
+        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar orden, cliente…" className="input !mt-0 w-56" />
+        {!esMecanico && (
+          <button onClick={() => setCreando(true)}
+            className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nueva orden</button>
+        )}
+      </div>
+
+      {cargando ? <p className="text-slate-500">Cargando…</p> : ordenes.length === 0 ? (
+        <p className="text-slate-500 py-8 text-center">No hay órdenes de servicio{esMecanico ? ' asignadas a ti' : ''}.</p>
+      ) : (
+        <div className="grid gap-3">
+          {ordenes.map((o) => (
+            <button key={o.id} onClick={() => setAbierta(o.id)}
+              className="text-left rounded-xl border border-slate-800 bg-slate-800/40 hover:bg-slate-800/70 p-4 transition">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-bold">{o.numero_orden}</span>
+                <Chip estado={o.estado} />
+                <span className="text-sm text-slate-300">{o.cliente?.nombre_completo}</span>
+                {o.asset_vehicle && (
+                  <span className="text-sm text-slate-400">🏍️ {o.asset_vehicle.marca} {o.asset_vehicle.modelo} · {o.asset_vehicle.placa_identificador}</span>
+                )}
+                {o.mecanico_asignado && (
+                  <span className="text-sm text-slate-400">👨‍🔧 {o.mecanico_asignado.nombre} {o.mecanico_asignado.apellido}</span>
+                )}
+                {!esMecanico && <span className="ml-auto font-semibold">{COP(o.total)}</span>}
+              </div>
+              {o.descripcion_trabajo && <p className="text-sm text-slate-400 mt-1 line-clamp-1">{o.descripcion_trabajo}</p>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {creando && <ModalCrearOrden onClose={() => setCreando(false)} onCreada={(id) => { setCreando(false); cargar(); setAbierta(id) }} />}
+      {abierta && <ModalOrden id={abierta} esMecanico={esMecanico} onClose={() => { setAbierta(null); cargar() }} />}
+    </div>
+  )
+}
+
+function ModalCrearOrden({ onClose, onCreada }) {
+  const [clientes, setClientes] = useState([])
+  const [buscarCliente, setBuscarCliente] = useState('')
+  const [vehiculos, setVehiculos] = useState([])
+  const [empleados, setEmpleados] = useState([])
+  const [form, setForm] = useState({ cliente_id: '', asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '' })
+  const [nuevoVehiculo, setNuevoVehiculo] = useState(null) // {placa, marca, modelo}
+  const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => {
+    api('/empleados').then((r) => setEmpleados(r.data ?? [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api(`/clientes?buscar=${encodeURIComponent(buscarCliente)}`).then((r) => setClientes(r.data ?? [])).catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [buscarCliente])
+
+  useEffect(() => {
+    if (!form.cliente_id) { setVehiculos([]); return }
+    api(`/activos?cliente_id=${form.cliente_id}`).then((r) => setVehiculos(r.data ?? [])).catch(() => {})
+  }, [form.cliente_id])
+
+  async function crear(e) {
+    e.preventDefault()
+    if (!form.cliente_id) return alert('Selecciona el cliente.')
+    setGuardando(true)
+    try {
+      let vehiculoId = form.asset_vehicle_id || null
+
+      // Registrar el vehículo nuevo sobre la marcha si el usuario llenó el mini-formulario.
+      if (nuevoVehiculo?.marca && nuevoVehiculo?.modelo) {
+        const v = await api('/activos', { method: 'POST', body: {
+          cliente_id: Number(form.cliente_id), tipo_activo: nuevoVehiculo.tipo || 'moto',
+          placa_identificador: nuevoVehiculo.placa || null, marca: nuevoVehiculo.marca, modelo: nuevoVehiculo.modelo,
+        } })
+        vehiculoId = v.id
+      }
+
+      const orden = await api('/ordenes-servicio', { method: 'POST', body: {
+        cliente_id: Number(form.cliente_id),
+        asset_vehicle_id: vehiculoId ? Number(vehiculoId) : null,
+        operables_employee_id: form.operables_employee_id ? Number(form.operables_employee_id) : null,
+        descripcion_trabajo: form.descripcion_trabajo || null,
+        fecha_entrega_estimada: form.fecha_entrega_estimada || null,
+      } })
+      onCreada(orden.id)
+    } catch (err) {
+      alert(err.message || 'No se pudo crear la orden.')
+    } finally { setGuardando(false) }
+  }
+
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-4">Nueva orden de servicio</h2>
+        <form onSubmit={crear} className="space-y-3">
+          <label className="block text-sm text-slate-300">Buscar cliente
+            <input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Nombre, cédula, teléfono…" className="input mt-1" />
+          </label>
+          <label className="block text-sm text-slate-300">Cliente *
+            <select value={form.cliente_id} onChange={set('cliente_id')} className="input mt-1" required>
+              <option value="">— Selecciona —</option>
+              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo} {c.numero_documento ? `(${c.numero_documento})` : ''}</option>)}
+            </select>
+          </label>
+
+          <label className="block text-sm text-slate-300">Vehículo / equipo del cliente
+            <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1" disabled={!!nuevoVehiculo}>
+              <option value="">— Sin vehículo —</option>
+              {vehiculos.map((v) => <option key={v.id} value={v.id}>{v.marca} {v.modelo} · {v.placa_identificador ?? 's/placa'}</option>)}
+            </select>
+          </label>
+
+          {nuevoVehiculo ? (
+            <div className="rounded-lg border border-slate-700 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Nuevo vehículo</p>
+                <button type="button" onClick={() => setNuevoVehiculo(null)} className="text-xs text-slate-400 hover:text-white">Cancelar</button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Placa" value={nuevoVehiculo.placa ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, placa: e.target.value.toUpperCase() })} className="input !mt-0" />
+                <select value={nuevoVehiculo.tipo ?? 'moto'} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, tipo: e.target.value })} className="input !mt-0">
+                  <option value="moto">Moto</option><option value="auto">Auto</option><option value="celular">Celular</option><option value="otro">Otro</option>
+                </select>
+                <input placeholder="Marca *" value={nuevoVehiculo.marca ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, marca: e.target.value })} className="input !mt-0" />
+                <input placeholder="Modelo *" value={nuevoVehiculo.modelo ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, modelo: e.target.value })} className="input !mt-0" />
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setNuevoVehiculo({ tipo: 'moto' })} disabled={!form.cliente_id}
+              className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-40">+ Registrar vehículo nuevo</button>
+          )}
+
+          <label className="block text-sm text-slate-300">Mecánico / técnico asignado
+            <select value={form.operables_employee_id} onChange={set('operables_employee_id')} className="input mt-1">
+              <option value="">— Sin asignar —</option>
+              {empleados.map((m) => <option key={m.id} value={m.id}>{m.nombre} {m.apellido}</option>)}
+            </select>
+          </label>
+
+          <label className="block text-sm text-slate-300">Diagnóstico / trabajo a realizar
+            <textarea value={form.descripcion_trabajo} onChange={set('descripcion_trabajo')} rows="3" className="input mt-1" placeholder="Ej: cambio de aceite, revisión de frenos…" />
+          </label>
+
+          <label className="block text-sm text-slate-300">Fecha estimada de entrega
+            <input type="datetime-local" value={form.fecha_entrega_estimada} onChange={set('fecha_entrega_estimada')} className="input mt-1" />
+          </label>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
+            <button type="submit" disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
+              {guardando ? 'Creando…' : 'Crear orden'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function ModalOrden({ id, esMecanico, onClose }) {
+  const [orden, setOrden] = useState(null)
+  const [productos, setProductos] = useState([])
+  const [empleados, setEmpleados] = useState([])
+  const [detalle, setDetalle] = useState({ producto_id: '', cantidad: 1, precio_unitario: '', operables_employee_id: '' })
+  const [guardando, setGuardando] = useState(false)
+
+  const cargar = useCallback(() => api(`/ordenes-servicio/${id}`).then(setOrden).catch((e) => { alert(e.message); onClose() }), [id, onClose])
+  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    api('/productos').then((r) => setProductos(r.data ?? [])).catch(() => {})
+    api('/empleados').then((r) => setEmpleados(r.data ?? [])).catch(() => {})
+  }, [])
+
+  if (!orden) return null
+  const editable = !['facturado', 'cancelado'].includes(orden.estado)
+
+  async function cambiarEstado(estado) {
+    try { await api(`/ordenes-servicio/${id}`, { method: 'PUT', body: { estado } }); cargar() }
+    catch (err) { alert(err.message) }
+  }
+
+  async function completar() {
+    try { await api(`/ordenes-servicio/${id}/completar`, { method: 'POST', body: {} }); cargar() }
+    catch (err) { alert(err.message) }
+  }
+
+  function alElegirProducto(pid) {
+    const p = productos.find((x) => String(x.id) === String(pid))
+    setDetalle({ ...detalle, producto_id: pid, precio_unitario: p ? p.precio_venta : '' })
+  }
+
+  async function agregarDetalle(e) {
+    e.preventDefault()
+    if (!detalle.producto_id) return
+    setGuardando(true)
+    try {
+      await api(`/ordenes-servicio/${id}/detalles`, { method: 'POST', body: {
+        producto_id: Number(detalle.producto_id),
+        cantidad: Number(detalle.cantidad) || 1,
+        // El backend ignora el precio para el rol Mecanico y usa el de lista.
+        precio_unitario: Number(detalle.precio_unitario) || 0,
+        operables_employee_id: detalle.operables_employee_id ? Number(detalle.operables_employee_id) : null,
+      } })
+      setDetalle({ producto_id: '', cantidad: 1, precio_unitario: '', operables_employee_id: '' })
+      cargar()
+    } catch (err) { alert(err.message) } finally { setGuardando(false) }
+  }
+
+  async function quitarDetalle(did) {
+    if (!confirm('¿Quitar este ítem y devolver el stock?')) return
+    try { await api(`/ordenes-servicio/${id}/detalles/${did}`, { method: 'DELETE' }); cargar() }
+    catch (err) { alert(err.message) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2">{orden.numero_orden} <Chip estado={orden.estado} /></h2>
+            <p className="text-sm text-slate-400">
+              {orden.cliente?.nombre_completo} · {orden.cliente?.telefono ?? ''}
+              {orden.asset_vehicle && <> · 🏍️ {orden.asset_vehicle.marca} {orden.asset_vehicle.modelo} ({orden.asset_vehicle.placa_identificador ?? 's/placa'})</>}
+            </p>
+            {orden.mecanico_asignado && <p className="text-sm text-slate-400">👨‍🔧 {orden.mecanico_asignado.nombre} {orden.mecanico_asignado.apellido}</p>}
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">✕</button>
+        </div>
+
+        {orden.descripcion_trabajo && (
+          <p className="text-sm bg-slate-800/60 rounded-lg p-3 mb-4">{orden.descripcion_trabajo}</p>
+        )}
+
+        {/* Cambiar estado */}
+        {editable && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-xs text-slate-500 uppercase">Estado:</span>
+            {['recibido', 'en_proceso', 'listo', ...(esMecanico ? [] : ['cancelado'])].map((e) => (
+              <button key={e} onClick={() => cambiarEstado(e)} disabled={orden.estado === e}
+                className={`text-xs rounded-full px-3 py-1 transition ${orden.estado === e ? ESTADOS[e].clase + ' font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                {ESTADOS[e].label}
+              </button>
+            ))}
+            <button onClick={completar} className="ml-auto text-xs rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-semibold">
+              ✓ Completar (registra hoja de vida)
+            </button>
+          </div>
+        )}
+
+        {/* Detalles: repuestos y mano de obra */}
+        <h3 className="font-semibold text-sm mb-2">Repuestos y trabajos</h3>
+        <div className="rounded-xl border border-slate-800 overflow-hidden mb-3">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-800/60 text-slate-400 text-xs">
+              <tr>
+                <th className="text-left px-3 py-2">Ítem</th>
+                <th className="text-center px-2 py-2">Cant.</th>
+                {!esMecanico && <th className="text-right px-2 py-2">Precio</th>}
+                {!esMecanico && <th className="text-right px-2 py-2">Subtotal</th>}
+                <th className="text-left px-2 py-2">Realizado por</th>
+                {editable && <th className="px-2 py-2"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {(orden.details ?? []).length === 0 && (
+                <tr><td colSpan="6" className="px-3 py-4 text-center text-slate-500">Aún no hay repuestos ni trabajos registrados.</td></tr>
+              )}
+              {(orden.details ?? []).map((d) => (
+                <tr key={d.id} className="border-t border-slate-800">
+                  <td className="px-3 py-2">{d.producto?.nombre ?? '—'}</td>
+                  <td className="text-center px-2 py-2">{d.cantidad}</td>
+                  {!esMecanico && <td className="text-right px-2 py-2">{COP(d.precio_unitario)}</td>}
+                  {!esMecanico && <td className="text-right px-2 py-2 font-semibold">{COP(d.subtotal)}</td>}
+                  <td className="px-2 py-2 text-slate-400">{d.operables_employee ? `${d.operables_employee.nombre} ${d.operables_employee.apellido}` : '—'}</td>
+                  {editable && (
+                    <td className="px-2 py-2 text-right">
+                      <button onClick={() => quitarDetalle(d.id)} className="text-red-400 hover:text-red-300">🗑️</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+            {!esMecanico && (orden.details ?? []).length > 0 && (
+              <tfoot>
+                <tr className="border-t border-slate-700 bg-slate-800/40">
+                  <td colSpan="3" className="px-3 py-2 text-right text-slate-400">Total</td>
+                  <td className="text-right px-2 py-2 font-bold">{COP(orden.total)}</td>
+                  <td colSpan="2"></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+
+        {/* Agregar detalle */}
+        {editable && (
+          <form onSubmit={agregarDetalle} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end rounded-xl border border-slate-800 bg-slate-800/30 p-3">
+            <label className="block text-xs text-slate-400 col-span-2">Producto / servicio
+              <select value={detalle.producto_id} onChange={(e) => alElegirProducto(e.target.value)} className="input !mt-1" required>
+                <option value="">— Selecciona —</option>
+                {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.is_service ? ' (servicio)' : ` · stock ${p.stock ?? '—'}`}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs text-slate-400">Cantidad
+              <input type="number" min="1" value={detalle.cantidad} onChange={(e) => setDetalle({ ...detalle, cantidad: e.target.value })} className="input !mt-1" required />
+            </label>
+            {!esMecanico && (
+              <label className="block text-xs text-slate-400">Precio unitario
+                <input type="number" min="0" step="any" value={detalle.precio_unitario} onChange={(e) => setDetalle({ ...detalle, precio_unitario: e.target.value })} className="input !mt-1" required />
+              </label>
+            )}
+            <label className="block text-xs text-slate-400">Realizado por
+              <select value={detalle.operables_employee_id} onChange={(e) => setDetalle({ ...detalle, operables_employee_id: e.target.value })} className="input !mt-1">
+                <option value="">—</option>
+                {empleados.map((m) => <option key={m.id} value={m.id}>{m.nombre} {m.apellido}</option>)}
+              </select>
+            </label>
+            <button disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-2 text-sm font-semibold col-span-2 md:col-span-5">
+              {guardando ? 'Agregando…' : '+ Agregar (descuenta inventario)'}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ============ Vehículos / Activos ============ */
+function Vehiculos() {
+  const [lista, setLista] = useState([])
+  const [buscar, setBuscar] = useState('')
+  const [creando, setCreando] = useState(false)
+
+  const cargar = useCallback(() => {
+    api(`/activos?buscar=${encodeURIComponent(buscar)}`).then((r) => setLista(r.data ?? [])).catch(() => {})
+  }, [buscar])
+  useEffect(() => { const t = setTimeout(cargar, 300); return () => clearTimeout(t) }, [cargar])
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-4">
+        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar placa, marca, modelo…" className="input !mt-0 w-64" />
+        <button onClick={() => setCreando(true)} className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Registrar vehículo</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {lista.map((v) => (
+          <div key={v.id} className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
+            <div className="flex items-center justify-between">
+              <span className="font-bold">{v.marca} {v.modelo}</span>
+              <span className="text-xs rounded-full bg-slate-700 px-2 py-0.5">{v.tipo_activo}</span>
+            </div>
+            <p className="text-sm text-slate-400 mt-1">
+              Placa: <span className="text-white font-mono">{v.placa_identificador ?? '—'}</span>
+              {v.anio ? ` · ${v.anio}` : ''}{v.color ? ` · ${v.color}` : ''}
+            </p>
+            <p className="text-sm text-slate-400">Dueño: {v.cliente?.nombre_completo ?? '—'}</p>
+          </div>
+        ))}
+        {lista.length === 0 && <p className="text-slate-500 col-span-2 text-center py-6">No hay vehículos registrados.</p>}
+      </div>
+      {creando && <ModalVehiculo onClose={() => setCreando(false)} onGuardado={() => { setCreando(false); cargar() }} />}
+    </div>
+  )
+}
+
+function ModalVehiculo({ onClose, onGuardado }) {
+  const [clientes, setClientes] = useState([])
+  const [tipos, setTipos] = useState([])
+  const [form, setForm] = useState({ cliente_id: '', tipo_activo: 'moto', placa_identificador: '', marca: '', modelo: '', anio: '', color: '' })
+
+  useEffect(() => {
+    api('/clientes').then((r) => setClientes(r.data ?? [])).catch(() => {})
+    api('/activos/tipos').then((r) => setTipos(r.tipos ?? [])).catch(() => {})
+  }, [])
+
+  async function guardar(e) {
+    e.preventDefault()
+    try {
+      await api('/activos', { method: 'POST', body: {
+        ...form,
+        cliente_id: form.cliente_id ? Number(form.cliente_id) : null,
+        placa_identificador: form.placa_identificador || null,
+        anio: form.anio ? Number(form.anio) : null,
+        color: form.color || null,
+      } })
+      onGuardado()
+    } catch (err) { alert(err.message || 'No se pudo guardar.') }
+  }
+
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-4">Registrar vehículo / activo</h2>
+        <form onSubmit={guardar} className="space-y-3">
+          <label className="block text-sm text-slate-300">Cliente (dueño)
+            <select value={form.cliente_id} onChange={set('cliente_id')} className="input mt-1">
+              <option value="">— Sin cliente —</option>
+              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm text-slate-300">Tipo
+              <select value={form.tipo_activo} onChange={set('tipo_activo')} className="input mt-1">
+                {tipos.map((t) => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm text-slate-300">Placa / identificador
+              <input value={form.placa_identificador} onChange={(e) => setForm({ ...form, placa_identificador: e.target.value.toUpperCase() })} className="input mt-1" />
+            </label>
+            <label className="block text-sm text-slate-300">Marca *
+              <input value={form.marca} onChange={set('marca')} className="input mt-1" required />
+            </label>
+            <label className="block text-sm text-slate-300">Modelo *
+              <input value={form.modelo} onChange={set('modelo')} className="input mt-1" required />
+            </label>
+            <label className="block text-sm text-slate-300">Año
+              <input type="number" min="1900" max={new Date().getFullYear()} value={form.anio} onChange={set('anio')} className="input mt-1" />
+            </label>
+            <label className="block text-sm text-slate-300">Color
+              <input value={form.color} onChange={set('color')} className="input mt-1" />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
+            <button type="submit" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/* ============ Empleados del taller ============ */
+function Empleados() {
+  const [lista, setLista] = useState([])
+  const [creando, setCreando] = useState(false)
+
+  const cargar = useCallback(() => api('/empleados').then((r) => setLista(r.data ?? [])).catch(() => {}), [])
+  useEffect(() => { cargar() }, [cargar])
+
+  return (
+    <div>
+      <div className="flex mb-4">
+        <button onClick={() => setCreando(true)} className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nuevo empleado</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {lista.map((m) => (
+          <div key={m.id} className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
+            <div className="flex items-center justify-between">
+              <span className="font-bold">👨‍🔧 {m.nombre} {m.apellido}</span>
+              <span className="text-xs rounded-full bg-slate-700 px-2 py-0.5">{m.tipo_operario}</span>
+            </div>
+            <p className="text-sm text-slate-400 mt-1">CC {m.ci_cedula}{m.telefono ? ` · ${m.telefono}` : ''}</p>
+            {m.comision_default > 0 && (
+              <p className="text-sm text-slate-400">Comisión: {m.tipo_comision_default === 'fixed' ? COP(m.comision_default) : `${Number(m.comision_default)}%`}</p>
+            )}
+          </div>
+        ))}
+        {lista.length === 0 && <p className="text-slate-500 col-span-2 text-center py-6">Sin empleados. Crea tu equipo de mecánicos/técnicos.</p>}
+      </div>
+      {creando && <ModalEmpleado onClose={() => setCreando(false)} onGuardado={() => { setCreando(false); cargar() }} />}
+      <p className="text-xs text-slate-500 mt-4">
+        💡 Para que un mecánico entre al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
+        <span className="font-semibold"> Mecanico</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
+      </p>
+    </div>
+  )
+}
+
+function ModalEmpleado({ onClose, onGuardado }) {
+  const [tipos, setTipos] = useState([])
+  const [form, setForm] = useState({ nombre: '', apellido: '', ci_cedula: '', telefono: '', tipo_operario: 'mecanico', comision_default: '', tipo_comision_default: 'percentage' })
+
+  useEffect(() => { api('/empleados/tipos').then((r) => setTipos(r.tipos ?? [])).catch(() => {}) }, [])
+
+  async function guardar(e) {
+    e.preventDefault()
+    try {
+      await api('/empleados', { method: 'POST', body: {
+        ...form,
+        telefono: form.telefono || null,
+        comision_default: form.comision_default ? Number(form.comision_default) : null,
+      } })
+      onGuardado()
+    } catch (err) { alert(err.message || 'No se pudo guardar.') }
+  }
+
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-4">Nuevo empleado del taller</h2>
+        <form onSubmit={guardar} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm text-slate-300">Nombre *
+              <input value={form.nombre} onChange={set('nombre')} className="input mt-1" required />
+            </label>
+            <label className="block text-sm text-slate-300">Apellido *
+              <input value={form.apellido} onChange={set('apellido')} className="input mt-1" required />
+            </label>
+            <label className="block text-sm text-slate-300">Cédula *
+              <input value={form.ci_cedula} onChange={set('ci_cedula')} className="input mt-1" required />
+            </label>
+            <label className="block text-sm text-slate-300">Teléfono
+              <input value={form.telefono} onChange={set('telefono')} className="input mt-1" />
+            </label>
+            <label className="block text-sm text-slate-300">Oficio
+              <select value={form.tipo_operario} onChange={set('tipo_operario')} className="input mt-1">
+                {tipos.map((t) => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm text-slate-300">Comisión por defecto
+              <div className="flex gap-1 mt-1">
+                <input type="number" min="0" step="any" value={form.comision_default} onChange={set('comision_default')} className="input !mt-0" placeholder="0" />
+                <select value={form.tipo_comision_default} onChange={set('tipo_comision_default')} className="input !mt-0 w-20">
+                  <option value="percentage">%</option>
+                  <option value="fixed">$</option>
+                </select>
+              </div>
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
+            <button type="submit" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

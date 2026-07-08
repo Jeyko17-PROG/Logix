@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
             'superadmin' => \App\Http\Middleware\EnsureSuperAdmin::class,
             'feature' => \App\Http\Middleware\CheckFeature::class,
+            'membresia' => \App\Http\Middleware\VerificarMembresia::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

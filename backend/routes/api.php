@@ -66,7 +66,9 @@ Route::prefix('publico')->group(function () {
 });
 
 // --- Rutas protegidas (requieren token Sanctum) ---
-Route::middleware('auth:sanctum')->group(function () {
+// 'membresia' bloquea las funciones operativas si la membresía mensual venció
+// (deja pasar perfil, planes, créditos y notificaciones para poder renovar).
+Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -77,6 +79,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Catálogo de planes (visible para usuarios autenticados: dashboard, "actualizar plan")
     Route::get('/planes', [PlanController::class, 'index']);
+    // Pago/renovación de la membresía mensual (checkout Wompi: PSE, Nequi, tarjeta)
+    Route::post('/planes/{plan}/checkout', [App\Http\Controllers\CreditController::class, 'createPlanSession']);
 
     // Crédito por uso (paquetes y saldo)
     Route::get('/credit-packages', [App\Http\Controllers\CreditController::class, 'indexPackages']);
@@ -272,6 +276,23 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ===== BLOQUE E: Bloc de notas =====
     Route::apiResource('notas', NotaController::class)->except('show')->middleware('feature:notas');
+
+    // ===== POS: Caja (apertura/cierre con arqueo) y Gastos diarios =====
+    // El rol Mecanico no maneja dinero: queda excluido por rol.
+    Route::middleware('role:Administrador,Usuario,Ventas/Compras,Empleado,Almacenista')->group(function () {
+        Route::get('caja/sesiones', [App\Http\Controllers\CajaController::class, 'index']);
+        Route::get('caja/actual', [App\Http\Controllers\CajaController::class, 'actual']);
+        Route::post('caja/abrir', [App\Http\Controllers\CajaController::class, 'abrir']);
+        Route::post('caja/{sesion}/cerrar', [App\Http\Controllers\CajaController::class, 'cerrar']);
+
+        Route::get('gastos', [App\Http\Controllers\GastoController::class, 'index']);
+        Route::post('gastos', [App\Http\Controllers\GastoController::class, 'store']);
+        Route::delete('gastos/{gasto}', [App\Http\Controllers\GastoController::class, 'destroy']);
+        Route::get('reportes/utilidad-dia', [App\Http\Controllers\GastoController::class, 'utilidadDia']);
+
+        // Fidelización: historial del cliente por placa o cédula en el POS.
+        Route::get('pos/historial-cliente', [ClienteController::class, 'historialPos']);
+    });
 });
 
 // Public webhooks for payment providers (no auth). Protect with provider signature in production.

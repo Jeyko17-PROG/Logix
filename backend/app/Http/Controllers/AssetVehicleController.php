@@ -14,7 +14,7 @@ class AssetVehicleController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = AssetVehicle::with(['cliente:id,nombre']);
+        $query = AssetVehicle::with(['cliente:id,nombre_completo']);
 
         if ($buscar = $request->query('buscar')) {
             $query->where(function ($w) use ($buscar) {
@@ -43,9 +43,9 @@ class AssetVehicleController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $this->validar($request);
-        $data['owner_id'] = auth()->id();
+        $data['owner_id'] = $request->user()->workspaceOwnerId();
         $activo = AssetVehicle::create($data);
-        return response()->json($activo->load('cliente:id,nombre'), 201);
+        return response()->json($activo->load('cliente:id,nombre_completo'), 201);
     }
 
     /**
@@ -55,7 +55,7 @@ class AssetVehicleController extends Controller
     {
         return response()->json(
             $assetVehicle->load([
-                'cliente:id,nombre',
+                'cliente:id,nombre_completo',
                 'history' => fn ($q) => $q->orderByDesc('fecha_entrada'),
                 'serviceOrders' => fn ($q) => $q->orderByDesc('created_at'),
             ])
@@ -83,7 +83,7 @@ class AssetVehicleController extends Controller
     {
         $data = $this->validar($request, $assetVehicle->id);
         $assetVehicle->update($data);
-        return response()->json($assetVehicle->load('cliente:id,nombre'));
+        return response()->json($assetVehicle->load('cliente:id,nombre_completo'));
     }
 
     /**
@@ -106,7 +106,7 @@ class AssetVehicleController extends Controller
         }
 
         $resultados = AssetVehicle::where('placa_identificador', 'like', "%{$placa}%")
-            ->with('cliente:id,nombre')
+            ->with('cliente:id,nombre_completo')
             ->limit(10)
             ->get();
 
