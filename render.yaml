@@ -7,7 +7,8 @@ services:
     region: oregon
     root: backend
     buildCommand: composer install --no-dev --optimize-autoloader && php artisan key:generate --force
-    startCommand: php artisan serve --host 0.0.0.0 --port $PORT
+    # Migra la BD automáticamente en cada deploy antes de arrancar el servidor.
+    startCommand: php artisan migrate --force && php artisan serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production

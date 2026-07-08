@@ -32,10 +32,25 @@ use Illuminate\Support\Facades\Route;
 
 // --- Salud / prueba de conexión ---
 Route::get('/ping', function () {
+    // Diagnóstico de configuración: solo booleanos/conteos, nunca secretos.
+    $migracionesPendientes = null;
+    try {
+        $corridas = \Illuminate\Support\Facades\DB::table('migrations')->pluck('migration');
+        $archivos = collect(glob(database_path('migrations/*.php')))->map(fn ($f) => basename($f, '.php'));
+        $migracionesPendientes = $archivos->diff($corridas)->count();
+    } catch (\Throwable $e) {
+        // sin acceso a BD: se reporta null
+    }
+
     return response()->json([
         'message' => 'conectado',
         'app' => config('app.name'),
         'time' => now()->toIso8601String(),
+        'diagnostico' => [
+            'correo_smtp_configurado' => config('mail.default') === 'smtp' && ! empty(config('mail.mailers.smtp.username')),
+            'wompi_configurada' => ! empty(config('services.wompi.public_key')) && ! empty(config('services.wompi.integrity_secret')),
+            'migraciones_pendientes' => $migracionesPendientes,
+        ],
     ]);
 });
 
