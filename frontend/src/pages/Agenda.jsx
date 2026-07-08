@@ -188,7 +188,6 @@ function NuevaCita({ clientes, servicios, onClose, onCreada }) {
   const [cliente_id, setCliente] = useState('')
   const [servicio_id, setServicio] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
-  const [hora, setHora] = useState('10:00')
   const [slots, setSlots] = useState([])
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -225,11 +224,6 @@ function NuevaCita({ clientes, servicios, onClose, onCreada }) {
     } catch (err) { setError(err.message) } finally { setGuardando(false) }
   }
 
-  // Reserva directa con la fecha+hora escritas (sin depender de los slots sugeridos).
-  function reservarManual() {
-    reservar(`${fecha}T${hora}:00`)
-  }
-
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
       <div onClick={(e) => e.stopPropagation()} className="bg-slate-800 rounded-2xl p-6 max-w-md w-full max-h-[85vh] overflow-y-auto">
@@ -253,12 +247,8 @@ function NuevaCita({ clientes, servicios, onClose, onCreada }) {
             {servicios.map((s) => <option key={s.id} value={s.id}>{s.nombre} ({s.duracion_min} min)</option>)}
           </select>
 
-          {/* Reserva manual por fecha y hora */}
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+          <div className="grid gap-2">
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input" />
-            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="input" />
-            <button onClick={reservarManual} disabled={guardando}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 text-sm font-semibold whitespace-nowrap">Guardar</button>
           </div>
           <button onClick={buscar} className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-sm">Ver horarios sugeridos</button>
         </div>
