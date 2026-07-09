@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { aNumero } from '../utils/numero'
 
 const COP = (n) => '$' + Number(n ?? 0).toLocaleString('es-CO')
 
@@ -364,9 +365,9 @@ function ModalOrden({ id, esMecanico, onClose }) {
     try {
       await api(`/ordenes-servicio/${id}/detalles`, { method: 'POST', body: {
         producto_id: Number(detalle.producto_id),
-        cantidad: Number(detalle.cantidad) || 1,
+        cantidad: aNumero(detalle.cantidad) || 1,
         // El backend ignora el precio para el rol Mecanico y usa el de lista.
-        precio_unitario: Number(detalle.precio_unitario) || 0,
+        precio_unitario: aNumero(detalle.precio_unitario) || 0,
         operables_employee_id: detalle.operables_employee_id ? Number(detalle.operables_employee_id) : null,
       } })
       setDetalle({ producto_id: '', cantidad: 1, precio_unitario: '', operables_employee_id: '' })
@@ -474,7 +475,7 @@ function ModalOrden({ id, esMecanico, onClose }) {
             </label>
             {!esMecanico && (
               <label className="block text-xs text-slate-400">Precio unitario
-                <input type="number" min="0" step="any" value={detalle.precio_unitario} onChange={(e) => setDetalle({ ...detalle, precio_unitario: e.target.value })} className="input !mt-1" required />
+                <input type="text" inputMode="decimal" value={detalle.precio_unitario} onChange={(e) => setDetalle({ ...detalle, precio_unitario: e.target.value })} className="input !mt-1" required />
               </label>
             )}
             <label className="block text-xs text-slate-400">Realizado por
@@ -649,7 +650,7 @@ function ModalEmpleado({ onClose, onGuardado }) {
       await api('/empleados', { method: 'POST', body: {
         ...form,
         telefono: form.telefono || null,
-        comision_default: form.comision_default ? Number(form.comision_default) : null,
+        comision_default: form.comision_default ? aNumero(form.comision_default) : null,
       } })
       onGuardado()
     } catch (err) { alert(err.message || 'No se pudo guardar.') }

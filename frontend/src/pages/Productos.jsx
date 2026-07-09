@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { aNumero } from '../utils/numero'
 
 const VACIO = {
   sku: '', codigo_barras: '', nombre: '', descripcion: '',
@@ -37,6 +38,8 @@ export default function Productos() {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
         if (k === 'activo') fd.append(k, v ? '1' : '0')
+        // Precios en formato colombiano: "400.000" debe llegar como 400000.
+        else if (k === 'precio_costo' || k === 'precio_venta') fd.append(k, aNumero(v))
         else if (v !== null && v !== '') fd.append(k, v)
       })
       if (imagen) fd.append('imagen', imagen)
@@ -75,8 +78,8 @@ export default function Productos() {
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
           <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="input" />
-          <input type="number" step="0.01" placeholder="Precio costo" value={form.precio_costo} onChange={set('precio_costo')} className="input" required />
-          <input type="number" step="0.01" placeholder="Precio venta" value={form.precio_venta} onChange={set('precio_venta')} className="input" required />
+          <input type="text" inputMode="decimal" placeholder="Precio costo (ej: 250.000)" value={form.precio_costo} onChange={set('precio_costo')} className="input" required />
+          <input type="text" inputMode="decimal" placeholder="Precio venta (ej: 400.000)" value={form.precio_venta} onChange={set('precio_venta')} className="input" required />
           <textarea placeholder="Descripción" value={form.descripcion ?? ''} onChange={set('descripcion')} className="input sm:col-span-2" />
           <div className="sm:col-span-2 flex gap-2">
             <button className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Guardar</button>

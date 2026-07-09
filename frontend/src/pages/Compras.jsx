@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { aNumero } from '../utils/numero'
 
 export default function Compras() {
   const [ordenes, setOrdenes] = useState([])
@@ -29,14 +30,14 @@ export default function Compras() {
     setLineas(copia)
   }
   const addLinea = () => setLineas([...lineas, { producto_id: '', cantidad: '', precio_unitario: '' }])
-  const total = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.precio_unitario) || 0), 0)
+  const total = lineas.reduce((s, l) => s + aNumero(l.cantidad) * aNumero(l.precio_unitario), 0)
 
   async function crear(e) {
     e.preventDefault(); setError('')
     try {
       await api('/ordenes-compra', { method: 'POST', body: {
         ...cab,
-        lineas: lineas.map((l) => ({ producto_id: Number(l.producto_id), cantidad: Number(l.cantidad), precio_unitario: Number(l.precio_unitario) })),
+        lineas: lineas.map((l) => ({ producto_id: Number(l.producto_id), cantidad: aNumero(l.cantidad), precio_unitario: aNumero(l.precio_unitario) })),
       } })
       setAbierto(false)
       setLineas([{ producto_id: '', cantidad: '', precio_unitario: '' }])
@@ -83,8 +84,8 @@ export default function Compras() {
                 <option value="">Producto…</option>
                 {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
               </select>
-              <input type="number" step="0.01" required placeholder="Cantidad" value={l.cantidad} onChange={(e) => setLinea(i, 'cantidad', e.target.value)} className="input" />
-              <input type="number" step="0.01" required placeholder="Precio unit." value={l.precio_unitario} onChange={(e) => setLinea(i, 'precio_unitario', e.target.value)} className="input" />
+              <input type="text" inputMode="decimal" required placeholder="Cantidad" value={l.cantidad} onChange={(e) => setLinea(i, 'cantidad', e.target.value)} className="input" />
+              <input type="text" inputMode="decimal" required placeholder="Precio unit. (ej: 120.000)" value={l.precio_unitario} onChange={(e) => setLinea(i, 'precio_unitario', e.target.value)} className="input" />
             </div>
           ))}
           <button type="button" onClick={addLinea} className="text-emerald-400 text-sm hover:underline">+ Agregar línea</button>

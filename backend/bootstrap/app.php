@@ -13,6 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Normaliza números en formato colombiano (400.000 -> 400000) en campos
+        // monetarios de TODA la API, antes de validar.
+        $middleware->api(append: [
+            \App\Http\Middleware\NormalizarNumerosLocales::class,
+        ]);
+
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
             'superadmin' => \App\Http\Middleware\EnsureSuperAdmin::class,

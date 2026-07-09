@@ -34,8 +34,10 @@ export default function Proveedores() {
     e.preventDefault()
     setError('')
     try {
-      if (editId) await api(`/proveedores/${editId}`, { method: 'PUT', body: form })
-      else await api('/proveedores', { method: 'POST', body: form })
+      // El dígito de verificación solo aplica al NIT.
+      const body = { ...form, digito_verificacion: form.tipo_documento === 'NIT' ? (form.digito_verificacion || null) : null }
+      if (editId) await api(`/proveedores/${editId}`, { method: 'PUT', body })
+      else await api('/proveedores', { method: 'POST', body })
       setForm(VACIO); setEditId(null); setAbierto(false)
       cargar()
     } catch (err) {
@@ -105,8 +107,21 @@ export default function Proveedores() {
           <select value={form.tipo_documento} onChange={set('tipo_documento')} className="input">
             <option>NIT</option><option>CC</option><option>CE</option>
           </select>
-          <input required placeholder="Número de documento o NIT" value={form.numero_documento} onChange={set('numero_documento')} className="input" />
-          <input placeholder="Dígito de verificación (DV)" value={form.digito_verificacion ?? ''} onChange={set('digito_verificacion')} className="input" />
+          {/* Con NIT, el DV va en su propio campo etiquetado (máx. 1 dígito, ej: 900123456-7) */}
+          {form.tipo_documento === 'NIT' ? (
+            <div className="flex gap-2">
+              <input required placeholder="NIT (sin dígito de verificación)" value={form.numero_documento} onChange={set('numero_documento')} className="input flex-1" />
+              <label className="block w-24 shrink-0">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Dígito verif. (DV)</span>
+                <input placeholder="Ej: 7" maxLength={2} inputMode="numeric"
+                  value={form.digito_verificacion ?? ''}
+                  onChange={(e) => setForm({ ...form, digito_verificacion: e.target.value.replace(/\D/g, '').slice(0, 2) })}
+                  className="input text-center" />
+              </label>
+            </div>
+          ) : (
+            <input required placeholder="Número de documento" value={form.numero_documento} onChange={set('numero_documento')} className="input" />
+          )}
           <input placeholder="correo@empresa.com" value={form.email ?? ''} onChange={set('email')} className="input" />
           <input placeholder="Ejemplo: 3001234567" value={form.telefono ?? ''} onChange={set('telefono')} className="input" />
           <input placeholder="Dirección del proveedor" value={form.direccion ?? ''} onChange={set('direccion')} className="input" />

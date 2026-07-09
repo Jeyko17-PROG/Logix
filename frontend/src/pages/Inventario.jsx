@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { aNumero } from '../utils/numero'
 
 const MOV_VACIO = { tipo: 'ENTRADA', producto_id: '', cantidad: '', costo_unitario: '', bodega_origen_id: '', bodega_destino_id: '', motivo: '' }
 
@@ -29,8 +30,8 @@ export default function Inventario() {
     try {
       await api('/inventario/movimientos', { method: 'POST', body: {
         ...mov,
-        cantidad: Number(mov.cantidad),
-        costo_unitario: mov.costo_unitario ? Number(mov.costo_unitario) : undefined,
+        cantidad: aNumero(mov.cantidad),
+        costo_unitario: mov.costo_unitario ? aNumero(mov.costo_unitario) : undefined,
         bodega_origen_id: mov.bodega_origen_id || undefined,
         bodega_destino_id: mov.bodega_destino_id || undefined,
       } })
@@ -113,7 +114,7 @@ export default function Inventario() {
           <option value="">Producto…</option>
           {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
         </select>
-        <input type="number" step="0.0001" required placeholder="Cantidad" value={mov.cantidad} onChange={set('cantidad')} className="input" />
+        <input type="text" inputMode="decimal" required placeholder="Cantidad" value={mov.cantidad} onChange={set('cantidad')} className="input" />
         {usaOrigen && (
           <select required value={mov.bodega_origen_id} onChange={set('bodega_origen_id')} className="input">
             <option value="">Bodega origen…</option>
@@ -127,7 +128,7 @@ export default function Inventario() {
           </select>
         )}
         {mov.tipo === 'ENTRADA' && (
-          <input type="number" step="0.0001" placeholder="Costo unitario" value={mov.costo_unitario} onChange={set('costo_unitario')} className="input" />
+          <input type="text" inputMode="decimal" placeholder="Costo unitario (ej: 120.000)" value={mov.costo_unitario} onChange={set('costo_unitario')} className="input" />
         )}
         <div className="sm:col-span-3">
           <button className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Registrar</button>

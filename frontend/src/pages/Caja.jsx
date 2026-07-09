@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { aNumero } from '../utils/numero'
 
 const COP = (n) => '$' + Number(n ?? 0).toLocaleString('es-CO')
 const CATEGORIAS_ICONO = { arriendo: '🏠', servicios: '💡', papeleria: '📎', nomina: '👥', insumos: '🧰', transporte: '🚚', otros: '📌' }
@@ -125,7 +126,7 @@ function AbrirTurno({ onAbierto }) {
     e.preventDefault()
     setGuardando(true)
     try {
-      await api('/caja/abrir', { method: 'POST', body: { monto_apertura: Number(monto) || 0, notas_apertura: notas || null } })
+      await api('/caja/abrir', { method: 'POST', body: { monto_apertura: aNumero(monto), notas_apertura: notas || null } })
       onAbierto()
     } catch (err) { alert(err.message || 'No se pudo abrir la caja.') } finally { setGuardando(false) }
   }
@@ -136,7 +137,7 @@ function AbrirTurno({ onAbierto }) {
       <p className="text-sm text-slate-400 mb-4">Registra la base en efectivo con la que inicias el turno.</p>
       <form onSubmit={abrir} className="space-y-3">
         <label className="block text-sm text-slate-300">Base de apertura (COP) *
-          <input type="number" min="0" step="any" value={monto} onChange={(e) => setMonto(e.target.value)} className="input mt-1" required placeholder="Ej: 100000" />
+          <input type="text" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} className="input mt-1" required placeholder="Ej: 100000" />
         </label>
         <label className="block text-sm text-slate-300">Notas
           <input value={notas} onChange={(e) => setNotas(e.target.value)} className="input mt-1" placeholder="Opcional" />
@@ -160,7 +161,7 @@ function TurnoAbierto({ estado, onCerrado }) {
     if (!confirm('¿Cerrar el turno de caja? Se calculará el arqueo y el descuadre.')) return
     setCerrando(true)
     try {
-      const r = await api(`/caja/${sesion.id}/cerrar`, { method: 'POST', body: { monto_cierre: Number(contado) || 0, notas_cierre: notas || null } })
+      const r = await api(`/caja/${sesion.id}/cerrar`, { method: 'POST', body: { monto_cierre: aNumero(contado), notas_cierre: notas || null } })
       onCerrado(r)
     } catch (err) { alert(err.message || 'No se pudo cerrar la caja.') } finally { setCerrando(false) }
   }
@@ -179,7 +180,7 @@ function TurnoAbierto({ estado, onCerrado }) {
       </div>
       <form onSubmit={cerrar} className="space-y-3">
         <label className="block text-sm text-slate-300">Efectivo contado al cierre (COP) *
-          <input type="number" min="0" step="any" value={contado} onChange={(e) => setContado(e.target.value)} className="input mt-1" required placeholder="Cuenta el dinero de la caja" />
+          <input type="text" inputMode="decimal" value={contado} onChange={(e) => setContado(e.target.value)} className="input mt-1" required placeholder="Cuenta el dinero de la caja" />
         </label>
         <label className="block text-sm text-slate-300">Notas de cierre
           <input value={notas} onChange={(e) => setNotas(e.target.value)} className="input mt-1" placeholder="Opcional" />
@@ -207,7 +208,7 @@ function Gastos({ esPropietario, onCambio }) {
     e.preventDefault()
     setGuardando(true)
     try {
-      await api('/gastos', { method: 'POST', body: { ...form, monto: Number(form.monto) } })
+      await api('/gastos', { method: 'POST', body: { ...form, monto: aNumero(form.monto) } })
       setForm({ categoria: 'otros', descripcion: '', monto: '' })
       cargar(); onCambio()
     } catch (err) { alert(err.message || 'No se pudo registrar el gasto.') } finally { setGuardando(false) }
@@ -240,7 +241,7 @@ function Gastos({ esPropietario, onCambio }) {
           <input value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} className="input !mt-1" required placeholder="Ej: recibo de la luz" />
         </label>
         <label className="block text-xs text-slate-400">Monto (COP) *
-          <input type="number" min="1" step="any" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} className="input !mt-1" required />
+          <input type="text" inputMode="decimal" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} className="input !mt-1" required />
         </label>
         <button disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-2 text-sm font-semibold">
           {guardando ? 'Guardando…' : '+ Registrar gasto'}

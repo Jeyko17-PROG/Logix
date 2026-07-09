@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { API_BASE, api, getToken } from '../api/client'
 import FirmaPad from '../components/FirmaPad'
 import { useFeatures } from '../context/FeaturesContext'
+import { aNumero } from '../utils/numero'
 
 const FIRMA_KEY = 'logix_firma'
 
@@ -56,8 +57,9 @@ export default function Facturacion() {
   }
 
   // --- Totales en vivo ---
-  const baseLinea = (l) => (Number(l.cantidad) || 0) * (Number(l.precio_unitario) || 0)
-  const ivaLinea = (l) => baseLinea(l) * (Number(l.impuesto_porcentaje) || 0) / 100
+  // aNumero entiende el formato colombiano: "400.000" = 400000 (no 400).
+  const baseLinea = (l) => aNumero(l.cantidad) * aNumero(l.precio_unitario)
+  const ivaLinea = (l) => baseLinea(l) * (aNumero(l.impuesto_porcentaje) || 0) / 100
   const subtotal = lineas.reduce((s, l) => s + baseLinea(l), 0)
   const ivaTotal = lineas.reduce((s, l) => s + ivaLinea(l), 0)
   const total = subtotal + ivaTotal
@@ -89,9 +91,9 @@ export default function Facturacion() {
         lineas: lineas.map((l) => ({
           descripcion: l.descripcion,
           producto_id: l.producto_id ? Number(l.producto_id) : null,
-          cantidad: Number(l.cantidad),
-          precio_unitario: Number(l.precio_unitario),
-          impuesto_porcentaje: Number(l.impuesto_porcentaje) || 0,
+          cantidad: aNumero(l.cantidad),
+          precio_unitario: aNumero(l.precio_unitario),
+          impuesto_porcentaje: aNumero(l.impuesto_porcentaje) || 0,
         })),
         firma: firma || null,
       } })
@@ -201,8 +203,8 @@ export default function Facturacion() {
                     </select>
                     <input required placeholder="Producto o servicio" value={l.descripcion} onChange={(e) => updateLinea(i, { descripcion: e.target.value, producto_id: '' })} className="input" />
                   </div>
-                  <input type="number" min="0" step="0.01" placeholder="Cant." value={l.cantidad} onChange={(e) => updateLinea(i, { cantidad: e.target.value })} className="input md:text-right" />
-                  <input type="number" min="0" step="0.01" placeholder="Ingrese el valor" value={l.precio_unitario} onChange={(e) => updateLinea(i, { precio_unitario: e.target.value })} className="input md:text-right" />
+                  <input type="text" inputMode="decimal" placeholder="Cant." value={l.cantidad} onChange={(e) => updateLinea(i, { cantidad: e.target.value })} className="input md:text-right" />
+                  <input type="text" inputMode="decimal" placeholder="Ej: 400.000" value={l.precio_unitario} onChange={(e) => updateLinea(i, { precio_unitario: e.target.value })} className="input md:text-right" />
                   <div className="flex gap-1">
                     <select value={l.ivaCustom ? 'custom' : String(l.impuesto_porcentaje)} onChange={(e) => setIva(i, e.target.value)} className="input">
                       {IVA_FIJOS.map((v) => <option key={v} value={v}>{v}%</option>)}

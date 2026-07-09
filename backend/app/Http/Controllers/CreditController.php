@@ -57,11 +57,30 @@ class CreditController extends Controller
         $referencia = "LOGIX-CRED-{$pt->id}";
         $pt->update(['payload' => array_merge($pt->payload, ['reference' => $referencia])]);
 
+        if ($error = $this->validarWompi()) {
+            return $error;
+        }
+
         return response()->json([
             'checkoutUrl' => $this->wompi->checkoutUrl((int) $package->price_cop, $referencia),
             'payment_transaction_id' => $pt->id,
             'reference' => $referencia,
         ]);
+    }
+
+    /** Verifica que la llave de Wompi corresponda a un comercio real antes de redirigir. */
+    private function validarWompi()
+    {
+        if (! $this->wompi->configurado()) {
+            return null; // en desarrollo devuelve la URL de prueba interna
+        }
+        $comercio = $this->wompi->verificarComercio();
+        if (! $comercio['ok']) {
+            return response()->json([
+                'message' => 'La pasarela de pagos no está bien configurada: ' . ($comercio['error'] ?? 'llave inválida.'),
+            ], 422);
+        }
+        return null;
     }
 
     /** Crea la sesión de pago (Wompi) para pagar o renovar la membresía mensual de un plan. */
@@ -85,6 +104,10 @@ class CreditController extends Controller
 
         $referencia = "LOGIX-PLAN-{$pt->id}";
         $pt->update(['payload' => array_merge($pt->payload, ['reference' => $referencia])]);
+
+        if ($error = $this->validarWompi()) {
+            return $error;
+        }
 
         return response()->json([
             'checkoutUrl' => $this->wompi->checkoutUrl((int) $plan->precio_mensual, $referencia),
