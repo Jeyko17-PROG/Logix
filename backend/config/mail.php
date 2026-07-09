@@ -46,7 +46,9 @@ return [
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
             'encryption' => env('MAIL_ENCRYPTION'),
-            'timeout' => null,
+            // Límite duro: si el SMTP no responde, corta antes de que Render
+            // mate la petición HTTP con un 502.
+            'timeout' => (int) env('MAIL_TIMEOUT', 20),
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 

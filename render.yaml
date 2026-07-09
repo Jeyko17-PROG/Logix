@@ -9,7 +9,9 @@ services:
     buildCommand: composer install --no-dev --optimize-autoloader && php artisan key:generate --force
     # Migra y siembra la BD automáticamente en cada deploy antes de arrancar el servidor.
     # Los seeders son idempotentes (updateOrCreate): roles, planes, módulos, tipos de negocio, super-admin.
-    startCommand: php artisan migrate --force && php artisan db:seed --force && php artisan serve --host 0.0.0.0 --port $PORT
+    # El queue:work en segundo plano procesa los correos encolados (facturas, recibos)
+    # para que las peticiones HTTP no esperen al SMTP (evita 502 en Render).
+    startCommand: php artisan migrate --force && php artisan db:seed --force && (php artisan queue:work --sleep=3 --tries=3 --timeout=60 &) && php artisan serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production

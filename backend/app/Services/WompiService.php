@@ -54,15 +54,29 @@ class WompiService
             try {
                 $res = Http::timeout(8)->get("{$base}/v1/merchants/{$key}");
                 if ($res->successful()) {
-                    return ['ok' => true, 'nombre' => $res->json('data.name')];
+                    return ['ok' => true, 'nombre' => $res->json('data.name'), 'sandbox' => $this->esSandbox()];
                 }
+
+                // Incluye el motivo exacto que devuelve Wompi para poder autodiagnosticar
+                // (ej: "Formato inválido" = llave mal copiada; 404 = llave de otro ambiente).
+                $detalle = $res->json('error.reason')
+                    ?? collect($res->json('error.messages') ?? [])->flatten()->implode(' ')
+                    ?: "HTTP {$res->status()}";
+
                 Log::warning('Wompi: la llave pública no corresponde a un comercio válido', [
-                    'status' => $res->status(), 'sandbox' => $this->esSandbox(),
+                    'status' => $res->status(), 'sandbox' => $this->esSandbox(), 'detalle' => $detalle,
                 ]);
-                return ['ok' => false, 'error' => 'Wompi no reconoce la llave pública configurada (revisa WOMPI_PUBLIC_KEY y que sea del ambiente correcto: pub_prod_ para producción).'];
+
+                $ambiente = $this->esSandbox() ? 'pruebas (sandbox)' : 'producción';
+                return [
+                    'ok' => false,
+                    'error' => "Wompi no reconoce la llave pública en el ambiente de {$ambiente}: {$detalle}. "
+                        . 'Revisa que WOMPI_PUBLIC_KEY esté copiada completa (pub_prod_... para producción, pub_test_... para pruebas) '
+                        . 'junto con su WOMPI_INTEGRITY_SECRET del MISMO ambiente.',
+                ];
             } catch (\Throwable $e) {
                 Log::warning('Wompi: no se pudo verificar el comercio', ['error' => $e->getMessage()]);
-                return ['ok' => true, 'nombre' => null]; // no bloquear por un fallo de red
+                return ['ok' => true, 'nombre' => null, 'sandbox' => $this->esSandbox()]; // no bloquear por un fallo de red
             }
         });
     }

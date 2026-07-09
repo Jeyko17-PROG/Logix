@@ -366,7 +366,7 @@ class FacturaController extends Controller
             ], 502);
         }
 
-        return response()->json(['mensaje' => "Factura enviada a {$data['email']}."]);
+        return response()->json(['mensaje' => "Factura en camino a {$data['email']} (se envía en segundo plano)."]);
     }
 
     public function whatsapp(Factura $factura)

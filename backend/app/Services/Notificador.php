@@ -38,18 +38,25 @@ class Notificador
     }
 
     /**
-     * Envía un correo con plantilla. NO crea una notificación interna:
-     * un correo no es una notificación de panel y, si se guardara con user_id null,
-     * se filtraría a TODOS los usuarios. Solo deja traza en el log si falla.
+     * Envía un correo con plantilla EN SEGUNDO PLANO (cola de trabajos):
+     * la petición HTTP responde de inmediato y el worker hace el envío SMTP,
+     * evitando timeouts 502 en Render cuando Gmail tarda en responder.
+     * Si la cola no está disponible, cae al envío directo (síncrono).
      */
     public function correo(string $para, string $asunto, string $titulo, array $lineas, ?string $adjuntoPath = null, string $tipo = 'ADMIN'): bool
     {
         try {
-            Mail::to($para)->send(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath));
+            Mail::to($para)->queue(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath));
             return true;
         } catch (\Throwable $e) {
-            Log::warning('No se pudo enviar el correo de Logix', ['para' => $para, 'error' => $e->getMessage()]);
-            return false;
+            Log::warning('No se pudo encolar el correo; intentando envío directo', ['para' => $para, 'error' => $e->getMessage()]);
+            try {
+                Mail::to($para)->send(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath));
+                return true;
+            } catch (\Throwable $e2) {
+                Log::warning('No se pudo enviar el correo de Logix', ['para' => $para, 'error' => $e2->getMessage()]);
+                return false;
+            }
         }
     }
 }

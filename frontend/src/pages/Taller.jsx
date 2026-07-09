@@ -202,33 +202,41 @@ function Ordenes({ esMecanico }) {
 }
 
 function ModalCrearOrden({ onClose, onCreada }) {
-  const [clientes, setClientes] = useState([])
+  const [resultados, setResultados] = useState([])
   const [buscarCliente, setBuscarCliente] = useState('')
+  const [clienteSel, setClienteSel] = useState(null) // cliente elegido (objeto completo, no depende de la lista)
   const [vehiculos, setVehiculos] = useState([])
   const [empleados, setEmpleados] = useState([])
-  const [form, setForm] = useState({ cliente_id: '', asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '' })
+  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '' })
   const [nuevoVehiculo, setNuevoVehiculo] = useState(null) // {placa, marca, modelo}
   const [guardando, setGuardando] = useState(false)
+  const [errorCarga, setErrorCarga] = useState('')
 
   useEffect(() => {
     api('/empleados').then((r) => setEmpleados(r.data ?? [])).catch(() => {})
   }, [])
 
+  // Búsqueda reactiva: los resultados son una lista clicable, y el cliente
+  // elegido queda fijado aparte (no se pierde al seguir escribiendo).
   useEffect(() => {
     const t = setTimeout(() => {
-      api(`/clientes?buscar=${encodeURIComponent(buscarCliente)}`).then((r) => setClientes(r.data ?? [])).catch(() => {})
+      api(`/clientes?buscar=${encodeURIComponent(buscarCliente)}`)
+        .then((r) => { setResultados(r.data ?? r ?? []); setErrorCarga('') })
+        .catch((e) => setErrorCarga(e.message || 'No se pudieron cargar los clientes.'))
     }, 300)
     return () => clearTimeout(t)
   }, [buscarCliente])
 
   useEffect(() => {
-    if (!form.cliente_id) { setVehiculos([]); return }
-    api(`/activos?cliente_id=${form.cliente_id}`).then((r) => setVehiculos(r.data ?? [])).catch(() => {})
-  }, [form.cliente_id])
+    if (!clienteSel?.id) { setVehiculos([]); return }
+    api(`/activos?cliente_id=${clienteSel.id}`)
+      .then((r) => setVehiculos(r.data ?? []))
+      .catch((e) => setErrorCarga(e.message || 'No se pudieron cargar los vehículos.'))
+  }, [clienteSel])
 
   async function crear(e) {
     e.preventDefault()
-    if (!form.cliente_id) return alert('Selecciona el cliente.')
+    if (!clienteSel?.id) return alert('Selecciona el cliente.')
     setGuardando(true)
     try {
       let vehiculoId = form.asset_vehicle_id || null
@@ -236,14 +244,14 @@ function ModalCrearOrden({ onClose, onCreada }) {
       // Registrar el vehículo nuevo sobre la marcha si el usuario llenó el mini-formulario.
       if (nuevoVehiculo?.marca && nuevoVehiculo?.modelo) {
         const v = await api('/activos', { method: 'POST', body: {
-          cliente_id: Number(form.cliente_id), tipo_activo: nuevoVehiculo.tipo || 'moto',
+          cliente_id: Number(clienteSel.id), tipo_activo: nuevoVehiculo.tipo || 'moto',
           placa_identificador: nuevoVehiculo.placa || null, marca: nuevoVehiculo.marca, modelo: nuevoVehiculo.modelo,
         } })
         vehiculoId = v.id
       }
 
       const orden = await api('/ordenes-servicio', { method: 'POST', body: {
-        cliente_id: Number(form.cliente_id),
+        cliente_id: Number(clienteSel.id),
         asset_vehicle_id: vehiculoId ? Number(vehiculoId) : null,
         operables_employee_id: form.operables_employee_id ? Number(form.operables_employee_id) : null,
         descripcion_trabajo: form.descripcion_trabajo || null,
@@ -262,19 +270,36 @@ function ModalCrearOrden({ onClose, onCreada }) {
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-4">Nueva orden de servicio</h2>
         <form onSubmit={crear} className="space-y-3">
-          <label className="block text-sm text-slate-300">Buscar cliente
-            <input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Nombre, cédula, teléfono…" className="input mt-1" />
-          </label>
-          <label className="block text-sm text-slate-300">Cliente *
-            <select value={form.cliente_id} onChange={set('cliente_id')} className="input mt-1" required>
-              <option value="">— Selecciona —</option>
-              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo} {c.numero_documento ? `(${c.numero_documento})` : ''}</option>)}
-            </select>
-          </label>
+          {errorCarga && <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-300">{errorCarga}</div>}
+
+          {/* Cliente: buscador con resultados clicables; el elegido queda fijado */}
+          {clienteSel ? (
+            <div className="flex items-center justify-between rounded-lg border border-emerald-600/50 bg-emerald-500/10 px-3 py-2.5">
+              <div className="text-sm">
+                <p className="font-semibold">👤 {clienteSel.nombre_completo}</p>
+                <p className="text-xs text-slate-400">{clienteSel.numero_documento ?? ''} {clienteSel.telefono ? `· ${clienteSel.telefono}` : ''}</p>
+              </div>
+              <button type="button" onClick={() => { setClienteSel(null); setForm({ ...form, asset_vehicle_id: '' }); setNuevoVehiculo(null) }}
+                className="text-xs text-slate-400 hover:text-white">Cambiar</button>
+            </div>
+          ) : (
+            <label className="block text-sm text-slate-300">Cliente * (escribe para buscar)
+              <input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Nombre, cédula, teléfono…" className="input mt-1" autoFocus />
+              <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-700 divide-y divide-slate-800">
+                {resultados.length === 0 && <p className="px-3 py-2 text-xs text-slate-500">Sin resultados. Crea el cliente primero en el módulo Clientes.</p>}
+                {resultados.map((c) => (
+                  <button type="button" key={c.id} onClick={() => { setClienteSel(c); setBuscarCliente('') }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-800">
+                    {c.nombre_completo} <span className="text-xs text-slate-500">{c.numero_documento ?? ''}</span>
+                  </button>
+                ))}
+              </div>
+            </label>
+          )}
 
           <label className="block text-sm text-slate-300">Vehículo / equipo del cliente
-            <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1" disabled={!!nuevoVehiculo}>
-              <option value="">— Sin vehículo —</option>
+            <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1" disabled={!!nuevoVehiculo || !clienteSel}>
+              <option value="">{clienteSel ? (vehiculos.length ? '— Sin vehículo —' : 'Este cliente no tiene vehículos registrados') : 'Primero elige el cliente'}</option>
               {vehiculos.map((v) => <option key={v.id} value={v.id}>{v.marca} {v.modelo} · {v.placa_identificador ?? 's/placa'}</option>)}
             </select>
           </label>
@@ -295,7 +320,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
               </div>
             </div>
           ) : (
-            <button type="button" onClick={() => setNuevoVehiculo({ tipo: 'moto' })} disabled={!form.cliente_id}
+            <button type="button" onClick={() => setNuevoVehiculo({ tipo: 'moto' })} disabled={!clienteSel}
               className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-40">+ Registrar vehículo nuevo</button>
           )}
 
@@ -467,7 +492,7 @@ function ModalOrden({ id, esMecanico, onClose }) {
             <label className="block text-xs text-slate-400 col-span-2">Producto / servicio
               <select value={detalle.producto_id} onChange={(e) => alElegirProducto(e.target.value)} className="input !mt-1" required>
                 <option value="">— Selecciona —</option>
-                {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.is_service ? ' (servicio)' : ` · stock ${p.stock ?? '—'}`}</option>)}
+                {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.is_service ? ' (servicio)' : ` · stock ${p.stock_total ?? 0}`}</option>)}
               </select>
             </label>
             <label className="block text-xs text-slate-400">Cantidad
@@ -604,15 +629,21 @@ function ModalVehiculo({ onClose, onGuardado }) {
 /* ============ Empleados del taller ============ */
 function Empleados() {
   const [lista, setLista] = useState([])
-  const [creando, setCreando] = useState(false)
+  const [editando, setEditando] = useState(null) // null | 'nuevo' | empleado
 
   const cargar = useCallback(() => api('/empleados').then((r) => setLista(r.data ?? [])).catch(() => {}), [])
   useEffect(() => { cargar() }, [cargar])
 
+  async function eliminar(m) {
+    if (!confirm(`¿Eliminar a ${m.nombre} ${m.apellido}?`)) return
+    try { await api(`/empleados/${m.id}`, { method: 'DELETE' }); cargar() }
+    catch (err) { alert(err.message) }
+  }
+
   return (
     <div>
       <div className="flex mb-4">
-        <button onClick={() => setCreando(true)} className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nuevo empleado</button>
+        <button onClick={() => setEditando('nuevo')} className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nuevo empleado</button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {lista.map((m) => (
@@ -625,11 +656,18 @@ function Empleados() {
             {m.comision_default > 0 && (
               <p className="text-sm text-slate-400">Comisión: {m.tipo_comision_default === 'fixed' ? COP(m.comision_default) : `${Number(m.comision_default)}%`}</p>
             )}
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setEditando(m)} className="text-xs rounded bg-slate-700 hover:bg-slate-600 px-3 py-1.5">✏️ Editar</button>
+              <button onClick={() => eliminar(m)} className="text-xs rounded bg-red-900/60 hover:bg-red-800 px-3 py-1.5">🗑️ Eliminar</button>
+            </div>
           </div>
         ))}
         {lista.length === 0 && <p className="text-slate-500 col-span-2 text-center py-6">Sin empleados. Crea tu equipo de mecánicos/técnicos.</p>}
       </div>
-      {creando && <ModalEmpleado onClose={() => setCreando(false)} onGuardado={() => { setCreando(false); cargar() }} />}
+      {editando && (
+        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando}
+          onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar() }} />
+      )}
       <p className="text-xs text-slate-500 mt-4">
         💡 Para que un mecánico entre al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
         <span className="font-semibold"> Mecanico</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
@@ -638,20 +676,28 @@ function Empleados() {
   )
 }
 
-function ModalEmpleado({ onClose, onGuardado }) {
+function ModalEmpleado({ empleado, onClose, onGuardado }) {
   const [tipos, setTipos] = useState([])
-  const [form, setForm] = useState({ nombre: '', apellido: '', ci_cedula: '', telefono: '', tipo_operario: 'mecanico', comision_default: '', tipo_comision_default: 'percentage' })
+  const [form, setForm] = useState({
+    nombre: empleado?.nombre ?? '', apellido: empleado?.apellido ?? '',
+    ci_cedula: empleado?.ci_cedula ?? '', telefono: empleado?.telefono ?? '',
+    tipo_operario: empleado?.tipo_operario ?? 'mecanico',
+    comision_default: empleado?.comision_default ?? '',
+    tipo_comision_default: empleado?.tipo_comision_default ?? 'percentage',
+  })
 
   useEffect(() => { api('/empleados/tipos').then((r) => setTipos(r.tipos ?? [])).catch(() => {}) }, [])
 
   async function guardar(e) {
     e.preventDefault()
     try {
-      await api('/empleados', { method: 'POST', body: {
+      const body = {
         ...form,
         telefono: form.telefono || null,
         comision_default: form.comision_default ? aNumero(form.comision_default) : null,
-      } })
+      }
+      if (empleado?.id) await api(`/empleados/${empleado.id}`, { method: 'PUT', body })
+      else await api('/empleados', { method: 'POST', body })
       onGuardado()
     } catch (err) { alert(err.message || 'No se pudo guardar.') }
   }
@@ -661,7 +707,7 @@ function ModalEmpleado({ onClose, onGuardado }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4">Nuevo empleado del taller</h2>
+        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : 'Nuevo empleado del taller'}</h2>
         <form onSubmit={guardar} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm text-slate-300">Nombre *

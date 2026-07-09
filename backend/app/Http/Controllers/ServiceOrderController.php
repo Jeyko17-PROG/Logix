@@ -2,17 +2,42 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Bodega;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderDetail;
 use App\Models\Producto;
 use App\Models\OperablesEmployee;
 use App\Models\AssetHistory;
+use App\Services\KardexService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
 
 class ServiceOrderController extends Controller
 {
+    public function __construct(private KardexService $kardex) {}
+
+    /**
+     * Bodega donde se descuentan los repuestos de las órdenes:
+     * la del empleado (si está limitado a una) o la bodega principal.
+     */
+    private function resolverBodega(Request $request): int
+    {
+        $user = $request->user();
+        if ($user->estaLimitadoABodega()) {
+            return (int) $user->bodega_id;
+        }
+
+        $principal = Bodega::query()->orderByDesc('es_principal')->orderBy('id')->value('id');
+        if (! $principal) {
+            throw ValidationException::withMessages([
+                'bodega' => ['Debes crear una bodega antes de usar repuestos en las órdenes.'],
+            ]);
+        }
+        return (int) $principal;
+    }
+
     /**
      * Listar órdenes de servicio.
      */
@@ -56,6 +81,8 @@ class ServiceOrderController extends Controller
         $data = $this->validar($request);
         $ownerId = $request->user()->workspaceOwnerId();
         $data['owner_id'] = $ownerId;
+        $data['estado'] = 'recibido';
+        $data['fecha_recepcion'] = now();
         $data['numero_orden'] = ServiceOrder::generarNumeroOrden($ownerId);
 
         $orden = ServiceOrder::create($data);
@@ -130,7 +157,7 @@ class ServiceOrderController extends Controller
             'notas' => ['nullable', 'string'],
         ]);
 
-        // --- SISTEMA DE INVENTARIO AUTOMÁTICO ---
+        // --- INVENTARIO AUTOMÁTICO (Kardex real: stock_por_bodega) ---
         $producto = Producto::find($data['producto_id']);
 
         // El mecánico no puede fijar precios ni comisiones: se usa el precio de lista del producto.
@@ -139,15 +166,20 @@ class ServiceOrderController extends Controller
             unset($data['tiene_comision'], $data['tipo_comision'], $data['comision_value']);
             $data['tiene_comision'] = false;
         }
-        
-        // Solo descuenta si no está configurado como servicio/mano de obra
-        if ($producto && !$producto->is_service) {
-            if ($producto->stock < $data['cantidad']) {
-                return response()->json(['error' => "Stock insuficiente en tienda. Disponibles: {$producto->stock}"], 422);
-            }
-            $producto->decrement('stock', $data['cantidad']);
+
+        // Solo descuenta si no está configurado como servicio/mano de obra.
+        // KardexService valida el stock disponible y lanza 422 si no alcanza.
+        if ($producto && ! $producto->is_service) {
+            $this->kardex->salida(
+                (int) $producto->id,
+                $this->resolverBodega($request),
+                (float) $data['cantidad'],
+                $request->user()->id,
+                'ORDEN_SERVICIO',
+                ['tipo' => 'ORDEN_SERVICIO', 'id' => $serviceOrder->id],
+            );
         }
-        // ----------------------------------------
+        // -------------------------------------------------------------
 
         $subtotal = $data['cantidad'] * $data['precio_unitario'];
         $data['subtotal'] = $subtotal;
@@ -156,7 +188,7 @@ class ServiceOrderController extends Controller
         $detail = $serviceOrder->details()->create($data);
 
         // Calcular comisión si aplica
-        if ($data['tiene_comision']) {
+        if (! empty($data['tiene_comision'])) {
             $detail->calcularComision();
             $detail->save();
         }
@@ -187,18 +219,20 @@ class ServiceOrderController extends Controller
             $data = array_intersect_key($data, array_flip(['cantidad']));
         }
 
-        // Ajustar inventario si cambia la cantidad del repuesto
+        // Ajustar inventario (Kardex) si cambia la cantidad del repuesto
         if (isset($data['cantidad'])) {
             $producto = Producto::find($detail->producto_id);
-            if ($producto && !$producto->is_service) {
-                $diferencia = $data['cantidad'] - $detail->cantidad;
+            if ($producto && ! $producto->is_service) {
+                $bodegaId = $this->resolverBodega($request);
+                $diferencia = (float) $data['cantidad'] - (float) $detail->cantidad;
                 if ($diferencia > 0) {
-                    if ($producto->stock < $diferencia) {
-                        return response()->json(['error' => "Stock insuficiente para aumentar la cantidad. Disponibles: {$producto->stock}"], 422);
-                    }
-                    $producto->decrement('stock', $diferencia);
+                    // Kardex valida el disponible y responde 422 si no alcanza.
+                    $this->kardex->salida((int) $producto->id, $bodegaId, $diferencia, $request->user()->id,
+                        'ORDEN_SERVICIO', ['tipo' => 'ORDEN_SERVICIO', 'id' => $serviceOrder->id]);
                 } elseif ($diferencia < 0) {
-                    $producto->increment('stock', abs($diferencia));
+                    $this->kardex->entrada((int) $producto->id, $bodegaId, abs($diferencia),
+                        $this->costoPromedioActual($producto->id, $bodegaId), $request->user()->id,
+                        'DEVOLUCION_ORDEN', ['tipo' => 'ORDEN_SERVICIO', 'id' => $serviceOrder->id]);
                 }
             }
         }
@@ -223,18 +257,28 @@ class ServiceOrderController extends Controller
     /**
      * Eliminar un detalle y devolver el stock al inventario.
      */
-    public function eliminarDetalle(ServiceOrder $serviceOrder, ServiceOrderDetail $detail): JsonResponse
+    public function eliminarDetalle(Request $request, ServiceOrder $serviceOrder, ServiceOrderDetail $detail): JsonResponse
     {
-        // --- RESTABLECER INVENTARIO ---
+        // --- RESTABLECER INVENTARIO (devolución en el Kardex) ---
         $producto = Producto::find($detail->producto_id);
-        if ($producto && !$producto->is_service) {
-            $producto->increment('stock', $detail->cantidad);
+        if ($producto && ! $producto->is_service && (float) $detail->cantidad > 0) {
+            $bodegaId = $this->resolverBodega($request);
+            $this->kardex->entrada((int) $producto->id, $bodegaId, (float) $detail->cantidad,
+                $this->costoPromedioActual($producto->id, $bodegaId), $request->user()->id,
+                'DEVOLUCION_ORDEN', ['tipo' => 'ORDEN_SERVICIO', 'id' => $serviceOrder->id]);
         }
-        // ------------------------------
+        // ---------------------------------------------------------
 
         $detail->delete();
         $serviceOrder->recalculateTotals();
         return response()->json(['message' => 'Detalle eliminado y stock devuelto a inventario.']);
+    }
+
+    /** Costo promedio vigente del producto en la bodega (para devoluciones sin alterar el promedio). */
+    private function costoPromedioActual(int $productoId, int $bodegaId): float
+    {
+        return (float) (\App\Models\StockBodega::where('producto_id', $productoId)
+            ->where('bodega_id', $bodegaId)->value('costo_promedio') ?? 0);
     }
 
     /**

@@ -42,13 +42,20 @@ Route::get('/ping', function () {
         // sin acceso a BD: se reporta null
     }
 
+    // Verificación del comercio en Wompi (cacheada 10 min, solo booleanos).
+    $wompi = app(\App\Services\WompiService::class);
+    $comercio = $wompi->configurado() ? $wompi->verificarComercio() : null;
+
     return response()->json([
         'message' => 'conectado',
         'app' => config('app.name'),
         'time' => now()->toIso8601String(),
         'diagnostico' => [
             'correo_smtp_configurado' => config('mail.default') === 'smtp' && ! empty(config('mail.mailers.smtp.username')),
-            'wompi_configurada' => ! empty(config('services.wompi.public_key')) && ! empty(config('services.wompi.integrity_secret')),
+            'wompi_configurada' => $wompi->configurado() && ! empty(config('services.wompi.integrity_secret')),
+            'wompi_comercio_valido' => $comercio['ok'] ?? null,
+            'wompi_ambiente' => $wompi->configurado() ? ($wompi->esSandbox() ? 'sandbox' : 'produccion') : null,
+            'wompi_detalle' => ($comercio['ok'] ?? true) ? null : ($comercio['error'] ?? null),
             'migraciones_pendientes' => $migracionesPendientes,
         ],
     ]);

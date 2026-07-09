@@ -93,7 +93,7 @@ class ServiceOrder extends Model
             'listo' => 'Listo',
             'facturado' => 'Facturado',
             'cancelado' => 'Cancelado',
-        ])->get($this->estado, $this->estado);
+        ])->get($this->estado, $this->estado ?? 'Recibido');
     }
 
     /**
