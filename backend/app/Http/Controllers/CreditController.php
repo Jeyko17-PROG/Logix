@@ -24,18 +24,13 @@ class CreditController extends Controller
         return $q->orderBy('price_cop')->get();
     }
 
-    // Return current user's credits per module
+    // Saldo por módulo de la EMPRESA del usuario (compartido por todo su equipo)
     public function myCredits(Request $request)
     {
         $user = $request->user();
         if (! $user) return response()->json(['message' => 'No autorizado'], 401);
-        $credits = $user->load('credits');
-        // Format: { module: credits }
-        $map = [];
-        foreach ($user->credits as $c) {
-            $map[$c->module] = $c->credits;
-        }
-        return response()->json($map);
+
+        return response()->json($this->credits->saldos($user));
     }
 
     /** Crea la sesión de pago (Wompi: PSE, Nequi, tarjeta) para recargar la billetera. */

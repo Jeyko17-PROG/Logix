@@ -53,7 +53,7 @@ class VerificarMembresia
             'codigo' => 'MEMBRESIA_VENCIDA',
             'message' => 'Tu membresía venció. Renueva tu plan para seguir usando el POS.',
             'vencio_el' => $owner->membresia_vence_at?->toDateString(),
-            'plan' => $owner->plan?->nombre,
+            'plan' => $owner->planEfectivo()?->nombre,
         ], 402);
     }
 }

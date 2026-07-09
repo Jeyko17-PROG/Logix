@@ -10,7 +10,7 @@ class PaymentTransaction extends Model
     protected $table = 'payment_transactions';
 
     protected $fillable = [
-        'provider', 'provider_event_id', 'user_id', 'plan_id', 'status', 'payload', 'amount', 'currency', 'processed_at'
+        'provider', 'provider_event_id', 'user_id', 'empresa_id', 'plan_id', 'status', 'payload', 'amount', 'currency', 'processed_at'
     ];
 
     protected $casts = [

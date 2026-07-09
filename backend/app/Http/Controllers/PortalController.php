@@ -25,13 +25,18 @@ class PortalController extends Controller
 {
     public function __construct(private AgendaService $agenda, private Notificador $notificador) {}
 
-    /** Resuelve el id del negocio dueño del portal a partir del slug público. */
+    /**
+     * Resuelve el id del usuario dueño del portal a partir del slug público.
+     * Multiempresa: primero busca el slug en empresas (canónico) y cae al
+     * slug antiguo de users para no romper QRs/enlaces existentes.
+     */
     private function negocioId(?string $slug = null): int
     {
         if ($slug) {
-            $id = User::where('reservas_slug', $slug)->value('id');
+            $id = \App\Models\Empresa::where('reservas_slug', $slug)->value('owner_user_id')
+                ?? User::where('reservas_slug', $slug)->value('id');
             abort_if(! $id, 404, 'Portal de reservas no encontrado.');
-            return $id;
+            return (int) $id;
         }
         return User::negocioPrincipalId() ?? abort(404, 'Portal de reservas no disponible.');
     }
@@ -41,7 +46,11 @@ class PortalController extends Controller
     {
         $id = $this->negocioId($slug);
         $u = User::find($id);
-        return response()->json(['nombre' => $u?->name, 'slug' => $u?->reservas_slug]);
+        $empresa = \App\Models\Empresa::where('owner_user_id', $id)->first();
+        return response()->json([
+            'nombre' => $empresa?->nombre ?? $u?->name,
+            'slug' => $empresa?->reservas_slug ?? $u?->reservas_slug,
+        ]);
     }
 
     /** Servicios activos que el cliente puede reservar. */

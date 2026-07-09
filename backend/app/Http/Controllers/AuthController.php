@@ -28,6 +28,9 @@ class AuthController extends Controller
             'telefono' => ['nullable', 'string', 'max:50'],
             'email' => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // Multiempresa: nombre del negocio y su tipo (define los módulos visibles).
+            'nombre_empresa' => ['nullable', 'string', 'max:255'],
+            'tipo_negocio_id' => ['nullable', 'exists:tipos_negocio,id'],
         ]);
 
         // Todo usuario nuevo es "Usuario": propietario de su propio espacio aislado.
@@ -50,6 +53,22 @@ class AuthController extends Controller
             'estado' => 'ACTIVO',
         ]);
 
+        // La empresa es el tenant real: dueña de los datos, el plan y la membresía.
+        $empresa = \App\Models\Empresa::create([
+            'nombre' => $data['nombre_empresa'] ?? $data['name'],
+            'tipo_documento' => $data['tipo_documento'] ?? null,
+            'numero_documento' => $data['numero_documento'] ?? null,
+            'telefono' => $data['telefono'] ?? null,
+            'email' => $data['email'],
+            'tipo_negocio_id' => $data['tipo_negocio_id']
+                ?? \App\Models\TipoNegocio::where('clave', 'otro')->value('id'),
+            'owner_user_id' => $user->id,
+            'plan_id' => $planId,
+            'estado' => 'ACTIVO',
+            'activo' => true,
+        ]);
+        $user->forceFill(['empresa_id' => $empresa->id, 'es_admin_empresa' => true])->save();
+
         $this->prepararEspacioDeTrabajo($user);
         $this->notificarNuevoRegistro($user);
         $this->darBienvenida($user);
@@ -65,10 +84,15 @@ class AuthController extends Controller
     /** Provisiona la configuración inicial del nuevo inquilino (horarios y ajustes de agenda). */
     private function prepararEspacioDeTrabajo(User $user): void
     {
+        // El registro ocurre sin sesión autenticada: el hook del trait no puede
+        // resolver la empresa, así que se pasa empresa_id explícito.
+        $empresaId = $user->empresa_id;
+
         // Horario laboral por defecto: Lunes(1) a Sábado(6), 08:00–18:00.
         foreach (range(1, 6) as $dia) {
             \App\Models\HorarioLaboral::create([
                 'owner_id' => $user->id,
+                'empresa_id' => $empresaId,
                 'dia_semana' => $dia,
                 'hora_inicio' => '08:00:00',
                 'hora_fin' => '18:00:00',
@@ -79,6 +103,7 @@ class AuthController extends Controller
         // Ajustes por defecto de la agenda (duración de cita y buffer).
         \App\Models\AjusteAgenda::create([
             'owner_id' => $user->id,
+            'empresa_id' => $empresaId,
             'duracion_cita_min' => 30,
             'buffer_min' => 0,
         ]);
@@ -87,6 +112,7 @@ class AuthController extends Controller
         foreach (['Principal' => true, 'Centro' => false, 'Norte' => false] as $nombre => $principal) {
             \App\Models\Bodega::create([
                 'owner_id' => $user->id,
+                'empresa_id' => $empresaId,
                 'nombre' => $nombre,
                 'activo' => true,
                 'es_principal' => $principal,
@@ -167,6 +193,22 @@ class AuthController extends Controller
             ]);
         }
 
+        // Multiempresa: si la EMPRESA fue suspendida/desactivada por el super-admin,
+        // ningún usuario de esa empresa puede entrar (salvo el super-admin).
+        $empresa = $user->empresaDeCobro();
+        if ($empresa && ! $user->esSuperAdmin()) {
+            if ($empresa->estado === 'SUSPENDIDO') {
+                throw ValidationException::withMessages([
+                    'email' => ['La cuenta de tu empresa está suspendida. Contacta al administrador de Logix.'],
+                ]);
+            }
+            if ($empresa->estado === 'DESACTIVADO' || ! $empresa->activo) {
+                throw ValidationException::withMessages([
+                    'email' => ['La cuenta de tu empresa está desactivada.'],
+                ]);
+            }
+        }
+
         $user->forceFill(['ultimo_acceso' => now()])->save();
 
         $token = $user->createToken('logix')->plainTextToken;
@@ -184,15 +226,29 @@ class AuthController extends Controller
     {
         $user = $request->user()->load('rol.permisos', 'plan', 'bodega', 'workspaceOwner');
 
-        // Estado de cobro SaaS del workspace (el del dueño si es un empleado):
+        // Estado de cobro SaaS de la EMPRESA (compartido por todo el equipo):
         // el frontend usa esto para mostrar la pasarela de pago cuando la membresía vence.
+        $empresa = $user->empresaDeCobro();
         $owner = $user->billingOwner();
+        $creditos = app(\App\Services\CreditService::class)->saldos($user);
+
         $user->setAttribute('facturacion_saas', [
-            'modo_cobro' => $owner->modo_cobro,
-            'membresia_vence_at' => $owner->membresia_vence_at?->toIso8601String(),
-            'membresia_vencida' => $owner->membresiaVencida(),
-            'creditos_facturacion' => (int) ($owner->credits()->where('module', 'facturacion')->value('credits') ?? 0),
+            'modo_cobro' => $empresa->modo_cobro ?? $owner->modo_cobro,
+            'membresia_vence_at' => ($empresa->membresia_vence_at ?? $owner->membresia_vence_at)?->toIso8601String(),
+            'membresia_vencida' => $user->membresiaVencida(),
+            'creditos_facturacion' => (int) ($creditos['facturacion'] ?? 0),
         ]);
+
+        if ($empresa) {
+            $user->setAttribute('empresa_info', [
+                'id' => $empresa->id,
+                'nombre' => $empresa->nombre,
+                'tipo_negocio' => $empresa->tipoNegocio?->only(['id', 'clave', 'nombre']),
+                'plan' => $empresa->plan?->only(['id', 'nombre']),
+                'estado' => $empresa->estado,
+                'es_admin_empresa' => (bool) $user->es_admin_empresa,
+            ]);
+        }
 
         return response()->json($user);
     }

@@ -91,14 +91,44 @@ class Funcionalidades
     }
 
     /**
-     * Estado efectivo de una funcionalidad para un usuario:
-     * super-admin = todo ACTIVADA; si hay override del admin se usa; si no, el del plan.
+     * Estado efectivo de una funcionalidad para un usuario (multiempresa):
+     *  1. Super-admin: todo ACTIVADA.
+     *  2. El TIPO DE NEGOCIO de la empresa limita el universo de módulos
+     *     (modulos_default; null = sin restricción).
+     *  3. Override del super-admin para la empresa (empresa_modulos).
+     *  4. Transición: override antiguo por usuario dueño (user_funcionalidades).
+     *  5. Default según el plan de la empresa.
      */
     public static function estadoEfectivo(User $user, string $clave): string
     {
         if ($user->esSuperAdmin()) {
             return 'ACTIVADA';
         }
+
+        $empresa = $user->empresaDeCobro();
+        if ($empresa) {
+            $defaults = $empresa->tipoNegocio?->modulos_default;
+            if (is_array($defaults) && ! in_array($clave, $defaults, true)) {
+                return 'DESACTIVADA';
+            }
+
+            $override = \App\Models\EmpresaModulo::where('empresa_id', $empresa->id)
+                ->whereHas('modulo', fn ($q) => $q->where('clave', $clave))
+                ->value('estado');
+            if ($override) {
+                return $override;
+            }
+
+            $overrideLegado = UserFuncionalidad::where('user_id', $empresa->owner_user_id)
+                ->where('clave', $clave)->value('estado');
+            if ($overrideLegado) {
+                return $overrideLegado;
+            }
+
+            return self::estadoPorPlan($empresa->plan?->nombre, $clave);
+        }
+
+        // Usuario sin empresa (previo al backfill): lógica anterior.
         $override = UserFuncionalidad::where('user_id', $user->id)->where('clave', $clave)->value('estado');
         if ($override) {
             return $override;
@@ -114,5 +144,32 @@ class Funcionalidades
             $mapa[$clave] = self::estadoEfectivo($user, $clave);
         }
         return $mapa;
+    }
+
+    /**
+     * Estado efectivo por EMPRESA (para el panel del super-admin):
+     * misma cadena que estadoEfectivo pero sin usuario de por medio.
+     */
+    public static function estadoEfectivoEmpresa(\App\Models\Empresa $empresa, string $clave): string
+    {
+        $defaults = $empresa->tipoNegocio?->modulos_default;
+        if (is_array($defaults) && ! in_array($clave, $defaults, true)) {
+            return 'DESACTIVADA';
+        }
+
+        $override = \App\Models\EmpresaModulo::where('empresa_id', $empresa->id)
+            ->whereHas('modulo', fn ($q) => $q->where('clave', $clave))
+            ->value('estado');
+        if ($override) {
+            return $override;
+        }
+
+        $overrideLegado = UserFuncionalidad::where('user_id', $empresa->owner_user_id)
+            ->where('clave', $clave)->value('estado');
+        if ($overrideLegado) {
+            return $overrideLegado;
+        }
+
+        return self::estadoPorPlan($empresa->plan?->nombre, $clave);
     }
 }

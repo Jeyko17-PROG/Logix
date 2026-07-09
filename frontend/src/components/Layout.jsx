@@ -121,6 +121,7 @@ const RUTAS_MECANICO = ['/', '/taller', '/productos', '/notificaciones', '/perfi
 const MENU_SUPER_ADMIN = {
   grupo: 'Plataforma (Super Admin)',
   items: [
+    { to: '/empresas', label: 'Empresas', icon: '🏢' },
     { to: '/usuarios', label: 'Usuarios Registrados', icon: '👤' },
     { to: '/licencias', label: 'Administración de Licencias', icon: '🔑' },
     { to: '/funcionalidades', label: 'Control de Funcionalidades', icon: '🧩' },

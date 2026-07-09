@@ -8,7 +8,7 @@ class UserCredit extends Model
 {
     protected $table = 'user_credits';
 
-    protected $fillable = ['user_id', 'module', 'credits', 'blocked'];
+    protected $fillable = ['user_id', 'empresa_id', 'module', 'credits', 'blocked'];
 
     protected $casts = [
         'credits' => 'integer',

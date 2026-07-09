@@ -22,6 +22,7 @@ import Calculadora from './pages/Calculadora'
 import Reportes from './pages/Reportes'
 import Notificaciones from './pages/Notificaciones'
 import Usuarios from './pages/Usuarios'
+import Empresas from './pages/Empresas'
 import Licencias from './pages/Licencias'
 import Planes from './pages/Planes'
 import ControlFuncionalidades from './pages/ControlFuncionalidades'
@@ -73,6 +74,7 @@ function App() {
         <Route path="/planes" element={<Planes />} />
 
         {/* Solo Super Administrador */}
+        <Route path="/empresas" element={<SoloSuperAdmin><Empresas /></SoloSuperAdmin>} />
         <Route path="/usuarios" element={<SoloSuperAdmin><Usuarios /></SoloSuperAdmin>} />
         <Route path="/licencias" element={<SoloSuperAdmin><Licencias /></SoloSuperAdmin>} />
         <Route path="/funcionalidades" element={<SoloSuperAdmin><ControlFuncionalidades /></SoloSuperAdmin>} />

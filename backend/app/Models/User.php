@@ -34,7 +34,9 @@ class User extends Authenticatable
         'activo',
         'estado',
         'es_super_admin',
+        'es_admin_empresa',
         'workspace_owner_id',
+        'empresa_id',
         'bodega_id',
     ];
 
@@ -57,6 +59,7 @@ class User extends Authenticatable
         'password' => 'hashed',
         'activo' => 'boolean',
         'es_super_admin' => 'boolean',
+        'es_admin_empresa' => 'boolean',
         'membresia_vence_at' => 'datetime',
     ];
 
@@ -67,18 +70,35 @@ class User extends Authenticatable
     }
 
     /**
-     * Propietario de su propio espacio de trabajo: tiene acceso total a SUS datos.
-     * (Roles "Administrador" y "Usuario" administran su workspace completo.)
+     * Propietario/administrador de su empresa: acceso total a los datos de SU empresa.
+     * (es_admin_empresa; los roles "Administrador"/"Usuario" se mantienen como respaldo.)
      */
     public function esPropietario(): bool
     {
-        return $this->esSuperAdmin() || $this->tieneRol('Administrador', 'Usuario');
+        return $this->esSuperAdmin()
+            || (bool) $this->es_admin_empresa
+            || $this->tieneRol('Administrador', 'Usuario');
     }
 
     /** Dueño operativo del workspace: el usuario mismo o el administrador que creó al empleado. */
     public function workspaceOwnerId(): int
     {
         return (int) ($this->workspace_owner_id ?: $this->id);
+    }
+
+    /** Empresa (tenant) a la que pertenece el usuario. */
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class, 'empresa_id');
+    }
+
+    /** Id de la empresa del usuario, con respaldo vía el dueño del workspace. */
+    public function empresaId(): ?int
+    {
+        if ($this->empresa_id) {
+            return (int) $this->empresa_id;
+        }
+        return $this->workspaceOwner?->empresa_id ? (int) $this->workspaceOwner->empresa_id : null;
     }
 
     /** Rol Mecánico/Técnico: solo ve sus órdenes asignadas, sin acceso a facturación ni precios. */
@@ -88,32 +108,60 @@ class User extends Authenticatable
     }
 
     /**
-     * Usuario responsable del cobro SaaS del workspace:
-     * el dueño (workspace_owner) si este usuario es un empleado, o él mismo.
+     * FACHADA — Usuario responsable del cobro SaaS: el dueño de la empresa.
+     * (Si aún no hay empresa, cae al dueño del workspace como antes.)
      */
     public function billingOwner(): User
     {
+        if ($this->empresa && $this->empresa->owner) {
+            return $this->empresa->owner;
+        }
         if ($this->workspace_owner_id && $this->workspaceOwner) {
             return $this->workspaceOwner;
         }
         return $this;
     }
 
+    /** Empresa responsable del cobro (la del usuario, resuelta también para empleados). */
+    public function empresaDeCobro(): ?Empresa
+    {
+        $id = $this->empresaId();
+        return $id ? Empresa::withTrashed()->find($id) : null;
+    }
+
     /**
-     * ¿La membresía mensual está vencida?
-     * Solo aplica en modo 'membresia' y cuando hay fecha de vencimiento registrada
-     * (NULL = cuenta sin control de vencimiento, no se bloquea).
+     * FACHADA — ¿La membresía mensual está vencida? La verdad vive en la empresa;
+     * si el usuario no tiene empresa aún, se usan los campos antiguos de users.
      */
     public function membresiaVencida(): bool
     {
+        if ($empresa = $this->empresaDeCobro()) {
+            return $empresa->membresiaVencida();
+        }
         return $this->modo_cobro === 'membresia'
             && $this->membresia_vence_at !== null
             && $this->membresia_vence_at->isPast();
     }
 
-    /** Registra una renovación: extiende la membresía un mes desde hoy (o desde el vencimiento futuro). */
+    /**
+     * FACHADA — Renueva la membresía de la EMPRESA y sincroniza los campos
+     * antiguos del usuario dueño durante la transición.
+     */
     public function renovarMembresia(int $meses = 1): void
     {
+        if ($empresa = $this->empresaDeCobro()) {
+            $empresa->renovarMembresia($meses);
+            // Sincroniza los campos legados del dueño (paneles/reportes antiguos).
+            $empresa->owner?->forceFill([
+                'membresia_vence_at' => $empresa->membresia_vence_at,
+                'modo_cobro' => $empresa->modo_cobro,
+                'estado' => 'ACTIVO',
+                'activo' => true,
+            ])->saveQuietly();
+            $this->refresh();
+            return;
+        }
+
         $base = ($this->membresia_vence_at && $this->membresia_vence_at->isFuture())
             ? $this->membresia_vence_at
             : now();
@@ -159,15 +207,28 @@ class User extends Authenticatable
         if ($this->esSuperAdmin()) {
             return PHP_INT_MAX;
         }
+        // FACHADA: el límite efectivo vive en la empresa (override o plan de la empresa).
+        if ($empresa = $this->empresaDeCobro()) {
+            return $empresa->limiteClientesEfectivo();
+        }
         if (! is_null($this->limite_clientes)) {
             return (int) $this->limite_clientes;
         }
         return (int) ($this->plan?->limite_clientes ?? 0);
     }
 
-    /** Cantidad de clientes que ha registrado este usuario (su workspace). */
+    /** Plan efectivo: el de la empresa (o el del usuario si aún no tiene empresa). */
+    public function planEfectivo(): ?Plan
+    {
+        return $this->empresaDeCobro()?->plan ?? $this->plan;
+    }
+
+    /** Cantidad de clientes registrados en la empresa del usuario. */
     public function clientesUsados(): int
     {
+        if ($empresaId = $this->empresaId()) {
+            return Cliente::withoutGlobalScopes()->where('empresa_id', $empresaId)->count();
+        }
         return Cliente::withoutGlobalScopes()->where('owner_id', $this->id)->count();
     }
 
@@ -179,11 +240,23 @@ class User extends Authenticatable
     }
 
     /**
-     * Genera (si falta) un slug público único para el portal de reservas del usuario.
-     * Ej: "Barbería Luis" -> "barberia-luis" (con sufijo -id si ya existe).
+     * FACHADA — Genera (si falta) el slug público único del portal de reservas.
+     * El slug canónico vive en la empresa; se mantiene copia en users por
+     * compatibilidad con los enlaces/QR existentes.
      */
     public function generarReservasSlug(): string
     {
+        if ($empresa = $this->empresaDeCobro()) {
+            $slug = $empresa->reservas_slug ?: ($this->reservas_slug ?: $empresa->generarReservasSlug());
+            if ($empresa->reservas_slug !== $slug) {
+                $empresa->forceFill(['reservas_slug' => $slug])->saveQuietly();
+            }
+            if ($this->reservas_slug !== $slug) {
+                $this->forceFill(['reservas_slug' => $slug])->saveQuietly();
+            }
+            return $slug;
+        }
+
         if ($this->reservas_slug) {
             return $this->reservas_slug;
         }

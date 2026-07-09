@@ -41,5 +41,9 @@ class AdminUserSeeder extends Seeder
                 'estado' => 'ACTIVO',
             ]
         );
+
+        // En BD nueva los seeders corren después de las migraciones: el backfill
+        // crea aquí las empresas de los usuarios sembrados (es idempotente).
+        \App\Support\BackfillEmpresas::run();
     }
 }

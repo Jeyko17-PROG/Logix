@@ -48,11 +48,10 @@ DB_PASSWORD=...
 DB_SSLMODE=require
 ```
 
-Despues de crear la base de datos, ejecutar migraciones en Render:
-
-```bash
-php artisan migrate --force --seed
-```
+No hace falta ejecutar migraciones a mano: el `startCommand` de Render corre
+`php artisan migrate --force && php artisan db:seed --force` en cada deploy
+(los seeders son idempotentes). Basta con crear la BD Postgres, definir las
+variables `DB_*` y hacer deploy.
 
 ## Base de datos recomendada
 
@@ -63,4 +62,6 @@ Opciones:
 - Render Postgres `Basic-256mb`: recomendado si quieres mantener backend y base de datos dentro de Render.
 - Proveedor externo Postgres gestionado: buena opcion si quieres capa gratuita mas flexible, pero agrega otra cuenta/proveedor y mas configuracion.
 
-Decision recomendada para Logix: Render Postgres `Basic-256mb` para produccion real y MySQL/SQLite local para desarrollo.
+Decision tomada para Logix: PostgreSQL es el motor estandar (default del codigo).
+En desarrollo local se puede seguir usando MySQL de Laragon definiendo
+`DB_CONNECTION=mysql` en el `.env`; SQLite ya no es el default.

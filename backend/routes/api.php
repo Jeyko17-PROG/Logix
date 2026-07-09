@@ -55,6 +55,12 @@ Route::get('/ping', function () {
 });
 
 // --- Autenticación (público) ---
+// Catálogo de tipos de negocio para el formulario de registro.
+Route::get('/tipos-negocio', function () {
+    return \App\Models\TipoNegocio::where('activo', true)
+        ->orderBy('orden')
+        ->get(['id', 'clave', 'nombre', 'descripcion']);
+});
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
@@ -125,6 +131,20 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
 
         // Administración de licencias
         Route::get('licencias', [UsuarioAdminController::class, 'licencias']);
+
+        // ===== Multiempresa: gestión de EMPRESAS (tenants) =====
+        Route::get('empresas', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'index']);
+        Route::put('empresas/{empresa}', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'update']);
+        Route::post('empresas/{empresa}/estado', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarEstado']);
+        Route::post('empresas/{empresa}/plan', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarPlan']);
+        Route::post('empresas/{empresa}/limite', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarLimite']);
+        Route::get('empresas/{empresa}/modulos', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'modulos']);
+        Route::put('empresas/{empresa}/modulos', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'guardarModulos']);
+        Route::post('empresas/{empresa}/modulos/aplicar-plan', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'aplicarPlanModulos']);
+
+        // Catálogo de tipos de negocio (módulos por tipo)
+        Route::get('tipos-negocio', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'tiposNegocio']);
+        Route::post('tipos-negocio', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'guardarTipoNegocio']);
 
         // Bitácora de auditoría
         Route::get('auditorias', [UsuarioAdminController::class, 'auditorias']);

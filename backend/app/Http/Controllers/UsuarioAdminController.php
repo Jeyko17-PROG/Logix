@@ -224,6 +224,14 @@ class UsuarioAdminController extends Controller
             'activo' => $data['estado'] === 'ACTIVO',
         ]);
 
+        // Multiempresa: si el usuario es el dueño, el estado aplica a toda su empresa.
+        if ($usuario->es_admin_empresa || $usuario->esPropietario()) {
+            $usuario->empresaDeCobro()?->update([
+                'estado' => $data['estado'],
+                'activo' => $data['estado'] === 'ACTIVO',
+            ]);
+        }
+
         // Si queda inactivo, revoca sus sesiones.
         if ($data['estado'] !== 'ACTIVO') {
             $usuario->tokens()->delete();
@@ -243,6 +251,8 @@ class UsuarioAdminController extends Controller
 
         $anterior = $usuario->plan?->nombre;
         $usuario->update(['plan_id' => $data['plan_id']]);
+        // Multiempresa: el plan efectivo vive en la empresa.
+        $usuario->empresaDeCobro()?->update(['plan_id' => $data['plan_id']]);
         $usuario->load('plan');
 
         Auditoria::registrar($request->user()->id, $usuario->id, 'PLAN', null, $anterior, $usuario->plan?->nombre);
@@ -266,6 +276,8 @@ class UsuarioAdminController extends Controller
 
         $anterior = $usuario->limite_clientes;
         $usuario->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
+        // Multiempresa: el límite vive en la empresa.
+        $usuario->empresaDeCobro()?->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
 
         Auditoria::registrar($request->user()->id, $usuario->id, 'LIMITE', null, (string) $anterior, (string) ($data['limite_clientes'] ?? 'plan'));
 

@@ -7,8 +7,9 @@ services:
     region: oregon
     root: backend
     buildCommand: composer install --no-dev --optimize-autoloader && php artisan key:generate --force
-    # Migra la BD automáticamente en cada deploy antes de arrancar el servidor.
-    startCommand: php artisan migrate --force && php artisan serve --host 0.0.0.0 --port $PORT
+    # Migra y siembra la BD automáticamente en cada deploy antes de arrancar el servidor.
+    # Los seeders son idempotentes (updateOrCreate): roles, planes, módulos, tipos de negocio, super-admin.
+    startCommand: php artisan migrate --force && php artisan db:seed --force && php artisan serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production
@@ -16,8 +17,20 @@ services:
         value: 'false'
       - key: APP_URL
         value: https://<YOUR_BACKEND_DOMAIN>
+      # PostgreSQL administrado de Render: crea la BD en el dashboard y define
+      # DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME y DB_PASSWORD como secretos.
       - key: DB_CONNECTION
-        value: mysql
+        value: pgsql
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: '5432'
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
       - key: SESSION_DRIVER
         value: database
       - key: CACHE_STORE

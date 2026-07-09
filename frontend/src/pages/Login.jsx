@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../api/client'
 
 const VACIO = {
   name: '', tipo_documento: 'CC', numero_documento: '', telefono: '',
   email: '', password: '', password_confirmation: '',
+  nombre_empresa: '', tipo_negocio_id: '',
 }
 
 export default function Login() {
@@ -17,6 +19,12 @@ export default function Login() {
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [tiposNegocio, setTiposNegocio] = useState([])
+
+  // Catálogo de tipos de negocio para el registro (define los módulos del POS).
+  useEffect(() => {
+    api('/tipos-negocio').then(setTiposNegocio).catch(() => {})
+  }, [])
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
 
@@ -41,6 +49,8 @@ export default function Login() {
           email: form.email,
           password: form.password,
           password_confirmation: form.password_confirmation,
+          nombre_empresa: form.nombre_empresa || form.name,
+          tipo_negocio_id: form.tipo_negocio_id || null,
         })
         navigate('/')
       } else if (modo === 'recuperar') {
@@ -117,6 +127,15 @@ export default function Login() {
                   </div>
                 </div>
                 <Campo icono="📱" placeholder="Celular" value={form.telefono} onChange={set('telefono')} />
+                <Campo icono="🏪" placeholder="Nombre de tu negocio" value={form.nombre_empresa} onChange={set('nombre_empresa')} />
+                <div className="flex items-center gap-2 border-b border-slate-200 focus-within:border-blue-500 transition pb-1">
+                  <span className="text-slate-400 text-sm">🧰</span>
+                  <select value={form.tipo_negocio_id} onChange={set('tipo_negocio_id')}
+                    className="w-full py-1.5 text-slate-800 bg-transparent focus:outline-none text-sm">
+                    <option value="">Tipo de negocio…</option>
+                    {tiposNegocio.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                  </select>
+                </div>
               </>
             )}
 
