@@ -325,6 +325,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::get('caja/sesiones', [App\Http\Controllers\CajaController::class, 'index']);
         Route::get('caja/actual', [App\Http\Controllers\CajaController::class, 'actual']);
         Route::post('caja/abrir', [App\Http\Controllers\CajaController::class, 'abrir']);
+        Route::post('caja/ingresos', [App\Http\Controllers\CajaController::class, 'storeIngreso']);
         Route::post('caja/{sesion}/cerrar', [App\Http\Controllers\CajaController::class, 'cerrar']);
 
         Route::get('gastos', [App\Http\Controllers\GastoController::class, 'index']);

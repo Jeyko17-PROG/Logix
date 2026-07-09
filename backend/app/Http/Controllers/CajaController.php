@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Auditoria;
 use App\Models\CajaSesion;
+use App\Models\Cliente;
+use App\Models\Factura;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -54,6 +56,64 @@ class CajaController extends Controller
         ]);
     }
 
+    public function storeIngreso(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'descripcion' => ['required', 'string', 'max:255'],
+            'monto' => ['required', 'numeric', 'gt:0'],
+            'fecha' => ['nullable', 'date'],
+        ]);
+
+        $sesion = CajaSesion::where('user_id', $request->user()->id)
+            ->where('estado', 'ABIERTA')
+            ->latest('abierta_at')
+            ->first();
+
+        $cliente = Cliente::where('nombre_completo', 'Ingreso de caja')
+            ->where('owner_id', $request->user()->workspaceOwnerId())
+            ->first();
+
+        if (! $cliente) {
+            $cliente = Cliente::create([
+                'owner_id' => $request->user()->workspaceOwnerId(),
+                'empresa_id' => $request->user()->empresaId(),
+                'nombre_completo' => 'Ingreso de caja',
+                'email' => null,
+                'telefono' => null,
+                'direccion' => null,
+                'estado' => 'ACTIVO',
+                'created_by' => $request->user()->id,
+            ]);
+        }
+
+        $monto = round((float) $data['monto'], 2);
+        $factura = Factura::create([
+            'numero' => $this->siguienteNumero(),
+            'bodega_id' => $sesion?->bodega_id ?? $request->user()->bodega_id,
+            'cliente_id' => $cliente->id,
+            'fecha' => $data['fecha'] ?? now()->toDateString(),
+            'subtotal' => $monto,
+            'impuestos' => 0,
+            'total' => $monto,
+            'estado' => 'EMITIDA',
+            'notas' => 'Ingreso de caja: ' . $data['descripcion'],
+            'created_by' => $request->user()->id,
+        ]);
+
+        $factura->detalles()->create([
+            'descripcion' => $data['descripcion'],
+            'cantidad' => 1,
+            'precio_unitario' => $monto,
+            'subtotal' => $monto,
+            'impuesto' => 0,
+            'impuesto_porcentaje' => 0,
+        ]);
+
+        Auditoria::registrar($request->user()->id, null, 'FACTURA', 'EMITIR', null, $factura->numero, $factura->bodega_id);
+
+        return response()->json($factura->load(['cliente:id,nombre_completo,email,telefono', 'detalles']), 201);
+    }
+
     /** Abre un turno de caja con la base en efectivo. */
     public function abrir(Request $request): JsonResponse
     {
@@ -80,6 +140,12 @@ class CajaController extends Controller
         Auditoria::registrar($request->user()->id, null, 'CAJA', 'ABRIR', null, '$' . number_format((float) $data['monto_apertura'], 0), $sesion->bodega_id);
 
         return response()->json($sesion, 201);
+    }
+
+    private function siguienteNumero(): string
+    {
+        $ultimo = Factura::withTrashed()->count() + 1;
+        return 'FAC-' . str_pad((string) $ultimo, 5, '0', STR_PAD_LEFT);
     }
 
     /** Cierra el turno: calcula esperado, registra el conteo y el descuadre. */

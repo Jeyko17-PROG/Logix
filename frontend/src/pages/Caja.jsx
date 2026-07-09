@@ -77,6 +77,8 @@ export default function Caja() {
         </div>
       </div>
 
+      <Ingresos onCambio={cargar} />
+
       {/* Gastos del día */}
       <Gastos esPropietario={esPropietario} onCambio={cargar} />
 
@@ -189,6 +191,57 @@ function TurnoAbierto({ estado, onCerrado }) {
           {cerrando ? 'Cerrando…' : '🔒 Cerrar turno (arqueo)'}
         </button>
       </form>
+    </div>
+  )
+}
+
+function Ingresos({ onCambio }) {
+  const [form, setForm] = useState({ descripcion: '', monto: '' })
+  const [guardando, setGuardando] = useState(false)
+  const [lista, setLista] = useState([])
+  const [total, setTotal] = useState(0)
+
+  async function agregar(e) {
+    e.preventDefault()
+    setGuardando(true)
+    try {
+      const r = await api('/caja/ingresos', { method: 'POST', body: { descripcion: form.descripcion, monto: aNumero(form.monto) } })
+      setLista((prev) => [{ id: r.id, descripcion: r.detalles?.[0]?.descripcion ?? form.descripcion, monto: Number(r.total || 0) }, ...prev])
+      setTotal((prev) => prev + Number(r.total || 0))
+      setForm({ descripcion: '', monto: '' })
+      onCambio()
+    } catch (err) { alert(err.message || 'No se pudo registrar el ingreso.') } finally { setGuardando(false) }
+  }
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-bold">📥 Ingresos de hoy</h2>
+        <span className="text-sm text-slate-400">Total: <b className="text-emerald-400">{COP(total)}</b></span>
+      </div>
+
+      <form onSubmit={agregar} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end rounded-xl border border-slate-800 bg-slate-800/30 p-3 mb-4">
+        <label className="block text-xs text-slate-400">Descripción *
+          <input value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} className="input !mt-1" required placeholder="Ej: Ingreso por venta extra" />
+        </label>
+        <label className="block text-xs text-slate-400">Monto (COP) *
+          <input type="text" inputMode="decimal" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} className="input !mt-1" required />
+        </label>
+        <button disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-2 text-sm font-semibold">
+          {guardando ? 'Guardando…' : '+ Registrar ingreso'}
+        </button>
+      </form>
+
+      <div className="grid gap-2">
+        {lista.length === 0 && <p className="text-slate-500 text-sm text-center py-3">Sin ingresos registrados hoy.</p>}
+        {lista.map((g) => (
+          <div key={g.id} className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-800/40 px-4 py-2.5 text-sm">
+            <span>💵</span>
+            <span className="font-medium">{g.descripcion}</span>
+            <span className="ml-auto font-semibold text-emerald-400">+{COP(g.monto)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
