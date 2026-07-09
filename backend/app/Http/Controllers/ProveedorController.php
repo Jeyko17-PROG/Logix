@@ -19,8 +19,11 @@ class ProveedorController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
         $data = $this->validar($request);
-        $data['created_by'] = $request->user()->id;
+        $data['created_by'] = $user->id;
+        $data['owner_id'] = $user->workspaceOwnerId();
+        $data['empresa_id'] = $user->empresaId();
         return response()->json(Proveedor::create($data), 201);
     }
 
@@ -31,7 +34,11 @@ class ProveedorController extends Controller
 
     public function update(Request $request, Proveedor $proveedor)
     {
-        $proveedor->update($this->validar($request, $proveedor->id));
+        $user = $request->user();
+        $data = $this->validar($request, $proveedor->id);
+        $data['owner_id'] = $proveedor->owner_id ?? $user->workspaceOwnerId();
+        $data['empresa_id'] = $proveedor->empresa_id ?? $user->empresaId();
+        $proveedor->update($data);
         return $proveedor;
     }
 

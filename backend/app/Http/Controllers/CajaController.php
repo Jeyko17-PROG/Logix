@@ -61,6 +61,8 @@ class CajaController extends Controller
         $data = $request->validate([
             'descripcion' => ['required', 'string', 'max:255'],
             'monto' => ['required', 'numeric', 'gt:0'],
+            'nombre_cliente' => ['required', 'string', 'max:255'],
+            'cedula' => ['required', 'string', 'max:50'],
             'fecha' => ['nullable', 'date'],
         ]);
 
@@ -69,21 +71,30 @@ class CajaController extends Controller
             ->latest('abierta_at')
             ->first();
 
-        $cliente = Cliente::where('nombre_completo', 'Ingreso de caja')
-            ->where('owner_id', $request->user()->workspaceOwnerId())
+        $cliente = Cliente::where('owner_id', $request->user()->workspaceOwnerId())
+            ->where(function ($q) use ($data) {
+                $q->where('nombre_completo', trim($data['nombre_cliente']))
+                    ->orWhere('numero_documento', trim($data['cedula']));
+            })
             ->first();
 
         if (! $cliente) {
             $cliente = Cliente::create([
                 'owner_id' => $request->user()->workspaceOwnerId(),
                 'empresa_id' => $request->user()->empresaId(),
-                'nombre_completo' => 'Ingreso de caja',
+                'nombre_completo' => trim($data['nombre_cliente']),
+                'numero_documento' => trim($data['cedula']),
                 'email' => null,
                 'telefono' => null,
                 'direccion' => null,
                 'estado' => 'ACTIVO',
                 'created_by' => $request->user()->id,
             ]);
+        } else {
+            $cliente->forceFill([
+                'nombre_completo' => trim($data['nombre_cliente']),
+                'numero_documento' => trim($data['cedula']),
+            ])->save();
         }
 
         $monto = round((float) $data['monto'], 2);

@@ -35,6 +35,8 @@ class CajaIngresoTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/caja/ingresos', [
             'descripcion' => 'Ingreso por préstamo',
             'monto' => 125000,
+            'nombre_cliente' => 'Carlos Pérez',
+            'cedula' => '123456789',
             'fecha' => now()->toDateString(),
         ]);
 
@@ -42,6 +44,7 @@ class CajaIngresoTest extends TestCase
             ->assertJsonPath('detalles.0.descripcion', 'Ingreso por préstamo')
             ->assertJsonPath('total', '125000.00');
 
+        $this->assertDatabaseHas('clientes', ['nombre_completo' => 'Carlos Pérez', 'numero_documento' => '123456789']);
         $this->assertDatabaseHas('facturas', ['notas' => 'Ingreso de caja: Ingreso por préstamo']);
 
         $utilidad = $this->actingAs($user, 'sanctum')->getJson('/api/reportes/utilidad-dia?fecha=' . now()->toDateString());

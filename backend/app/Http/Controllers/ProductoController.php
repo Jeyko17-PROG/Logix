@@ -24,9 +24,12 @@ class ProductoController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
         $data = $this->validar($request);
-        $data['created_by'] = $request->user()->id;
-        $data['imagen_url'] = $this->guardarImagen($request, $request->user()->id);
+        $data['created_by'] = $user->id;
+        $data['owner_id'] = $user->workspaceOwnerId();
+        $data['empresa_id'] = $user->empresaId();
+        $data['imagen_url'] = $this->guardarImagen($request, $user->id);
         $producto = Producto::create($data);
         return response()->json($producto->load(['categoria:id,nombre', 'stocks']), 201);
     }
@@ -38,8 +41,11 @@ class ProductoController extends Controller
 
     public function update(Request $request, Producto $producto)
     {
+        $user = $request->user();
         $data = $this->validar($request, $producto->id);
-        if ($nueva = $this->guardarImagen($request, $request->user()->id)) {
+        $data['owner_id'] = $producto->owner_id ?? $user->workspaceOwnerId();
+        $data['empresa_id'] = $producto->empresa_id ?? $user->empresaId();
+        if ($nueva = $this->guardarImagen($request, $user->id)) {
             if ($producto->imagen_url) {
                 Storage::disk('public')->delete(str_replace('/storage/', '', $producto->imagen_url));
             }

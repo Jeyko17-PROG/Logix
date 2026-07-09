@@ -196,7 +196,7 @@ function TurnoAbierto({ estado, onCerrado }) {
 }
 
 function Ingresos({ onCambio }) {
-  const [form, setForm] = useState({ descripcion: '', monto: '' })
+  const [form, setForm] = useState({ descripcion: '', monto: '', nombreCliente: '', cedula: '' })
   const [guardando, setGuardando] = useState(false)
   const [lista, setLista] = useState([])
   const [total, setTotal] = useState(0)
@@ -205,10 +205,10 @@ function Ingresos({ onCambio }) {
     e.preventDefault()
     setGuardando(true)
     try {
-      const r = await api('/caja/ingresos', { method: 'POST', body: { descripcion: form.descripcion, monto: aNumero(form.monto) } })
+      const r = await api('/caja/ingresos', { method: 'POST', body: { descripcion: form.descripcion, monto: aNumero(form.monto), nombre_cliente: form.nombreCliente, cedula: form.cedula } })
       setLista((prev) => [{ id: r.id, descripcion: r.detalles?.[0]?.descripcion ?? form.descripcion, monto: Number(r.total || 0) }, ...prev])
       setTotal((prev) => prev + Number(r.total || 0))
-      setForm({ descripcion: '', monto: '' })
+      setForm({ descripcion: '', monto: '', nombreCliente: '', cedula: '' })
       onCambio()
     } catch (err) { alert(err.message || 'No se pudo registrar el ingreso.') } finally { setGuardando(false) }
   }
@@ -220,14 +220,20 @@ function Ingresos({ onCambio }) {
         <span className="text-sm text-slate-400">Total: <b className="text-emerald-400">{COP(total)}</b></span>
       </div>
 
-      <form onSubmit={agregar} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end rounded-xl border border-slate-800 bg-slate-800/30 p-3 mb-4">
+      <form onSubmit={agregar} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 items-end rounded-xl border border-slate-800 bg-slate-800/30 p-3 mb-4">
+        <label className="block text-xs text-slate-400">Nombre del Cliente *
+          <input value={form.nombreCliente} onChange={(e) => setForm({ ...form, nombreCliente: e.target.value })} className="input !mt-1" required placeholder="Ej: Carlos Pérez" />
+        </label>
+        <label className="block text-xs text-slate-400">Cédula / CC *
+          <input value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} className="input !mt-1" required placeholder="Ej: 123456789" />
+        </label>
         <label className="block text-xs text-slate-400">Descripción *
           <input value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} className="input !mt-1" required placeholder="Ej: Ingreso por venta extra" />
         </label>
         <label className="block text-xs text-slate-400">Monto (COP) *
           <input type="text" inputMode="decimal" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} className="input !mt-1" required />
         </label>
-        <button disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-2 text-sm font-semibold">
+        <button disabled={guardando} className="xl:col-span-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-2 text-sm font-semibold">
           {guardando ? 'Guardando…' : '+ Registrar ingreso'}
         </button>
       </form>

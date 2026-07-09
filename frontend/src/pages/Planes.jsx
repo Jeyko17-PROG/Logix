@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useFeatures } from '../context/FeaturesContext'
@@ -20,6 +20,8 @@ export default function Planes() {
   const [creditos, setCreditos] = useState({})
   const [searchParams] = useSearchParams()
   const vencida = searchParams.get('vencida') === '1' || user?.facturacion_saas?.membresia_vencida
+  const estadoPago = searchParams.get('status')
+  const referenciaPago = searchParams.get('ref')
 
   async function cargar() {
     setCargando(true)
@@ -74,6 +76,20 @@ export default function Planes() {
   return (
     <div>
       {/* Aviso de membresía vencida: pantalla de pasarela de pago */}
+      {estadoPago === 'error' && (
+        <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5">
+          <h2 className="text-lg font-bold text-amber-300">⚠️ El pago no pudo completarse</h2>
+          <p className="text-sm text-amber-200/80 mt-1">
+            No se confirmó el pago en la pasarela. Puedes volver al dashboard y reintentar más tarde.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to="/" className="rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-2 text-sm font-semibold">← Volver al Dashboard</Link>
+            <Link to="/planes" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Intentar de nuevo</Link>
+          </div>
+          {referenciaPago && <p className="text-xs text-amber-200/60 mt-2">Referencia: {referenciaPago}</p>}
+        </div>
+      )}
+
       {vencida && !esSuper && (
         <div className="mb-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
           <h2 className="text-lg font-bold text-red-300">⚠️ Tu membresía venció</h2>

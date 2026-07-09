@@ -134,6 +134,24 @@ export default function Layout() {
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
 
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 768) {
+        setAbierto(false)
+      }
+    }
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    document.body.style.overflow = abierto ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [abierto])
+
   async function handleLogout() {
     await logout()
     navigate('/login')
@@ -167,8 +185,8 @@ export default function Layout() {
     <div className="min-h-screen bg-slate-900 text-slate-100">
       {/* Barra superior */}
       <header className="fixed top-0 inset-x-0 z-30 h-14 bg-slate-950 border-b border-slate-800 flex items-center px-4 gap-3">
-        <button onClick={() => setAbierto(!abierto)} aria-label="Menú"
-          className="p-2 rounded-lg hover:bg-slate-800 text-xl leading-none">☰</button>
+        <button onClick={() => setAbierto(!abierto)} aria-label="Menú" aria-expanded={abierto} aria-controls="mobile-sidebar"
+          className="p-2 rounded-lg hover:bg-slate-800 text-xl leading-none md:hidden">☰</button>
         <img src="/logo.png" alt="" className="h-7 w-7 object-contain"
           onError={(e) => {
             if (!e.currentTarget.dataset.fb) { e.currentTarget.dataset.fb = '1'; e.currentTarget.src = '/logo.svg'; return }
@@ -193,12 +211,16 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Fondo oscuro al abrir el menú (en cualquier pantalla) */}
-      {abierto && <div onClick={() => setAbierto(false)} className="fixed inset-0 z-30 bg-black/50" />}
+      {/* Fondo oscuro al abrir el menú en móvil */}
+      {abierto && <div onClick={() => setAbierto(false)} className="fixed inset-0 z-30 bg-black/50 md:hidden" />}
 
       {/* Menú lateral deslizante (oculto por defecto, se abre con el botón ☰) */}
-      <aside className={`fixed top-0 left-0 z-40 h-full w-64 bg-slate-950 border-r border-slate-800 pt-16 px-3 pb-4 overflow-y-auto transition-transform duration-200
+      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-16 px-3 pb-4 overflow-y-auto transition-transform duration-200 shadow-2xl
         ${abierto ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="mb-3 flex items-center justify-between px-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Navegación</p>
+          <button onClick={() => setAbierto(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white md:hidden" aria-label="Cerrar menú">✕</button>
+        </div>
         <nav className="flex flex-col gap-1">
           {secciones.map((seccion) => (
             <div key={seccion.grupo} className="mb-2">

@@ -89,7 +89,7 @@ class WompiService
     public function checkoutUrl(int $montoPesos, string $referencia): string
     {
         if (! $this->configurado()) {
-            return url("/payments/checkout?ref={$referencia}");
+            return $this->retornarFrontend($referencia, 'error');
         }
 
         $centavos = $montoPesos * 100;
@@ -105,7 +105,7 @@ class WompiService
         $redirect = $this->secreto('redirect_url')
             ?? rtrim((string) env('FRONTEND_URL', ''), '/');
         if ($redirect) {
-            $params['redirect-url'] = str_contains($redirect, '://') ? $redirect : "https://{$redirect}";
+            $params['redirect-url'] = $this->retornarFrontend($referencia, 'success', $redirect);
         }
 
         $query = http_build_query($params);
@@ -120,6 +120,21 @@ class WompiService
         }
 
         return 'https://checkout.wompi.co/p/?' . $query;
+    }
+
+    private function retornarFrontend(string $referencia, string $estado, ?string $base = null): string
+    {
+        $baseUrl = trim((string) ($base ?: (config('services.wompi.redirect_url') ?: env('FRONTEND_URL', config('app.url', 'http://localhost')))), " \t\n\r\"'");
+        if ($baseUrl === '') {
+            $baseUrl = rtrim((string) config('app.url', 'http://localhost'), '/');
+        }
+
+        $baseUrl = rtrim($baseUrl, '/');
+        if (! str_contains($baseUrl, '://')) {
+            $baseUrl = 'https://' . $baseUrl;
+        }
+
+        return $baseUrl . '/planes?status=' . urlencode($estado) . '&ref=' . urlencode($referencia);
     }
 
     public function verificarEvento(array $payload): bool
