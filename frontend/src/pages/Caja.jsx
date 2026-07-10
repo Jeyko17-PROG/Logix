@@ -206,7 +206,9 @@ function Ingresos({ onCambio }) {
     setGuardando(true)
     try {
       const r = await api('/caja/ingresos', { method: 'POST', body: { descripcion: form.descripcion, monto: aNumero(form.monto), nombre_cliente: form.nombreCliente, cedula: form.cedula } })
-      setLista((prev) => [{ id: r.id, descripcion: r.detalles?.[0]?.descripcion ?? form.descripcion, monto: Number(r.total || 0) }, ...prev])
+      const clienteNombre = r.cliente?.nombre_completo ?? form.nombreCliente
+      const clienteCedula = r.cliente?.numero_documento ?? form.cedula
+      setLista((prev) => [{ id: r.id, descripcion: r.detalles?.[0]?.descripcion ?? form.descripcion, monto: Number(r.total || 0), cliente_nombre: clienteNombre, cliente_cedula: clienteCedula }, ...prev])
       setTotal((prev) => prev + Number(r.total || 0))
       setForm({ descripcion: '', monto: '', nombreCliente: '', cedula: '' })
       onCambio()
@@ -243,7 +245,10 @@ function Ingresos({ onCambio }) {
         {lista.map((g) => (
           <div key={g.id} className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-800/40 px-4 py-2.5 text-sm">
             <span>💵</span>
-            <span className="font-medium">{g.descripcion}</span>
+            <div className="flex flex-col">
+              <span className="font-medium">{g.descripcion}</span>
+              <span className="text-xs text-slate-400">{g.cliente_nombre ?? ''}{g.cliente_cedula ? ` · ${g.cliente_cedula}` : ''}</span>
+            </div>
             <span className="ml-auto font-semibold text-emerald-400">+{COP(g.monto)}</span>
           </div>
         ))}
