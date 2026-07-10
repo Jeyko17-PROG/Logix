@@ -25,13 +25,10 @@ export default function Bienvenida() {
       <div className="w-full max-w-md text-center">
         {/* Logo */}
         <img
-          src="/logo.png"
+          src="/logo.svg"
           alt="Logix"
           className="h-24 w-24 mx-auto object-contain drop-shadow-2xl"
-          onError={(e) => {
-            if (!e.currentTarget.dataset.fb) { e.currentTarget.dataset.fb = '1'; e.currentTarget.src = '/logo.svg'; return }
-            e.currentTarget.style.display = 'none'
-          }}
+          onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
 
         {/* Nombre y descripción */}

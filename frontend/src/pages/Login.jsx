@@ -70,11 +70,10 @@ export default function Login() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-6">
           <img
-            src="/logo.png"
+            src="/logo.svg"
             alt="Logix"
             className="h-20 w-20 object-contain drop-shadow-lg"
             onError={(e) => {
-              if (!e.currentTarget.dataset.fb) { e.currentTarget.dataset.fb = '1'; e.currentTarget.src = '/logo.svg'; return }
               e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'block'
             }}
           />

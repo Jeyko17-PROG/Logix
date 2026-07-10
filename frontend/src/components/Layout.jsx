@@ -187,11 +187,8 @@ export default function Layout() {
       {/* Barra superior */}
       <header className="fixed top-0 inset-x-0 z-50 bg-slate-950 border-b border-slate-800 px-4 py-3">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="" className="h-7 w-7 object-contain"
-            onError={(e) => {
-              if (!e.currentTarget.dataset.fb) { e.currentTarget.dataset.fb = '1'; e.currentTarget.src = '/logo.svg'; return }
-              e.currentTarget.style.display = 'none'
-            }} />
+          <img src="/logo.svg" alt="" className="h-7 w-7 object-contain"
+            onError={(e) => { e.currentTarget.style.display = 'none' }} />
           <span className="font-bold text-lg">Logix</span>
           <div className="ml-auto flex items-center gap-2">
             {/* Saldo de la billetera (modo prepago) o aviso de membresía vencida */}
@@ -217,7 +214,7 @@ export default function Layout() {
             <span className="text-xl">☰</span>
             Menú
           </button>
-          <button onClick={() => navigate(-1)} aria-label="Volver" className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/80 text-slate-200 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 text-base leading-none">
+          <button onClick={() => navigate('/')} aria-label="Volver al Dashboard" className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/80 text-slate-200 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 text-base leading-none">
             <span className="text-lg">←</span>
             Atrás
           </button>
@@ -228,8 +225,8 @@ export default function Layout() {
       {abierto && <div onClick={() => setAbierto(false)} className="fixed inset-0 z-30 bg-black/50 md:hidden" />}
 
       {/* Menú lateral deslizante (oculto por defecto, se abre con el botón ☰) */}
-      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-16 px-3 pb-4 overflow-y-auto transition-transform duration-200 shadow-2xl
-        ${abierto ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static md:h-screen md:w-64 md:max-w-none`}>
+      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-28 md:pt-16 px-3 pb-4 overflow-y-auto transition-transform duration-200 shadow-2xl
+        ${abierto ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:w-64 md:max-w-none`}>
         <div className="mb-3 flex items-center justify-between px-1 md:hidden">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Navegación</p>
           <button onClick={() => setAbierto(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Cerrar menú">✕</button>
@@ -254,8 +251,8 @@ export default function Layout() {
         </nav>
       </aside>
 
-      {/* Contenido (ocupa todo el ancho; el menú flota por encima) */}
-      <main className="pt-14">
+      {/* Contenido: en escritorio deja espacio al sidebar fijo; en móvil baja bajo el header de dos filas */}
+      <main className="pt-28 md:pt-14 md:pl-64">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <Outlet />
         </div>
