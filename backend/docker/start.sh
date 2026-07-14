@@ -42,6 +42,13 @@ echo "Ejecutando migraciones y seeders..."
 php artisan migrate --force || true
 php artisan db:seed --force || true
 
+# Enlace público de storage (los PDFs de facturas se sirven por /storage/...).
+# El disco es efímero: el enlace hay que recrearlo en cada arranque.
+php artisan storage:link --force || php artisan storage:link || true
+
+# Reintentar los correos que fallaron en arranques anteriores.
+php artisan queue:retry all || true
+
 # Worker de la cola: procesa los correos (facturas, recibos) en segundo plano.
 # Con auto-reinicio: si el worker muere, se relanza a los 5 segundos.
 echo "Lanzando worker de correos (queue:work)..."

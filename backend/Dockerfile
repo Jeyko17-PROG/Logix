@@ -43,7 +43,8 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.
 # Exponer el puerto por defecto de Render
 EXPOSE 80
 
-# Copiar el script de arranque que fija permisos y ejecuta migraciones, luego arranca Apache
+# Script de arranque: migraciones + seeders + storage:link + worker de colas
+# (queue:work con auto-reinicio) + Apache en primer plano.
 COPY docker/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
-CMD /usr/local/bin/start.sh
+CMD ["bash", "/usr/local/bin/start.sh"]

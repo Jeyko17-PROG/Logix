@@ -50,10 +50,13 @@ Route::get('/ping', function () {
     $cola = null;
     try {
         $masAntiguo = \Illuminate\Support\Facades\DB::table('jobs')->min('created_at');
+        // Primera línea del último fallo (sin trazas), para diagnosticar envíos.
+        $ultimoFallo = \Illuminate\Support\Facades\DB::table('failed_jobs')->orderByDesc('id')->value('exception');
         $cola = [
             'pendientes' => \Illuminate\Support\Facades\DB::table('jobs')->count(),
             'fallidos' => \Illuminate\Support\Facades\DB::table('failed_jobs')->count(),
             'mas_antiguo_seg' => $masAntiguo ? max(0, now()->timestamp - (int) $masAntiguo) : 0,
+            'ultimo_fallo' => $ultimoFallo ? \Illuminate\Support\Str::limit(strtok($ultimoFallo, "\n"), 220) : null,
         ];
     } catch (\Throwable $e) {
         // sin acceso a BD
@@ -351,6 +354,9 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::get('pos/historial-cliente', [ClienteController::class, 'historialPos']);
     });
 });
+
+// PDF público de factura con firma HMAC (enlace de WhatsApp/correo; regenera si el disco efímero lo borró).
+Route::get('publico/facturas/{factura}/pdf', [FacturaController::class, 'pdfPublico']);
 
 // Public webhooks for payment providers (no auth). Protect with provider signature in production.
 Route::post('webhooks/payments/{provider}', [\App\Http\Controllers\PaymentWebhookController::class, 'handle']);

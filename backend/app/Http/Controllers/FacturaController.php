@@ -374,19 +374,51 @@ class FacturaController extends Controller
         $this->autorizarBodega($factura);
         $factura->load('cliente');
 
-        if (! $factura->pdf_url) {
-            $this->generarPdf($factura);
-            $factura->refresh();
-        }
-
         $telefono = preg_replace('/\D+/', '', (string) ($factura->cliente->telefono ?? ''));
-        $urlPdf = url($factura->pdf_url);
+        // Enlace público FIRMADO que regenera el PDF bajo demanda: no depende de
+        // /storage ni del disco efímero de Render (los /storage/... daban 404
+        // tras cada redeploy porque los archivos se pierden).
+        $urlPdf = $this->urlPdfPublica($factura);
         $mensaje = "Hola, adjuntamos tu factura numero {$factura->numero}: {$urlPdf}";
 
         return response()->json([
             'whatsapp_url' => 'https://wa.me/' . $telefono . '?text=' . rawurlencode($mensaje),
             'mensaje' => $mensaje,
             'pdf_public_url' => $urlPdf,
+        ]);
+    }
+
+    /** URL pública firmada del PDF (para WhatsApp y correos). */
+    private function urlPdfPublica(Factura $factura): string
+    {
+        $firma = hash_hmac('sha256', $factura->id . '|' . $factura->numero, (string) config('app.key'));
+        return url("/api/publico/facturas/{$factura->id}/pdf?t={$firma}");
+    }
+
+    /**
+     * Descarga pública del PDF con firma HMAC (sin sesión): el cliente final
+     * abre este enlace desde WhatsApp. Si el archivo no existe (redeploy con
+     * disco efímero), se regenera al momento.
+     */
+    public function pdfPublico(Request $request, Factura $factura)
+    {
+        $esperada = hash_hmac('sha256', $factura->id . '|' . $factura->numero, (string) config('app.key'));
+        abort_unless(hash_equals($esperada, (string) $request->query('t', '')), 403, 'Enlace inválido.');
+
+        $ruta = str_replace('/storage/', '', (string) $factura->pdf_url);
+        if (! $factura->pdf_url || ! Storage::disk('public')->exists($ruta)) {
+            $this->generarPdf($factura);
+            $factura->refresh();
+            $ruta = str_replace('/storage/', '', (string) $factura->pdf_url);
+        }
+
+        $contenido = Storage::disk('public')->get($ruta);
+
+        return response($contenido, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="factura_' . $factura->numero . '.pdf"',
+            'Content-Length' => strlen($contenido),
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
         ]);
     }
 
