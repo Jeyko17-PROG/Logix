@@ -7,11 +7,10 @@ services:
     region: oregon
     root: backend
     buildCommand: composer install --no-dev --optimize-autoloader && php artisan key:generate --force
-    # Migra y siembra la BD automáticamente en cada deploy antes de arrancar el servidor.
-    # Los seeders son idempotentes (updateOrCreate): roles, planes, módulos, tipos de negocio, super-admin.
-    # El queue:work en segundo plano procesa los correos encolados (facturas, recibos)
-    # para que las peticiones HTTP no esperen al SMTP (evita 502 en Render).
-    startCommand: php artisan migrate --force && php artisan db:seed --force && (php artisan queue:work --sleep=3 --tries=3 --timeout=60 &) && php artisan serve --host 0.0.0.0 --port $PORT
+    # start.sh: migra + siembra la BD, lanza el worker de correos (queue:work,
+    # con auto-reinicio) y arranca el servidor. Si el Start Command del servicio
+    # está definido manualmente en el dashboard de Render, debe ser: bash start.sh
+    startCommand: bash start.sh
     envVars:
       - key: APP_ENV
         value: production
