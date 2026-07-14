@@ -7,10 +7,10 @@ services:
     region: oregon
     root: backend
     buildCommand: composer install --no-dev --optimize-autoloader && php artisan key:generate --force
-    # start.sh: migra + siembra la BD, lanza el worker de correos (queue:work,
-    # con auto-reinicio) y arranca el servidor. Si el Start Command del servicio
-    # está definido manualmente en el dashboard de Render, debe ser: bash start.sh
-    startCommand: bash start.sh
+    # NOTA: el servicio real en Render está desplegado con DOCKER, así que este
+    # startCommand no aplica. El arranque vive en backend/docker/start.sh
+    # (CMD del Dockerfile): migra + siembra + worker de correos + Apache.
+    startCommand: php artisan serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production
