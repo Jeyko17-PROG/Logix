@@ -16,7 +16,8 @@ class InventarioController extends Controller
      */
     public function stock(Request $request)
     {
-        $q = StockBodega::with(['producto:id,sku,nombre,stock_minimo', 'bodega:id,nombre']);
+        // Nota: stock_minimo vive en stock_por_bodega (no en productos).
+        $q = StockBodega::with(['producto:id,sku,nombre', 'bodega:id,nombre']);
         if ($request->user()?->estaLimitadoABodega()) {
             $q->where('bodega_id', $request->user()->bodega_id);
         }

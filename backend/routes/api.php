@@ -46,6 +46,19 @@ Route::get('/ping', function () {
     $wompi = app(\App\Services\WompiService::class);
     $comercio = $wompi->configurado() ? $wompi->verificarComercio() : null;
 
+    // Cola de correos: si "pendientes" crece y nunca baja, el worker no está corriendo.
+    $cola = null;
+    try {
+        $masAntiguo = \Illuminate\Support\Facades\DB::table('jobs')->min('created_at');
+        $cola = [
+            'pendientes' => \Illuminate\Support\Facades\DB::table('jobs')->count(),
+            'fallidos' => \Illuminate\Support\Facades\DB::table('failed_jobs')->count(),
+            'mas_antiguo_seg' => $masAntiguo ? max(0, now()->timestamp - (int) $masAntiguo) : 0,
+        ];
+    } catch (\Throwable $e) {
+        // sin acceso a BD
+    }
+
     return response()->json([
         'message' => 'conectado',
         'app' => config('app.name'),
@@ -56,6 +69,7 @@ Route::get('/ping', function () {
             'wompi_comercio_valido' => $comercio['ok'] ?? null,
             'wompi_ambiente' => $wompi->configurado() ? ($wompi->esSandbox() ? 'sandbox' : 'produccion') : null,
             'wompi_detalle' => ($comercio['ok'] ?? true) ? null : ($comercio['error'] ?? null),
+            'cola_correos' => $cola,
             'migraciones_pendientes' => $migracionesPendientes,
         ],
     ]);
