@@ -42,10 +42,13 @@ return [
             'scheme' => env('MAIL_SCHEME'),
             'url' => env('MAIL_URL'),
             'host' => env('MAIL_HOST', '127.0.0.1'),
-            'port' => env('MAIL_PORT', 2525),
+            // 587 + TLS: el estándar de los SMTP transaccionales (Gmail, Brevo,
+            // SendGrid). El viejo default 2525 hacía timeout contra Gmail cuando
+            // MAIL_PORT no estaba definido en el servidor.
+            'port' => (int) env('MAIL_PORT', 587),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'encryption' => env('MAIL_ENCRYPTION'),
+            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
             // Límite duro: si el SMTP no responde, corta antes de que Render
             // mate la petición HTTP con un 502.
             'timeout' => (int) env('MAIL_TIMEOUT', 20),
