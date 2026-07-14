@@ -67,8 +67,11 @@ Route::get('/ping', function () {
         'app' => config('app.name'),
         'time' => now()->toIso8601String(),
         'diagnostico' => [
-            'correo_smtp_configurado' => config('mail.default') === 'smtp' && ! empty(config('mail.mailers.smtp.username')),
-            'correo_smtp_destino' => config('mail.mailers.smtp.host') . ':' . config('mail.mailers.smtp.port'),
+            'correo_smtp_configurado' => (config('mail.default') === 'smtp' && ! empty(config('mail.mailers.smtp.username')))
+                || (config('mail.default') === 'brevo' && ! empty(config('services.brevo.key'))),
+            'correo_smtp_destino' => config('mail.default') === 'brevo'
+                ? 'api.brevo.com (HTTP)'
+                : config('mail.mailers.smtp.host') . ':' . config('mail.mailers.smtp.port'),
             'wompi_configurada' => $wompi->configurado() && ! empty(config('services.wompi.integrity_secret')),
             'wompi_comercio_valido' => $comercio['ok'] ?? null,
             'wompi_ambiente' => $wompi->configurado() ? ($wompi->esSandbox() ? 'sandbox' : 'produccion') : null,

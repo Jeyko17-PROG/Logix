@@ -41,6 +41,12 @@ return [
         'model' => env('ANTHROPIC_MODEL', 'claude-opus-4-8'),
     ],
 
+    // Correo transaccional por API HTTP (Brevo): Render bloquea SMTP saliente.
+    // Llave en app.brevo.com -> SMTP & API -> API Keys (xkeysib-...).
+    'brevo' => [
+        'key' => env('BREVO_API_KEY'),
+    ],
+
     // Pasarela de pagos Wompi (Bancolombia): PSE, Nequi, tarjetas.
     // Las llaves se obtienen en comercios.wompi.co; el dinero se liquida en la
     // cuenta bancaria registrada en el panel de Wompi (no se configura aquí).

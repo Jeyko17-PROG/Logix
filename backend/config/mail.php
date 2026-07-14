@@ -37,6 +37,12 @@ return [
 
     'mailers' => [
 
+        // Brevo por API HTTP (Render bloquea SMTP saliente). Se activa solo
+        // con definir BREVO_API_KEY (ver AppServiceProvider).
+        'brevo' => [
+            'transport' => 'brevo-api',
+        ],
+
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),
