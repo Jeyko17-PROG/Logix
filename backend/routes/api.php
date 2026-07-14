@@ -67,11 +67,17 @@ Route::get('/ping', function () {
         'app' => config('app.name'),
         'time' => now()->toIso8601String(),
         'diagnostico' => [
-            'correo_smtp_configurado' => (config('mail.default') === 'smtp' && ! empty(config('mail.mailers.smtp.username')))
-                || (config('mail.default') === 'brevo' && ! empty(config('services.brevo.key'))),
-            'correo_smtp_destino' => config('mail.default') === 'brevo'
-                ? 'api.brevo.com (HTTP)'
-                : config('mail.mailers.smtp.host') . ':' . config('mail.mailers.smtp.port'),
+            'correo_smtp_configurado' => in_array(config('mail.default'), ['gmail', 'brevo'], true)
+                || (config('mail.default') === 'smtp' && ! empty(config('mail.mailers.smtp.username'))),
+            'correo_smtp_destino' => match (config('mail.default')) {
+                'gmail' => 'gmail.googleapis.com (HTTP)',
+                'brevo' => 'api.brevo.com (HTTP)',
+                default => config('mail.mailers.smtp.host') . ':' . config('mail.mailers.smtp.port'),
+            },
+            'gmail_api' => [
+                'credenciales' => ! empty(config('services.gmail.client_id')) && ! empty(config('services.gmail.client_secret')),
+                'autorizado' => \App\Mail\Transport\GmailApiTransport::configurado(),
+            ],
             'wompi_configurada' => $wompi->configurado() && ! empty(config('services.wompi.integrity_secret')),
             'wompi_comercio_valido' => $comercio['ok'] ?? null,
             'wompi_ambiente' => $wompi->configurado() ? ($wompi->esSandbox() ? 'sandbox' : 'produccion') : null,
@@ -173,6 +179,28 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         // Catálogo de tipos de negocio (módulos por tipo)
         Route::get('tipos-negocio', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'tiposNegocio']);
         Route::post('tipos-negocio', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'guardarTipoNegocio']);
+
+        // Conectar la cuenta Gmail (OAuth) para enviar correos por la API HTTP.
+        // Devuelve la URL de consentimiento de Google; el super-admin la abre y autoriza.
+        Route::get('gmail/conectar', function () {
+            abort_unless(config('services.gmail.client_id') && config('services.gmail.client_secret'), 422,
+                'Define GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en el servidor primero (console.cloud.google.com).');
+
+            $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+                'client_id' => config('services.gmail.client_id'),
+                'redirect_uri' => url('/api/gmail/callback'),
+                'response_type' => 'code',
+                'scope' => 'https://www.googleapis.com/auth/gmail.send',
+                'access_type' => 'offline',
+                'prompt' => 'consent',
+            ]);
+
+            return response()->json([
+                'autorizar_url' => $url,
+                'instrucciones' => 'Abre autorizar_url en el navegador con la cuenta Gmail remitente y acepta. El refresh token queda guardado automáticamente.',
+                'redirect_uri_requerida' => url('/api/gmail/callback'),
+            ]);
+        });
 
         // Bitácora de auditoría
         Route::get('auditorias', [UsuarioAdminController::class, 'auditorias']);
@@ -361,6 +389,36 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
 
 // PDF público de factura con firma HMAC (enlace de WhatsApp/correo; regenera si el disco efímero lo borró).
 Route::get('publico/facturas/{factura}/pdf', [FacturaController::class, 'pdfPublico']);
+
+// Callback de OAuth de Google (autorización de la API de Gmail para enviar correos).
+// Google redirige aquí tras el consentimiento; guardamos el refresh token en la BD.
+Route::get('gmail/callback', function (Illuminate\Http\Request $request) {
+    abort_unless($request->query('code'), 400, 'Falta el código de autorización de Google.');
+
+    $res = Illuminate\Support\Facades\Http::asForm()->timeout(20)->post('https://oauth2.googleapis.com/token', [
+        'client_id' => config('services.gmail.client_id'),
+        'client_secret' => config('services.gmail.client_secret'),
+        'code' => $request->query('code'),
+        'grant_type' => 'authorization_code',
+        'redirect_uri' => url('/api/gmail/callback'),
+    ]);
+
+    if ($res->failed() || ! $res->json('refresh_token')) {
+        return response(
+            '<h2>❌ No se pudo conectar Gmail</h2><p>' . e($res->json('error_description') ?? $res->body()) . '</p>'
+            . '<p>Vuelve a intentarlo desde /api/admin/gmail/conectar (el consentimiento debe otorgarse de nuevo).</p>',
+            422
+        )->header('Content-Type', 'text/html; charset=utf-8');
+    }
+
+    Illuminate\Support\Facades\Cache::forever(\App\Mail\Transport\GmailApiTransport::CACHE_REFRESH_TOKEN, $res->json('refresh_token'));
+    Illuminate\Support\Facades\Cache::forget('gmail_access_token');
+
+    return response(
+        '<h2>✅ Gmail conectado</h2><p>Logix ya puede enviar correos por la API de Gmail (HTTPS). '
+        . 'Puedes cerrar esta pestaña. Los correos pendientes saldrán en el próximo arranque o reintento.</p>'
+    )->header('Content-Type', 'text/html; charset=utf-8');
+});
 
 // Public webhooks for payment providers (no auth). Protect with provider signature in production.
 Route::post('webhooks/payments/{provider}', [\App\Http\Controllers\PaymentWebhookController::class, 'handle']);

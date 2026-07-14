@@ -47,6 +47,14 @@ return [
         'key' => env('BREVO_API_KEY'),
     ],
 
+    // Correo por la API HTTP de Gmail (OAuth2 de Google; la App Password de
+    // SMTP no sirve para la API). Credenciales en console.cloud.google.com.
+    'gmail' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'refresh_token' => env('GMAIL_REFRESH_TOKEN'), // opcional: el flujo /api/admin/gmail/conectar lo guarda en BD
+    ],
+
     // Pasarela de pagos Wompi (Bancolombia): PSE, Nequi, tarjetas.
     // Las llaves se obtienen en comercios.wompi.co; el dinero se liquida en la
     // cuenta bancaria registrada en el panel de Wompi (no se configura aquí).

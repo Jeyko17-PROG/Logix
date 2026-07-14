@@ -37,8 +37,12 @@ return [
 
     'mailers' => [
 
-        // Brevo por API HTTP (Render bloquea SMTP saliente). Se activa solo
-        // con definir BREVO_API_KEY (ver AppServiceProvider).
+        // Correo por API HTTP (Render bloquea SMTP saliente). Se activan solos
+        // según las credenciales presentes (ver AppServiceProvider):
+        // gmail (OAuth de Google) tiene prioridad, luego brevo (BREVO_API_KEY).
+        'gmail' => [
+            'transport' => 'gmail-api',
+        ],
         'brevo' => [
             'transport' => 'brevo-api',
         ],

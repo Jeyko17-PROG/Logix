@@ -21,15 +21,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Transporte de correo por la API HTTP de Brevo (Render bloquea SMTP saliente).
+        // Transportes de correo por API HTTP (Render bloquea el SMTP saliente).
         Mail::extend('brevo-api', function () {
             return new BrevoApiTransport((string) config('services.brevo.key'));
         });
+        Mail::extend('gmail-api', function () {
+            return new \App\Mail\Transport\GmailApiTransport();
+        });
 
-        // Si hay llave de Brevo configurada, el correo sale por su API HTTP
-        // automáticamente (sin tener que cambiar MAIL_MAILER en el servidor).
-        if (config('services.brevo.key') && config('mail.default') !== 'brevo') {
-            config(['mail.default' => 'brevo']);
+        // Selección automática del mejor transporte disponible, sin tocar MAIL_MAILER:
+        //   1. Gmail API (si hay OAuth de Google autorizado)
+        //   2. Brevo (si hay BREVO_API_KEY)
+        //   3. lo que diga MAIL_MAILER (smtp/log)
+        try {
+            if (\App\Mail\Transport\GmailApiTransport::configurado()) {
+                config(['mail.default' => 'gmail']);
+            } elseif (config('services.brevo.key') && config('mail.default') !== 'brevo') {
+                config(['mail.default' => 'brevo']);
+            }
+        } catch (\Throwable $e) {
+            // BD/cache no disponible aún (build, migraciones): se mantiene el default.
         }
     }
 }
