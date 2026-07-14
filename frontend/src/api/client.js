@@ -42,6 +42,13 @@ export async function api(path, { method = 'GET', body, isForm = false } = {}) {
   const data = res.status === 204 ? null : await res.json().catch(() => null)
 
   if (!res.ok) {
+    // Sesión expirada o revocada (401): limpia el token y vuelve al login,
+    // en vez de dejar la app "colgada" mostrando errores de No autenticado.
+    const rutasPublicas = ['/login', '/bienvenida', '/reservar', '/restablecer']
+    if (res.status === 401 && !rutasPublicas.some((r) => window.location.pathname.startsWith(r))) {
+      setToken(null)
+      window.location.href = '/login'
+    }
     // Membresía vencida: el backend bloquea las funciones operativas con 402.
     // Se lleva al usuario a la pantalla de planes/pago para que renueve.
     if (res.status === 402 && data?.codigo === 'MEMBRESIA_VENCIDA' && !window.location.pathname.startsWith('/planes')) {

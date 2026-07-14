@@ -34,7 +34,7 @@ export default function Agenda() {
   const [citas, setCitas] = useState([])
   const [clientes, setClientes] = useState([])
   const [servicios, setServicios] = useState([])
-  const [nueva, setNueva] = useState(false)
+  const [nueva, setNueva] = useState(null) // null | fecha (Date) con la que abrir el formulario
 
   // Rango visible según la vista
   const [desde, hasta] = useMemo(() => {
@@ -46,13 +46,15 @@ export default function Agenda() {
   }, [vista, fecha])
 
   async function cargar() {
-    const data = await api(`/citas?desde=${ymd(desde)}&hasta=${ymd(hasta)}`)
-    setCitas(data)
+    try {
+      const data = await api(`/citas?desde=${ymd(desde)}&hasta=${ymd(hasta)}`)
+      setCitas(data)
+    } catch { /* sesión expirada: client.js redirige al login */ }
   }
   useEffect(() => { cargar() }, [desde, hasta]) // eslint-disable-line
   useEffect(() => {
-    api('/clientes').then((d) => setClientes(d.data ?? d))
-    api('/servicios').then(setServicios)
+    api('/clientes').then((d) => setClientes(d.data ?? d)).catch(() => {})
+    api('/servicios').then(setServicios).catch(() => {})
   }, [])
 
   const citasDe = (d) => citas.filter((c) => c.inicio.slice(0, 10) === ymd(d))
@@ -77,7 +79,7 @@ export default function Agenda() {
             <button key={v} onClick={() => setVista(v)}
               className={`px-3 py-1.5 rounded-lg text-sm capitalize ${vista === v ? 'bg-emerald-600' : 'bg-slate-700'}`}>{v}</button>
           ))}
-          <button onClick={() => setNueva(true)} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 text-sm font-semibold">+ Cita</button>
+          <button onClick={() => setNueva(fecha)} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 text-sm font-semibold">+ Cita</button>
         </div>
       </div>
 
@@ -120,11 +122,12 @@ export default function Agenda() {
         </div>
       )}
 
-      {/* Vista SEMANA */}
+      {/* Vista SEMANA: clic en un día abre el formulario de cita con esa fecha */}
       {vista === 'semana' && (
         <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
           {Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(fecha), i)).map((d) => (
-            <div key={d} className="rounded-lg border border-slate-800 bg-slate-800/30 p-2 min-h-28">
+            <div key={d} onClick={() => setNueva(d)} title="Agendar cita este día"
+              className="rounded-lg border border-slate-800 bg-slate-800/30 p-2 min-h-28 cursor-pointer hover:border-emerald-600/60 hover:bg-slate-800/60 transition">
               <div className="text-xs text-slate-400 mb-1">{DIAS[d.getDay()]} {d.getDate()}</div>
               {citasDe(d).map((c) => (
                 <div key={c.id} className={`text-xs rounded px-1.5 py-1 mb-1 ${ESTADO_COLOR[c.estado]}`}>
@@ -136,10 +139,13 @@ export default function Agenda() {
         </div>
       )}
 
-      {/* Vista MES */}
-      {vista === 'mes' && <VistaMes fecha={fecha} citas={citas} onDia={(d) => { setFecha(d); setVista('dia') }} />}
+      {/* Vista MES: clic en un día abre el formulario de cita con esa fecha */}
+      {vista === 'mes' && <VistaMes fecha={fecha} citas={citas} onDia={(d) => { setFecha(d); setNueva(d) }} />}
 
-      {nueva && <NuevaCita clientes={clientes} servicios={servicios} onClose={() => setNueva(false)} onCreada={() => { setNueva(false); cargar() }} />}
+      {nueva && (
+        <NuevaCita clientes={clientes} servicios={servicios} fechaInicial={nueva}
+          onClose={() => setNueva(null)} onCreada={() => { setNueva(null); cargar() }} />
+      )}
     </div>
   )
 }
@@ -183,12 +189,13 @@ function VistaMes({ fecha, citas, onDia }) {
   )
 }
 
-function NuevaCita({ clientes, servicios, onClose, onCreada }) {
+function NuevaCita({ clientes, servicios, fechaInicial, onClose, onCreada }) {
   const [lista, setLista] = useState(clientes)        // clientes (incluye los creados aquí)
   const [cliente_id, setCliente] = useState('')
   const [servicio_id, setServicio] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [fecha, setFecha] = useState(ymd(fechaInicial instanceof Date ? fechaInicial : new Date()))
   const [slots, setSlots] = useState([])
+  const [buscando, setBuscando] = useState(false)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
 
@@ -208,12 +215,17 @@ function NuevaCita({ clientes, servicios, onClose, onCreada }) {
     finally { setCreandoCli(false) }
   }
 
-  async function buscar() {
-    setError('')
-    const q = `/citas/disponibilidad?fecha=${fecha}${servicio_id ? `&servicio_id=${servicio_id}` : ''}`
-    const data = await api(q)
-    setSlots(data.slots)
-  }
+  // Los horarios sugeridos se cargan automáticamente al abrir el formulario
+  // y cada vez que cambia la fecha o el servicio.
+  useEffect(() => {
+    let cancelado = false
+    setBuscando(true); setError('')
+    api(`/citas/disponibilidad?fecha=${fecha}${servicio_id ? `&servicio_id=${servicio_id}` : ''}`)
+      .then((data) => { if (!cancelado) setSlots(data.slots ?? []) })
+      .catch((err) => { if (!cancelado) { setSlots([]); setError(err.message || 'No se pudo cargar la disponibilidad.') } })
+      .finally(() => { if (!cancelado) setBuscando(false) })
+    return () => { cancelado = true }
+  }, [fecha, servicio_id])
 
   async function reservar(inicio) {
     if (!cliente_id) { setError('Selecciona o crea un cliente primero.'); return }
@@ -250,8 +262,12 @@ function NuevaCita({ clientes, servicios, onClose, onCreada }) {
           <div className="grid gap-2">
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input" />
           </div>
-          <button onClick={buscar} className="w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-sm">Ver horarios sugeridos</button>
         </div>
+
+        {buscando && <p className="text-sm text-slate-400 mt-4">Buscando horarios disponibles…</p>}
+        {!buscando && slots.length === 0 && !error && (
+          <p className="text-sm text-slate-500 mt-4">No hay horarios disponibles para esta fecha (revisa el horario laboral en Configuración).</p>
+        )}
 
         {slots.length > 0 && (
           <div className="mt-4">
