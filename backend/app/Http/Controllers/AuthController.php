@@ -121,6 +121,34 @@ class AuthController extends Controller
 
         // Slug público único para su portal de reservas (QR personalizado).
         $user->generarReservasSlug();
+
+        // Cliente genérico para ventas rápidas de mostrador (tiendas, restaurantes).
+        \App\Models\Cliente::create([
+            'owner_id' => $user->id,
+            'empresa_id' => $empresaId,
+            'nombre_completo' => 'Consumidor Final',
+            'estado' => 'ACTIVO',
+            'created_by' => $user->id,
+        ]);
+
+        // Planes por defecto según el tipo de negocio (editables en Configuración).
+        $tipoClave = $user->empresa?->tipoNegocio?->clave;
+        if ($tipoClave === 'lavadero') {
+            foreach ([
+                ['nombre' => 'Plan Básico', 'precio' => 20000, 'duracion_min' => 30],
+                ['nombre' => 'Plan Especial', 'precio' => 30000, 'duracion_min' => 45],
+                ['nombre' => 'Plan Premium (Full)', 'precio' => 40000, 'duracion_min' => 60],
+            ] as $plan) {
+                \App\Models\Servicio::create([
+                    'owner_id' => $user->id,
+                    'empresa_id' => $empresaId,
+                    'nombre' => $plan['nombre'],
+                    'precio' => $plan['precio'],
+                    'duracion_min' => $plan['duracion_min'],
+                    'activo' => true,
+                ]);
+            }
+        }
     }
 
     /** Notificación de bienvenida para el propio usuario (solo él la ve). */

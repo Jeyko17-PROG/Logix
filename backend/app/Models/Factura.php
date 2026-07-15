@@ -18,7 +18,7 @@ class Factura extends Model
         'owner_id',
         'bodega_id',
         'numero', 'cliente_id', 'fecha', 'subtotal', 'impuestos', 'total',
-        'estado', 'pdf_url', 'firma_url', 'notas', 'created_by',
+        'estado', 'metodo_pago', 'propina', 'pdf_url', 'firma_url', 'notas', 'created_by',
         'currency', 'exchange_rate',
     ];
 
@@ -29,6 +29,26 @@ class Factura extends Model
         'total' => 'decimal:2',
         'exchange_rate' => 'decimal:6',
     ];
+
+    /**
+     * Siguiente número de factura de la EMPRESA (secuencia propia por negocio;
+     * el unique en BD es compuesto: empresa_id + numero).
+     */
+    public static function siguienteNumero(?int $empresaId): string
+    {
+        $base = static::withTrashed()->withoutGlobalScopes();
+        if ($empresaId) {
+            $base->where('empresa_id', $empresaId);
+        }
+
+        $n = (clone $base)->count() + 1;
+        do {
+            $numero = 'FAC-' . str_pad((string) $n, 5, '0', STR_PAD_LEFT);
+            $n++;
+        } while ((clone $base)->where('numero', $numero)->exists());
+
+        return $numero;
+    }
 
     public function cliente(): BelongsTo
     {

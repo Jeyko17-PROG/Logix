@@ -88,11 +88,19 @@ class GastoController extends Controller
         $ventas = (float) \App\Models\Factura::whereDate('created_at', $fecha)->sum('total');
         $gastos = (float) Gasto::whereDate('fecha', $fecha)->sum('monto');
 
+        // Desglose por medio de pago del día (reporte de cierre).
+        $porMetodo = \App\Models\Factura::whereDate('created_at', $fecha)
+            ->selectRaw('metodo_pago, SUM(total) as total, COUNT(*) as facturas')
+            ->groupBy('metodo_pago')
+            ->get()
+            ->map(fn ($r) => ['metodo' => $r->metodo_pago ?? 'EFECTIVO', 'total' => (float) $r->total, 'facturas' => (int) $r->facturas]);
+
         return response()->json([
             'fecha' => $fecha,
             'ventas' => $ventas,
             'gastos' => $gastos,
             'utilidad_neta' => $ventas - $gastos,
+            'por_metodo' => $porMetodo,
         ]);
     }
 }

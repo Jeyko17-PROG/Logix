@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Auth\AuthenticationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,9 +26,21 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature' => \App\Http\Middleware\CheckFeature::class,
             'membresia' => \App\Http\Middleware\VerificarMembresia::class,
         ]);
+
+        // Evita que las peticiones de la API o del navegador hacia rutas protegidas
+        // busquen la ruta 'login'. En su lugar, simplemente detenemos la redirección.
+        $middleware->redirectGuestsTo(fn (Request $request) => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => true, // Forzamos JSON siempre para evitar pantallas naranjas de error
         );
+
+        // Controlamos la excepción de falta de autenticación de forma limpia
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            return response()->json([
+                'error' => 'No autorizado',
+                'message' => 'Debes iniciar sesión en tu cuenta de Logix primero para poder conectar Gmail.'
+            ], 401);
+        });
     })->create();

@@ -79,6 +79,9 @@ export default function Caja() {
 
       <Ingresos onCambio={cargar} />
 
+      {/* Cobro de órdenes de servicio por placa (lavadero, taller, barbería) */}
+      <CobrarOrden onCobrada={cargar} />
+
       {/* Gastos del día */}
       <Gastos esPropietario={esPropietario} onCambio={cargar} />
 
@@ -119,6 +122,92 @@ export default function Caja() {
   )
 }
 
+const METODOS = [['EFECTIVO', '💵 Efectivo'], ['TARJETA', '💳 Tarjeta'], ['NEQUI', '📱 Nequi'], ['DAVIPLATA', '📱 Daviplata'], ['TRANSFERENCIA', '🏦 Transferencia']]
+
+/**
+ * Caja rápida: busca la placa o el número de orden, precarga el total de la
+ * orden de servicio y la cobra (genera factura + recibo al correo).
+ */
+function CobrarOrden({ onCobrada }) {
+  const [q, setQ] = useState('')
+  const [ordenes, setOrdenes] = useState([])
+  const [sel, setSel] = useState(null)
+  const [metodo, setMetodo] = useState('EFECTIVO')
+  const [cobrando, setCobrando] = useState(false)
+  const [ok, setOk] = useState('')
+  const [error, setError] = useState('')
+
+  async function buscar(e) {
+    e.preventDefault()
+    if (!q.trim()) return
+    setError(''); setOk(''); setSel(null)
+    try {
+      const r = await api(`/ordenes-servicio/buscar?q=${encodeURIComponent(q.trim())}`)
+      const lista = r.ordenes ?? []
+      setOrdenes(lista)
+      if (lista.length === 0) setError('No hay órdenes pendientes con esa placa u orden.')
+      if (lista.length === 1) setSel(lista[0])
+    } catch (err) { setError(err.message) }
+  }
+
+  async function cobrar() {
+    if (!sel) return
+    setCobrando(true); setError(''); setOk('')
+    try {
+      const f = await api(`/ordenes-servicio/${sel.id}/facturar`, { method: 'POST', body: { metodo_pago: metodo } })
+      setOk(`✅ Orden ${sel.numero_orden} cobrada — Factura ${f.numero} por ${COP(f.total)} (${metodo}). Recibo enviado al correo del cliente.`)
+      setOrdenes([]); setSel(null); setQ('')
+      onCobrada()
+    } catch (err) { setError(err.message) } finally { setCobrando(false) }
+  }
+
+  return (
+    <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-800/40 p-5">
+      <h2 className="font-bold mb-1">🏍️ Cobrar orden de servicio</h2>
+      <p className="text-sm text-slate-400 mb-3">Busca por placa o número de orden: el sistema precarga el total y cobra en un paso.</p>
+
+      <form onSubmit={buscar} className="flex gap-2 mb-3">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Placa (ABC123) o número de orden (SO-...)" className="input !mt-0" />
+        <button className="rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-sm font-semibold whitespace-nowrap">Buscar</button>
+      </form>
+
+      {error && <p className="text-sm text-red-300 mb-2">{error}</p>}
+      {ok && <p className="text-sm rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-300 mb-2">{ok}</p>}
+
+      {ordenes.length > 0 && (
+        <div className="grid gap-2 mb-3">
+          {ordenes.map((o) => (
+            <button key={o.id} onClick={() => setSel(o)}
+              className={`text-left rounded-lg border px-3 py-2 text-sm transition ${sel?.id === o.id ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 hover:bg-slate-800'}`}>
+              <b>{o.numero_orden}</b>
+              {o.asset_vehicle && <> · {o.asset_vehicle.marca} {o.asset_vehicle.modelo} ({o.asset_vehicle.placa_identificador})</>}
+              <span className="float-right font-bold">{COP(o.total)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {sel && (
+        <div className="rounded-xl border border-emerald-600/40 bg-emerald-500/5 p-4">
+          <p className="mb-3">Total a cobrar: <b className="text-xl">{COP(sel.total)}</b> <span className="text-slate-400 text-sm">({sel.numero_orden})</span></p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {METODOS.map(([v, label]) => (
+              <button key={v} onClick={() => setMetodo(v)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${metodo === v ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={cobrar} disabled={cobrando}
+            className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-2.5 text-sm font-semibold">
+            {cobrando ? 'Cobrando…' : `Cobrar ${COP(sel.total)} y enviar recibo`}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AbrirTurno({ onAbierto }) {
   const [monto, setMonto] = useState('')
   const [notas, setNotas] = useState('')
@@ -153,7 +242,7 @@ function AbrirTurno({ onAbierto }) {
 }
 
 function TurnoAbierto({ estado, onCerrado }) {
-  const { sesion, ventas, gastos, esperado } = estado
+  const { sesion, ventas, gastos, esperado, por_metodo } = estado
   const [contado, setContado] = useState('')
   const [notas, setNotas] = useState('')
   const [cerrando, setCerrando] = useState(false)
@@ -180,6 +269,18 @@ function TurnoAbierto({ estado, onCerrado }) {
         <div className="rounded-xl bg-slate-800/70 p-3"><p className="font-extrabold text-red-400">-{COP(gastos)}</p><p className="text-xs text-slate-400">Gastos</p></div>
         <div className="rounded-xl bg-slate-800/70 p-3"><p className="font-extrabold text-sky-300">{COP(esperado)}</p><p className="text-xs text-slate-400">Esperado</p></div>
       </div>
+
+      {/* Desglose de ventas por medio de pago */}
+      {(por_metodo ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {por_metodo.map((m) => (
+            <span key={m.metodo} className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
+              {m.metodo}: <b className="text-white">{COP(m.total)}</b> <span className="text-slate-500">({m.facturas})</span>
+            </span>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={cerrar} className="space-y-3">
         <label className="block text-sm text-slate-300">Efectivo contado al cierre (COP) *
           <input type="text" inputMode="decimal" value={contado} onChange={(e) => setContado(e.target.value)} className="input mt-1" required placeholder="Cuenta el dinero de la caja" />

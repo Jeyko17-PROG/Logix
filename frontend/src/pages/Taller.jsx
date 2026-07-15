@@ -202,12 +202,18 @@ function Ordenes({ esMecanico }) {
 }
 
 function ModalCrearOrden({ onClose, onCreada }) {
+  const { user } = useAuth()
+  // El formulario se adapta al tipo de negocio de la empresa.
+  const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave ?? ''
+  const esTallerVehiculos = ['taller_motos', 'taller_carros'].includes(tipoNegocio)
+  const esServicioTecnico = ['taller_general', 'otro'].includes(tipoNegocio)
+
   const [resultados, setResultados] = useState([])
   const [buscarCliente, setBuscarCliente] = useState('')
   const [clienteSel, setClienteSel] = useState(null) // cliente elegido (objeto completo, no depende de la lista)
   const [vehiculos, setVehiculos] = useState([])
   const [empleados, setEmpleados] = useState([])
-  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '' })
+  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '', km_entrada: '', nivel_gasolina: '', accesorios: '' })
   const [nuevoVehiculo, setNuevoVehiculo] = useState(null) // {placa, marca, modelo}
   const [guardando, setGuardando] = useState(false)
   const [errorCarga, setErrorCarga] = useState('')
@@ -256,6 +262,9 @@ function ModalCrearOrden({ onClose, onCreada }) {
         operables_employee_id: form.operables_employee_id ? Number(form.operables_employee_id) : null,
         descripcion_trabajo: form.descripcion_trabajo || null,
         fecha_entrega_estimada: form.fecha_entrega_estimada || null,
+        km_entrada: form.km_entrada ? aNumero(form.km_entrada) : null,
+        nivel_gasolina: form.nivel_gasolina !== '' ? Number(form.nivel_gasolina) : null,
+        accesorios: form.accesorios || null,
       } })
       onCreada(orden.id)
     } catch (err) {
@@ -331,7 +340,25 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </select>
           </label>
 
-          <label className="block text-sm text-slate-300">Diagnóstico / trabajo a realizar
+          {/* Campos según el tipo de negocio */}
+          {esTallerVehiculos && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm text-slate-300">Kilometraje actual
+                <input type="text" inputMode="numeric" value={form.km_entrada} onChange={set('km_entrada')} className="input mt-1" placeholder="Ej: 45.300" />
+              </label>
+              <label className="block text-sm text-slate-300">Nivel de gasolina: <b>{form.nivel_gasolina === '' ? '—' : `${form.nivel_gasolina}%`}</b>
+                <input type="range" min="0" max="100" step="5" value={form.nivel_gasolina === '' ? 50 : form.nivel_gasolina}
+                  onChange={set('nivel_gasolina')} className="mt-3 w-full accent-emerald-500" />
+              </label>
+            </div>
+          )}
+          {esServicioTecnico && (
+            <label className="block text-sm text-slate-300">Accesorios con los que se recibe
+              <input value={form.accesorios} onChange={set('accesorios')} className="input mt-1" placeholder="Ej: cargador, estuche, cable USB…" />
+            </label>
+          )}
+
+          <label className="block text-sm text-slate-300">{esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
             <textarea value={form.descripcion_trabajo} onChange={set('descripcion_trabajo')} rows="3" className="input mt-1" placeholder="Ej: cambio de aceite, revisión de frenos…" />
           </label>
 
@@ -417,6 +444,13 @@ function ModalOrden({ id, esMecanico, onClose }) {
               {orden.asset_vehicle && <> · 🏍️ {orden.asset_vehicle.marca} {orden.asset_vehicle.modelo} ({orden.asset_vehicle.placa_identificador ?? 's/placa'})</>}
             </p>
             {orden.mecanico_asignado && <p className="text-sm text-slate-400">👨‍🔧 {orden.mecanico_asignado.nombre} {orden.mecanico_asignado.apellido}</p>}
+            {(orden.km_entrada || orden.nivel_gasolina != null || orden.accesorios) && (
+              <p className="text-sm text-slate-400">
+                {orden.km_entrada ? `📏 ${Number(orden.km_entrada).toLocaleString('es-CO')} km` : ''}
+                {orden.nivel_gasolina != null ? ` · ⛽ ${orden.nivel_gasolina}%` : ''}
+                {orden.accesorios ? ` · 🎒 ${orden.accesorios}` : ''}
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">✕</button>
         </div>

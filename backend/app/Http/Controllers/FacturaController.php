@@ -55,6 +55,9 @@ class FacturaController extends Controller
             'firma' => ['nullable', 'string'],
             'currency' => ['nullable', 'in:COP,USD'],
             'exchange_rate' => ['nullable', 'numeric', 'min:0'],
+            // Medio de pago (para el cierre de caja desglosado por método).
+            'metodo_pago' => ['nullable', 'in:EFECTIVO,TARJETA,TRANSFERENCIA,NEQUI,DAVIPLATA'],
+            'propina' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $factura = DB::transaction(function () use ($data, $request) {
@@ -101,6 +104,8 @@ class FacturaController extends Controller
                 'currency' => $data['currency'] ?? 'COP',
                 'exchange_rate' => $data['exchange_rate'] ?? null,
                 'estado' => 'EMITIDA',
+                'metodo_pago' => $data['metodo_pago'] ?? 'EFECTIVO',
+                'propina' => $data['propina'] ?? null,
                 'notas' => $data['notas'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
@@ -422,6 +427,78 @@ class FacturaController extends Controller
         ]);
     }
 
+    /**
+     * Cobra una ORDEN DE SERVICIO desde la caja (lavadero, taller, barbería):
+     * genera la factura con los detalles de la orden, registra el medio de pago,
+     * marca la orden como facturada y envía el PDF al correo del cliente.
+     * NO toca el inventario: los repuestos ya se descontaron al agregarlos a la orden.
+     */
+    public function facturarOrden(Request $request, \App\Models\ServiceOrder $serviceOrder)
+    {
+        $this->bloquearMecanico($request);
+
+        if ($serviceOrder->estado === 'facturado') {
+            return response()->json(['message' => 'Esta orden ya fue facturada.'], 422);
+        }
+
+        $serviceOrder->load('details.producto:id,nombre', 'cliente:id,nombre_completo,email,telefono');
+        if ($serviceOrder->details->isEmpty()) {
+            return response()->json(['message' => 'La orden no tiene repuestos ni trabajos para cobrar.'], 422);
+        }
+
+        $data = $request->validate([
+            'metodo_pago' => ['required', 'in:EFECTIVO,TARJETA,TRANSFERENCIA,NEQUI,DAVIPLATA'],
+            'propina' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $factura = DB::transaction(function () use ($data, $request, $serviceOrder) {
+            // Pago por uso (modo prepago): cada factura consume 1 crédito.
+            $this->cobrarUsoPorFactura($request->user());
+
+            $bodegaId = $this->resolverBodegaFactura($request, null);
+
+            $factura = Factura::create([
+                'numero' => $this->siguienteNumero(),
+                'bodega_id' => $bodegaId,
+                'cliente_id' => $serviceOrder->cliente_id,
+                'fecha' => now()->toDateString(),
+                'subtotal' => $serviceOrder->subtotal,
+                'impuestos' => 0,
+                'total' => $serviceOrder->total,
+                'estado' => 'EMITIDA',
+                'metodo_pago' => $data['metodo_pago'],
+                'propina' => $data['propina'] ?? null,
+                'notas' => "Orden de servicio {$serviceOrder->numero_orden}",
+                'created_by' => $request->user()->id,
+            ]);
+
+            foreach ($serviceOrder->details as $d) {
+                // Sin producto_id a propósito: el inventario ya salió con la orden.
+                $factura->detalles()->create([
+                    'descripcion' => $d->producto?->nombre ?? 'Servicio',
+                    'cantidad' => $d->cantidad,
+                    'precio_unitario' => $d->precio_unitario,
+                    'impuesto_porcentaje' => 0,
+                    'subtotal' => $d->subtotal,
+                    'impuesto' => 0,
+                ]);
+            }
+
+            $serviceOrder->update(['estado' => 'facturado', 'factura_id' => $factura->id, 'fecha_entrega_real' => $serviceOrder->fecha_entrega_real ?? now()]);
+
+            $this->notificador->aUsuario($factura->owner_id, 'FACTURA',
+                "Orden {$serviceOrder->numero_orden} cobrada", "Factura {$factura->numero} · Total: \${$factura->total} ({$data['metodo_pago']})");
+            Auditoria::registrar($request->user()->id, null, 'FACTURA', 'COBRAR_ORDEN', $serviceOrder->numero_orden, $factura->numero, $bodegaId);
+
+            return $factura->load(['cliente:id,nombre_completo,email,telefono', 'detalles']);
+        });
+
+        // Recibo al correo del cliente (en segundo plano; no revierte el cobro si falla).
+        $this->enviarFacturaAutomatica($factura);
+
+        return response()->json($factura, 201);
+    }
+
     /** El rol Mecanico no tiene acceso a la facturación (montos ni listados). */
     private function bloquearMecanico(Request $request): void
     {
@@ -494,8 +571,7 @@ class FacturaController extends Controller
 
     private function siguienteNumero(): string
     {
-        $ultimo = Factura::withTrashed()->count() + 1;
-        return 'FAC-' . str_pad((string) $ultimo, 5, '0', STR_PAD_LEFT);
+        return Factura::siguienteNumero(request()->user()?->empresaId());
     }
 
     private function resolverBodegaFactura(Request $request, ?int $bodegaId): int

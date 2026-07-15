@@ -70,4 +70,21 @@ class CajaSesion extends Model
     {
         return (float) $this->gastos()->sum('monto');
     }
+
+    /** Ventas del turno desglosadas por medio de pago (cierre de caja). */
+    public function ventasPorMetodo(): array
+    {
+        $q = Factura::where('created_at', '>=', $this->abierta_at)
+            ->where('created_at', '<=', $this->cerrada_at ?? now());
+
+        if ($this->bodega_id) {
+            $q->where('bodega_id', $this->bodega_id);
+        }
+
+        return $q->selectRaw('metodo_pago, SUM(total) as total, COUNT(*) as facturas')
+            ->groupBy('metodo_pago')
+            ->get()
+            ->map(fn ($r) => ['metodo' => $r->metodo_pago ?? 'EFECTIVO', 'total' => (float) $r->total, 'facturas' => (int) $r->facturas])
+            ->all();
+    }
 }

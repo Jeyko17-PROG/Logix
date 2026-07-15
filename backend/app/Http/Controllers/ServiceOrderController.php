@@ -336,10 +336,14 @@ class ServiceOrderController extends Controller
             return response()->json([]);
         }
 
-        // Buscar órdenes de servicio
-        $ordenes = ServiceOrder::where('numero_orden', 'like', "%{$query}%")
-            ->where('estado', '!=', 'facturado')
-            ->with('assetVehicle:id,placa_identificador,marca,modelo')
+        // Buscar órdenes de servicio: por número de orden O por la placa del vehículo
+        // (la caja cobra buscando la placa: lavadero, taller, barbería).
+        $ordenes = ServiceOrder::where('estado', '!=', 'facturado')
+            ->where(function ($w) use ($query) {
+                $w->where('numero_orden', 'like', "%{$query}%")
+                    ->orWhereHas('assetVehicle', fn ($v) => $v->where('placa_identificador', 'like', "%{$query}%"));
+            })
+            ->with('assetVehicle:id,placa_identificador,marca,modelo', 'cliente:id,nombre_completo')
             ->limit(5)
             ->get();
 
@@ -381,6 +385,10 @@ class ServiceOrderController extends Controller
             'asset_vehicle_id' => ['nullable', 'exists:assets_vehicles,id'],
             'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
             'descripcion_trabajo' => ['nullable', 'string'],
+            // Talleres: estado de entrada del vehículo. Servicio técnico: accesorios recibidos.
+            'km_entrada' => ['nullable', 'integer', 'min:0'],
+            'nivel_gasolina' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'accesorios' => ['nullable', 'string', 'max:255'],
             'fecha_entrega_estimada' => ['nullable', 'date'],
             'requiere_pago_anticipo' => ['boolean'],
             'monto_anticipo' => ['nullable', 'numeric', 'min:0'],

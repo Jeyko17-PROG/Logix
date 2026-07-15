@@ -22,7 +22,7 @@ class NormalizarNumerosLocales
     private const CAMPOS_NUMERICOS = [
         'precio', 'costo', 'cantidad', 'monto', 'total', 'subtotal', 'impuesto',
         'valor', 'saldo', 'comision', 'stock', 'anticipo', 'exchange_rate',
-        'descuento', 'limite', 'credits', 'price',
+        'descuento', 'limite', 'credits', 'price', 'km_', 'propina',
     ];
 
     public function handle(Request $request, Closure $next): Response

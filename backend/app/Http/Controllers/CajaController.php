@@ -53,6 +53,7 @@ class CajaController extends Controller
             'ventas' => $sesion->totalVentas(),
             'gastos' => $sesion->totalGastos(),
             'esperado' => (float) $sesion->monto_apertura + $sesion->totalVentas() - $sesion->totalGastos(),
+            'por_metodo' => $sesion->ventasPorMetodo(),
         ]);
     }
 
@@ -155,8 +156,7 @@ class CajaController extends Controller
 
     private function siguienteNumero(): string
     {
-        $ultimo = Factura::withTrashed()->count() + 1;
-        return 'FAC-' . str_pad((string) $ultimo, 5, '0', STR_PAD_LEFT);
+        return Factura::siguienteNumero(request()->user()?->empresaId());
     }
 
     /** Cierra el turno: calcula esperado, registra el conteo y el descuadre. */
@@ -195,6 +195,7 @@ class CajaController extends Controller
             'gastos' => $gastos,
             'esperado' => $esperado,
             'descuadre' => (float) $sesion->descuadre,
+            'por_metodo' => $sesion->ventasPorMetodo(),
         ]);
     }
 }

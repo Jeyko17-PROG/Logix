@@ -22,6 +22,7 @@ export default function Facturacion() {
   const [guardando, setGuardando] = useState(false)
 
   const [cab, setCab] = useState({ cliente_id: '', fecha: new Date().toISOString().slice(0, 10), notas: '' })
+  const [medioPago, setMedioPago] = useState('EFECTIVO')
   const [currency, setCurrency] = useState('COP')
   const [exchangeRate, setExchangeRate] = useState('')
   const [lineas, setLineas] = useState([{ ...LINEA_VACIA }])
@@ -68,8 +69,34 @@ export default function Facturacion() {
     setCab({ cliente_id: '', fecha: new Date().toISOString().slice(0, 10), notas: '' })
     setLineas([{ ...LINEA_VACIA }])
     setFirma(localStorage.getItem(FIRMA_KEY) || null) // precarga "mi firma" guardada
+    setMedioPago('EFECTIVO')
     setError('')
     setAbierto(true)
+  }
+
+  // Venta de mostrador: preselecciona el cliente genérico "Consumidor Final"
+  // (se crea automáticamente con la cuenta) para cobrar sin pedir datos.
+  function ventaRapida() {
+    abrir()
+    const generico = clientes.find((c) => (c.nombre_completo || '').toLowerCase().includes('consumidor final'))
+    if (generico) setCab((prev) => ({ ...prev, cliente_id: String(generico.id) }))
+    else alert('Crea un cliente llamado "Consumidor Final" para usar la venta rápida.')
+  }
+
+  // Lector de código de barras / SKU: Enter agrega el producto como línea nueva.
+  function escanear(e) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const codigo = e.target.value.trim().toLowerCase()
+    if (!codigo) return
+    const p = productos.find((x) => (x.sku || '').toLowerCase() === codigo)
+      || productos.find((x) => (x.nombre || '').toLowerCase().includes(codigo))
+    if (!p) { setError(`No se encontró un producto con el código "${e.target.value.trim()}".`); return }
+    setError('')
+    const nueva = { ...LINEA_VACIA, producto_id: String(p.id), descripcion: p.nombre, precio_unitario: p.precio_venta }
+    // Reemplaza la primera línea si está vacía; si no, agrega al final.
+    setLineas((prev) => (prev.length === 1 && !prev[0].descripcion ? [nueva] : [...prev, nueva]))
+    e.target.value = ''
   }
 
   function guardarMiFirma() {
@@ -88,6 +115,7 @@ export default function Facturacion() {
         notas: cab.notas || null,
         currency: currency || 'COP',
         exchange_rate: exchangeRate || null,
+        metodo_pago: medioPago,
         lineas: lineas.map((l) => ({
           descripcion: l.descripcion,
           producto_id: l.producto_id ? Number(l.producto_id) : null,
@@ -132,7 +160,10 @@ export default function Facturacion() {
           <p className="text-sm text-slate-400">Genera, descarga y envía tus facturas de venta.</p>
         </div>
         {!abierto && (
-          <button onClick={abrir} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nueva factura</button>
+          <div className="flex gap-2">
+            <button onClick={ventaRapida} className="rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-sm font-semibold" title="Venta de mostrador a Consumidor Final">⚡ Venta rápida</button>
+            <button onClick={abrir} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nueva factura</button>
+          </div>
         )}
       </div>
 
@@ -162,6 +193,19 @@ export default function Facturacion() {
                 <input type="date" value={cab.fecha} onChange={(e) => setCab({ ...cab, fecha: e.target.value })} className="input" />
               </label>
             </div>
+
+            {/* Medio de pago (obligatorio para el cierre de caja por método) */}
+            <div className="mt-3">
+              <span className="mb-1 block text-sm text-slate-300">Medio de pago</span>
+              <div className="flex flex-wrap gap-2">
+                {[['EFECTIVO', '💵 Efectivo'], ['TARJETA', '💳 Tarjeta'], ['NEQUI', '📱 Nequi'], ['DAVIPLATA', '📱 Daviplata'], ['TRANSFERENCIA', '🏦 Transferencia']].map(([v, label]) => (
+                  <button type="button" key={v} onClick={() => setMedioPago(v)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${medioPago === v ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
               <div className="mt-3 grid sm:grid-cols-2 gap-4">
                 <label className="block">
                   <span className="mb-1 block text-sm text-slate-300">Divisa</span>
@@ -182,6 +226,13 @@ export default function Facturacion() {
           {/* Sección: productos / servicios */}
           <section className="px-6 py-5 border-b border-slate-800">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Productos y servicios</h3>
+
+            {/* Lector de código de barras / búsqueda rápida por SKU */}
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-sky-800/60 bg-sky-500/5 px-3 py-2">
+              <span>📷</span>
+              <input onKeyDown={escanear} placeholder="Escanea el código de barras o escribe el SKU y presiona Enter…"
+                className="w-full bg-transparent text-sm focus:outline-none placeholder-slate-500" />
+            </div>
 
             {/* Cabecera de columnas (solo escritorio) */}
             <div className="hidden md:grid grid-cols-[1fr_90px_140px_150px_120px_36px] gap-3 px-1 pb-2 text-xs font-medium text-slate-500">

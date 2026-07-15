@@ -354,6 +354,8 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::put('ordenes-servicio/{serviceOrder}/detalles/{detail}', [ServiceOrderController::class, 'actualizarDetalle']);
         Route::delete('ordenes-servicio/{serviceOrder}/detalles/{detail}', [ServiceOrderController::class, 'eliminarDetalle']);
         Route::post('ordenes-servicio/{serviceOrder}/preparar-facturacion', [ServiceOrderController::class, 'prepararFacturacion']);
+        // Cobro desde la caja: genera la factura de la orden con medio de pago y envía el recibo.
+        Route::post('ordenes-servicio/{serviceOrder}/facturar', [FacturaController::class, 'facturarOrden']);
         Route::post('ordenes-servicio/{serviceOrder}/completar', [ServiceOrderController::class, 'completar']);
         Route::apiResource('ordenes-servicio', ServiceOrderController::class, ['parameters' => ['ordenes-servicio' => 'serviceOrder']]);
 
