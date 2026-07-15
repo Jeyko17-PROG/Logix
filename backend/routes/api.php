@@ -82,6 +82,7 @@ Route::get('/ping', function () {
             'wompi_comercio_valido' => $comercio['ok'] ?? null,
             'wompi_ambiente' => $wompi->configurado() ? ($wompi->esSandbox() ? 'sandbox' : 'produccion') : null,
             'wompi_detalle' => ($comercio['ok'] ?? true) ? null : ($comercio['error'] ?? null),
+            'wompi_firma_integridad' => $wompi->configurado() ? ($wompi->validarIntegridad() ?? 'OK') : null,
             'cola_correos' => $cola,
             'migraciones_pendientes' => $migracionesPendientes,
         ],

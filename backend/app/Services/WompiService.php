@@ -137,6 +137,40 @@ class WompiService
         return $baseUrl . '/planes?status=' . urlencode($estado) . '&ref=' . urlencode($referencia);
     }
 
+    /**
+     * Valida que WOMPI_INTEGRITY_SECRET sea realmente el "Secreto de integridad"
+     * del MISMO ambiente que la llave pública (causa típica del error de Wompi
+     * "signature: La firma es inválida"). Los secretos de Wompi se distinguen
+     * por prefijo: prod_integrity_/test_integrity_ (integridad),
+     * prod_events_/test_events_ (eventos), prv_prod_/prv_test_ (privada).
+     *
+     * @return string|null null = consistente; texto = qué está mal exactamente
+     */
+    public function validarIntegridad(): ?string
+    {
+        $secreto = $this->secreto('integrity_secret');
+        if (! $secreto) {
+            return 'Falta WOMPI_INTEGRITY_SECRET (el "Secreto de integridad" en comercios.wompi.co → Desarrolladores).';
+        }
+
+        $esperado = $this->esSandbox() ? 'test_integrity_' : 'prod_integrity_';
+        if (! str_starts_with($secreto, $esperado)) {
+            $prefijo = substr($secreto, 0, 15);
+            $queEs = match (true) {
+                str_starts_with($secreto, 'prod_events_'), str_starts_with($secreto, 'test_events_') => 'ese es el secreto de EVENTOS (webhooks)',
+                str_starts_with($secreto, 'prv_') => 'esa es la llave PRIVADA',
+                str_starts_with($secreto, 'pub_') => 'esa es la llave PÚBLICA',
+                str_starts_with($secreto, 'test_integrity_'), str_starts_with($secreto, 'prod_integrity_') => 'es el secreto de integridad del OTRO ambiente',
+                default => 'no parece un secreto de Wompi',
+            };
+            return "WOMPI_INTEGRITY_SECRET incorrecto: empieza por \"{$prefijo}…\" y {$queEs}. "
+                . "Para tu ambiente actual debe empezar por \"{$esperado}\". "
+                . 'Cópialo de comercios.wompi.co → Desarrolladores → "Secreto de integridad".';
+        }
+
+        return null;
+    }
+
     public function verificarEvento(array $payload): bool
     {
         $secreto = $this->secreto('events_secret');

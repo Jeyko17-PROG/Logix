@@ -80,6 +80,11 @@ class CreditController extends Controller
                 'message' => 'La pasarela de pagos no está bien configurada: ' . ($comercio['error'] ?? 'llave inválida.'),
             ], 422);
         }
+        // El secreto de integridad equivocado produce "signature: La firma es inválida"
+        // ya dentro del checkout de Wompi: mejor frenar aquí con el motivo exacto.
+        if ($errorIntegridad = $this->wompi->validarIntegridad()) {
+            return response()->json(['message' => 'La pasarela de pagos no está bien configurada: ' . $errorIntegridad], 422);
+        }
         return null;
     }
 
