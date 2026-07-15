@@ -368,6 +368,22 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::get('reportes/comisiones-por-empleado', [ReportController::class, 'comisionesPorEmpleado']);
     });
 
+    // ===== BLOQUE RESTAURANTE: Plano de mesas, comandas y cocina (KDS) =====
+    Route::middleware('feature:mesas')->group(function () {
+        Route::apiResource('mesas', \App\Http\Controllers\MesaController::class)->except('show');
+        Route::post('mesas/{mesa}/comanda', [\App\Http\Controllers\ComandaController::class, 'abrir']);
+        Route::get('comandas/{comanda}', [\App\Http\Controllers\ComandaController::class, 'show']);
+        Route::post('comandas/{comanda}/items', [\App\Http\Controllers\ComandaController::class, 'agregarItem']);
+        Route::delete('comandas/{comanda}/items/{item}', [\App\Http\Controllers\ComandaController::class, 'quitarItem']);
+        Route::post('comandas/{comanda}/cobrar', [\App\Http\Controllers\ComandaController::class, 'cobrar']);
+        Route::post('comandas/{comanda}/cancelar', [\App\Http\Controllers\ComandaController::class, 'cancelar']);
+    });
+    // Cocina (KDS): pantalla dedicada, feature separada (puede asignarse solo al personal de cocina).
+    Route::middleware('feature:cocina')->group(function () {
+        Route::get('cocina/comandas', [\App\Http\Controllers\ComandaController::class, 'cocina']);
+        Route::put('cocina/items/{item}/estado', [\App\Http\Controllers\ComandaController::class, 'estadoItem']);
+    });
+
     // ===== BLOQUE E: Bloc de notas =====
     Route::apiResource('notas', NotaController::class)->except('show')->middleware('feature:notas');
 

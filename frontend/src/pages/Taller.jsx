@@ -8,10 +8,19 @@ const COP = (n) => '$' + Number(n ?? 0).toLocaleString('es-CO')
 const ESTADOS = {
   recibido: { label: 'Recibido', clase: 'bg-sky-500/15 text-sky-300' },
   en_proceso: { label: 'En Proceso', clase: 'bg-amber-500/15 text-amber-300' },
+  secando: { label: 'Secando', clase: 'bg-orange-500/15 text-orange-300' },
   listo: { label: 'Listo', clase: 'bg-emerald-500/15 text-emerald-300' },
   facturado: { label: 'Facturado', clase: 'bg-violet-500/15 text-violet-300' },
   cancelado: { label: 'Cancelado', clase: 'bg-red-500/15 text-red-300' },
 }
+
+// Kanban del lavadero: En espera → Lavando → Secando → Listo.
+const KANBAN_LAVADERO = [
+  { valor: 'recibido', etiqueta: 'En espera', clase: 'border-sky-600/50 bg-sky-500/5' },
+  { valor: 'en_proceso', etiqueta: 'Lavando', clase: 'border-amber-600/50 bg-amber-500/5' },
+  { valor: 'secando', etiqueta: 'Secando', clase: 'border-orange-600/50 bg-orange-500/5' },
+  { valor: 'listo', etiqueta: 'Listo', clase: 'border-emerald-600/50 bg-emerald-500/5' },
+]
 
 const Chip = ({ estado }) => (
   <span className={`text-xs rounded-full px-2 py-0.5 whitespace-nowrap ${ESTADOS[estado]?.clase ?? 'bg-slate-700'}`}>
@@ -22,6 +31,7 @@ const Chip = ({ estado }) => (
 export default function Taller() {
   const { user } = useAuth()
   const esMecanico = user?.rol?.nombre === 'Mecanico'
+  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
   const [tab, setTab] = useState('ordenes')
 
   const tabs = [
@@ -51,7 +61,7 @@ export default function Taller() {
         {!esMecanico && <BuscadorHistorial />}
       </div>
 
-      {tab === 'ordenes' && <Ordenes esMecanico={esMecanico} />}
+      {tab === 'ordenes' && <Ordenes esMecanico={esMecanico} esLavadero={esLavadero} />}
       {tab === 'vehiculos' && !esMecanico && <Vehiculos />}
       {tab === 'empleados' && !esMecanico && <Empleados />}
     </div>
@@ -135,13 +145,15 @@ function BuscadorHistorial() {
 }
 
 /* ============ Órdenes de servicio ============ */
-function Ordenes({ esMecanico }) {
+function Ordenes({ esMecanico, esLavadero }) {
   const [ordenes, setOrdenes] = useState([])
   const [estado, setEstado] = useState('')
   const [buscar, setBuscar] = useState('')
   const [cargando, setCargando] = useState(true)
   const [creando, setCreando] = useState(false)
   const [abierta, setAbierta] = useState(null) // orden en detalle
+  // El lavadero ve un Kanban por defecto; puede alternar a la lista clásica.
+  const [vista, setVista] = useState(esLavadero ? 'kanban' : 'lista')
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -156,14 +168,33 @@ function Ordenes({ esMecanico }) {
 
   useEffect(() => { cargar() }, [cargar])
 
+  async function avanzarEstado(orden, nuevoEstado) {
+    try {
+      await api(`/ordenes-servicio/${orden.id}`, { method: 'PUT', body: { estado: nuevoEstado } })
+      cargar()
+    } catch (err) { alert(err.message || 'No se pudo actualizar el estado.') }
+  }
+
   return (
     <div>
       <div className="flex flex-wrap gap-2 mb-4">
-        <select value={estado} onChange={(e) => setEstado(e.target.value)} className="input !mt-0 w-44">
-          <option value="">Todos los estados</option>
-          {Object.entries(ESTADOS).map(([v, e]) => <option key={v} value={v}>{e.label}</option>)}
-        </select>
-        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar orden, cliente…" className="input !mt-0 w-56" />
+        {esLavadero && (
+          <div className="flex bg-slate-800 rounded-lg p-1">
+            {[['kanban', '📋 Tablero'], ['lista', '📄 Lista']].map(([v, label]) => (
+              <button key={v} onClick={() => setVista(v)}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition ${vista === v ? 'bg-emerald-600 text-white' : 'text-slate-300'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {vista === 'lista' && (
+          <select value={estado} onChange={(e) => setEstado(e.target.value)} className="input !mt-0 w-44">
+            <option value="">Todos los estados</option>
+            {Object.entries(ESTADOS).map(([v, e]) => <option key={v} value={v}>{e.label}</option>)}
+          </select>
+        )}
+        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar orden, cliente, placa…" className="input !mt-0 w-56" />
         {!esMecanico && (
           <button onClick={() => setCreando(true)}
             className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nueva orden</button>
@@ -172,6 +203,8 @@ function Ordenes({ esMecanico }) {
 
       {cargando ? <p className="text-slate-500">Cargando…</p> : ordenes.length === 0 ? (
         <p className="text-slate-500 py-8 text-center">No hay órdenes de servicio{esMecanico ? ' asignadas a ti' : ''}.</p>
+      ) : vista === 'kanban' ? (
+        <KanbanLavadero ordenes={ordenes} onAvanzar={avanzarEstado} onAbrir={setAbierta} />
       ) : (
         <div className="grid gap-3">
           {ordenes.map((o) => (
@@ -201,12 +234,55 @@ function Ordenes({ esMecanico }) {
   )
 }
 
+/** Tablero Kanban del lavadero: En espera → Lavando → Secando → Listo. */
+function KanbanLavadero({ ordenes, onAvanzar, onAbrir }) {
+  const columnas = KANBAN_LAVADERO.map((col) => ({
+    ...col,
+    ordenes: ordenes.filter((o) => o.estado === col.valor),
+  }))
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {columnas.map((col, ci) => (
+        <div key={col.valor} className={`rounded-2xl border p-3 ${col.clase}`}>
+          <h3 className="font-bold text-sm mb-3 flex items-center justify-between">
+            {col.etiqueta} <span className="text-xs text-slate-500 font-normal">{col.ordenes.length}</span>
+          </h3>
+          <div className="space-y-2 min-h-[80px]">
+            {col.ordenes.map((o) => (
+              <div key={o.id} className="rounded-lg bg-slate-900/70 border border-slate-800 p-3">
+                <button onClick={() => onAbrir(o.id)} className="text-left w-full">
+                  <p className="font-semibold text-sm">{o.numero_orden}</p>
+                  <p className="text-xs text-slate-400">{o.cliente?.nombre_completo}</p>
+                  {o.asset_vehicle && (
+                    <p className="text-xs text-slate-400">🏍️ {o.asset_vehicle.placa_identificador ?? '—'}</p>
+                  )}
+                </button>
+                {KANBAN_LAVADERO[ci + 1] && (
+                  <button onClick={() => onAvanzar(o, KANBAN_LAVADERO[ci + 1].valor)}
+                    className="mt-2 w-full text-xs rounded-lg bg-slate-800 hover:bg-emerald-700 py-1.5 font-medium transition">
+                    → {KANBAN_LAVADERO[ci + 1].etiqueta}
+                  </button>
+                )}
+              </div>
+            ))}
+            {col.ordenes.length === 0 && <p className="text-xs text-slate-600 text-center py-4">Vacío</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ModalCrearOrden({ onClose, onCreada }) {
   const { user } = useAuth()
   // El formulario se adapta al tipo de negocio de la empresa.
   const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave ?? ''
   const esTallerVehiculos = ['taller_motos', 'taller_carros'].includes(tipoNegocio)
   const esServicioTecnico = ['taller_general', 'otro'].includes(tipoNegocio)
+  const esLavadero = tipoNegocio === 'lavadero'
+  // El vehículo es obligatorio en talleres y lavadero (el backend también lo exige).
+  const vehiculoObligatorio = esTallerVehiculos || esServicioTecnico || esLavadero
 
   const [resultados, setResultados] = useState([])
   const [buscarCliente, setBuscarCliente] = useState('')
@@ -215,6 +291,12 @@ function ModalCrearOrden({ onClose, onCreada }) {
   const [empleados, setEmpleados] = useState([])
   const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '', km_entrada: '', nivel_gasolina: '', accesorios: '' })
   const [nuevoVehiculo, setNuevoVehiculo] = useState(null) // {placa, marca, modelo}
+  // Checklist de entrada (talleres y lavadero): estado visual del vehículo al recibirlo.
+  const [checklist, setChecklist] = useState(
+    (esTallerVehiculos || esLavadero)
+      ? ['Espejos', 'Rines / llantas', 'Luces', 'Rayones visibles', 'Papeles del vehículo', 'Objetos de valor'].map((item) => ({ item, ok: true }))
+      : []
+  )
   const [guardando, setGuardando] = useState(false)
   const [errorCarga, setErrorCarga] = useState('')
 
@@ -243,6 +325,9 @@ function ModalCrearOrden({ onClose, onCreada }) {
   async function crear(e) {
     e.preventDefault()
     if (!clienteSel?.id) return alert('Selecciona el cliente.')
+    if (vehiculoObligatorio && !form.asset_vehicle_id && !nuevoVehiculo) {
+      return alert('Este tipo de negocio requiere el vehículo/equipo del cliente.')
+    }
     setGuardando(true)
     try {
       let vehiculoId = form.asset_vehicle_id || null
@@ -265,12 +350,15 @@ function ModalCrearOrden({ onClose, onCreada }) {
         km_entrada: form.km_entrada ? aNumero(form.km_entrada) : null,
         nivel_gasolina: form.nivel_gasolina !== '' ? Number(form.nivel_gasolina) : null,
         accesorios: form.accesorios || null,
+        checklist_entrada: checklist.length > 0 ? checklist : null,
       } })
       onCreada(orden.id)
     } catch (err) {
       alert(err.message || 'No se pudo crear la orden.')
     } finally { setGuardando(false) }
   }
+
+  const toggleChecklist = (idx) => setChecklist((c) => c.map((it, i) => (i === idx ? { ...it, ok: !it.ok } : it)))
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
 
@@ -306,8 +394,9 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </label>
           )}
 
-          <label className="block text-sm text-slate-300">Vehículo / equipo del cliente
-            <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1" disabled={!!nuevoVehiculo || !clienteSel}>
+          <label className="block text-sm text-slate-300">Vehículo / equipo del cliente{vehiculoObligatorio && ' *'}
+            <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1"
+              disabled={!!nuevoVehiculo || !clienteSel} required={vehiculoObligatorio && !nuevoVehiculo}>
               <option value="">{clienteSel ? (vehiculos.length ? '— Sin vehículo —' : 'Este cliente no tiene vehículos registrados') : 'Primero elige el cliente'}</option>
               {vehiculos.map((v) => <option key={v.id} value={v.id}>{v.marca} {v.modelo} · {v.placa_identificador ?? 's/placa'}</option>)}
             </select>
@@ -358,6 +447,21 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </label>
           )}
 
+          {/* Checklist de entrada: estado visual del vehículo al recibirlo (talleres/lavadero) */}
+          {checklist.length > 0 && (
+            <div>
+              <p className="text-sm text-slate-300 mb-1.5">Checklist de entrada</p>
+              <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-slate-700 bg-slate-800/30 p-3">
+                {checklist.map((it, i) => (
+                  <label key={it.item} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                    <input type="checkbox" checked={it.ok} onChange={() => toggleChecklist(i)} className="accent-emerald-500" />
+                    {it.item}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <label className="block text-sm text-slate-300">{esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
             <textarea value={form.descripcion_trabajo} onChange={set('descripcion_trabajo')} rows="3" className="input mt-1" placeholder="Ej: cambio de aceite, revisión de frenos…" />
           </label>
@@ -379,6 +483,8 @@ function ModalCrearOrden({ onClose, onCreada }) {
 }
 
 function ModalOrden({ id, esMecanico, onClose }) {
+  const { user } = useAuth()
+  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
   const [orden, setOrden] = useState(null)
   const [productos, setProductos] = useState([])
   const [empleados, setEmpleados] = useState([])
@@ -451,6 +557,15 @@ function ModalOrden({ id, esMecanico, onClose }) {
                 {orden.accesorios ? ` · 🎒 ${orden.accesorios}` : ''}
               </p>
             )}
+            {orden.checklist_entrada?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {orden.checklist_entrada.map((it) => (
+                  <span key={it.item} className={`text-xs rounded-full px-2 py-0.5 ${it.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'}`}>
+                    {it.ok ? '✓' : '✕'} {it.item}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">✕</button>
         </div>
@@ -463,7 +578,12 @@ function ModalOrden({ id, esMecanico, onClose }) {
         {editable && (
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs text-slate-500 uppercase">Estado:</span>
-            {['recibido', 'en_proceso', 'listo', ...(esMecanico ? [] : ['cancelado'])].map((e) => (
+            {[
+              'recibido', 'en_proceso',
+              ...(esLavadero ? ['secando'] : []),
+              'listo',
+              ...(esMecanico ? [] : ['cancelado']),
+            ].map((e) => (
               <button key={e} onClick={() => cambiarEstado(e)} disabled={orden.estado === e}
                 className={`text-xs rounded-full px-3 py-1 transition ${orden.estado === e ? ESTADOS[e].clase + ' font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
                 {ESTADOS[e].label}

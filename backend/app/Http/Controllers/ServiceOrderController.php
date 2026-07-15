@@ -123,8 +123,12 @@ class ServiceOrderController extends Controller
 
         $data = $request->validate([
             'descripcion_trabajo' => ['nullable', 'string'],
-            'estado' => ['in:recibido,en_proceso,listo,facturado,cancelado'],
+            // 'secando' es el paso intermedio del Kanban de lavadero.
+            'estado' => ['in:recibido,en_proceso,secando,listo,facturado,cancelado'],
             'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
+            'checklist_entrada' => ['nullable', 'array'],
+            'checklist_entrada.*.item' => ['required_with:checklist_entrada', 'string'],
+            'checklist_entrada.*.ok' => ['nullable', 'boolean'],
             'fecha_entrega_estimada' => ['nullable', 'date'],
             'requiere_pago_anticipo' => ['boolean'],
             'monto_anticipo' => ['nullable', 'numeric', 'min:0'],
@@ -132,7 +136,7 @@ class ServiceOrderController extends Controller
 
         // El mecánico solo registra diagnóstico/avance: no toca anticipos ni reasigna la orden.
         if ($request->user()->esMecanico()) {
-            $data = array_intersect_key($data, array_flip(['descripcion_trabajo', 'estado']));
+            $data = array_intersect_key($data, array_flip(['descripcion_trabajo', 'estado', 'checklist_entrada']));
         }
 
         $serviceOrder->update($data);
@@ -360,35 +364,59 @@ class ServiceOrderController extends Controller
     }
 
     /**
-     * Obtener estados disponibles.
+     * Obtener estados disponibles. El lavadero usa un Kanban con "Secando"
+     * intermedio; los demás negocios usan el flujo estándar de 4 pasos.
      */
-    public function estados(): JsonResponse
+    public function estados(Request $request): JsonResponse
     {
-        return response()->json([
-            'estados' => [
+        $esLavadero = $this->tipoNegocio($request) === 'lavadero';
+
+        $estados = $esLavadero
+            ? [
+                ['valor' => 'recibido', 'etiqueta' => 'En espera'],
+                ['valor' => 'en_proceso', 'etiqueta' => 'Lavando'],
+                ['valor' => 'secando', 'etiqueta' => 'Secando'],
+                ['valor' => 'listo', 'etiqueta' => 'Listo'],
+            ]
+            : [
                 ['valor' => 'recibido', 'etiqueta' => 'Recibido'],
                 ['valor' => 'en_proceso', 'etiqueta' => 'En Proceso'],
                 ['valor' => 'listo', 'etiqueta' => 'Listo'],
-                ['valor' => 'facturado', 'etiqueta' => 'Facturado'],
-                ['valor' => 'cancelado', 'etiqueta' => 'Cancelado'],
-            ],
-        ]);
+            ];
+
+        $estados[] = ['valor' => 'facturado', 'etiqueta' => 'Facturado'];
+        $estados[] = ['valor' => 'cancelado', 'etiqueta' => 'Cancelado'];
+
+        return response()->json(['estados' => $estados]);
+    }
+
+    /** Clave del tipo de negocio de la empresa del usuario autenticado. */
+    private function tipoNegocio(Request $request): ?string
+    {
+        return $request->user()?->empresaDeCobro()?->tipoNegocio?->clave;
     }
 
     /**
-     * Validar datos de la orden.
+     * Validar datos de la orden. Los campos vehiculares son obligatorios solo
+     * para negocios que trabajan con vehículos/equipos (talleres, lavadero);
+     * en tienda/restaurante/barbería no se piden.
      */
     private function validar(Request $request): array
     {
+        $conVehiculo = in_array($this->tipoNegocio($request), ['taller_motos', 'taller_carros', 'taller_general', 'lavadero'], true);
+
         return $request->validate([
             'cliente_id' => ['required', 'exists:clientes,id'],
-            'asset_vehicle_id' => ['nullable', 'exists:assets_vehicles,id'],
+            'asset_vehicle_id' => [$conVehiculo ? 'required' : 'nullable', 'exists:assets_vehicles,id'],
             'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
             'descripcion_trabajo' => ['nullable', 'string'],
-            // Talleres: estado de entrada del vehículo. Servicio técnico: accesorios recibidos.
+            // Talleres/lavadero: estado de entrada del vehículo. Servicio técnico: accesorios recibidos.
             'km_entrada' => ['nullable', 'integer', 'min:0'],
             'nivel_gasolina' => ['nullable', 'integer', 'min:0', 'max:100'],
             'accesorios' => ['nullable', 'string', 'max:255'],
+            'checklist_entrada' => ['nullable', 'array'],
+            'checklist_entrada.*.item' => ['required_with:checklist_entrada', 'string'],
+            'checklist_entrada.*.ok' => ['nullable', 'boolean'],
             'fecha_entrega_estimada' => ['nullable', 'date'],
             'requiere_pago_anticipo' => ['boolean'],
             'monto_anticipo' => ['nullable', 'numeric', 'min:0'],

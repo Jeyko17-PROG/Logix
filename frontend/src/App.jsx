@@ -17,6 +17,7 @@ import QR from './pages/QR'
 import Facturacion from './pages/Facturacion'
 import Taller from './pages/Taller'
 import Caja from './pages/Caja'
+import Restaurante from './pages/Restaurante'
 import Notas from './pages/Notas'
 import Calculadora from './pages/Calculadora'
 import Reportes from './pages/Reportes'
@@ -66,6 +67,7 @@ function App() {
 
         <Route path="/taller" element={<Taller />} />
         <Route path="/caja" element={<Caja />} />
+        <Route path="/restaurante" element={<Restaurante />} />
         <Route path="/facturacion" element={<Facturacion />} />
         <Route path="/reportes" element={<Reportes />} />
         <Route path="/notas" element={<Notas />} />

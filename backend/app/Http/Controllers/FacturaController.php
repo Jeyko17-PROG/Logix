@@ -8,6 +8,7 @@ use App\Models\Factura;
 use App\Services\Notificador;
 use App\Services\KardexService;
 use App\Services\CreditService;
+use App\Services\ReciboService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,12 @@ use Illuminate\Validation\ValidationException;
 
 class FacturaController extends Controller
 {
-    public function __construct(private Notificador $notificador, private KardexService $kardex, private CreditService $creditService) {}
+    public function __construct(
+        private Notificador $notificador,
+        private KardexService $kardex,
+        private CreditService $creditService,
+        private ReciboService $recibo,
+    ) {}
 
     public function index(Request $request)
     {
@@ -534,39 +540,7 @@ class FacturaController extends Controller
      */
     private function enviarFacturaAutomatica(Factura $factura): void
     {
-        try {
-            $email = $factura->cliente?->email;
-            if (! $email) {
-                return;
-            }
-
-            if (! $factura->pdf_url) {
-                $this->generarPdf($factura);
-                $factura->refresh();
-            }
-
-            $adjunto = $factura->pdf_url
-                ? Storage::disk('public')->path(str_replace('/storage/', '', $factura->pdf_url))
-                : null;
-
-            $this->notificador->correo(
-                $email,
-                "Factura {$factura->numero} - Logix",
-                "Factura {$factura->numero}",
-                [
-                    "Hola {$factura->cliente->nombre_completo},",
-                    "Gracias por tu compra. Adjuntamos tu factura {$factura->numero} por un total de \${$factura->total}.",
-                    'Si tienes alguna duda, responde a este correo.',
-                ],
-                $adjunto,
-                'FACTURA',
-            );
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Fallo el envío automático de la factura', [
-                'factura' => $factura->numero,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        $this->recibo->enviarPorCorreo($factura);
     }
 
     private function siguienteNumero(): string

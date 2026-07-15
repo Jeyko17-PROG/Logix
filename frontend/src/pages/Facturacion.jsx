@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { API_BASE, api, getToken } from '../api/client'
 import FirmaPad from '../components/FirmaPad'
 import { useFeatures } from '../context/FeaturesContext'
@@ -27,6 +27,17 @@ export default function Facturacion() {
   const [exchangeRate, setExchangeRate] = useState('')
   const [lineas, setLineas] = useState([{ ...LINEA_VACIA }])
   const [firma, setFirma] = useState(null)
+  const [ventaRapidaActiva, setVentaRapidaActiva] = useState(false)
+  const scanRef = useRef(null)
+
+  // Foco automático en el lector de código de barras al abrir la venta rápida
+  // (tienda/comercio): el cajero puede escanear de inmediato sin hacer clic.
+  useEffect(() => {
+    if (abierto && ventaRapidaActiva) {
+      const t = setTimeout(() => scanRef.current?.focus(), 80)
+      return () => clearTimeout(t)
+    }
+  }, [abierto, ventaRapidaActiva])
 
   async function cargar() {
     const data = await api('/facturas')
@@ -70,20 +81,24 @@ export default function Facturacion() {
     setLineas([{ ...LINEA_VACIA }])
     setFirma(localStorage.getItem(FIRMA_KEY) || null) // precarga "mi firma" guardada
     setMedioPago('EFECTIVO')
+    setVentaRapidaActiva(false)
     setError('')
     setAbierto(true)
   }
 
   // Venta de mostrador: preselecciona el cliente genérico "Consumidor Final"
-  // (se crea automáticamente con la cuenta) para cobrar sin pedir datos.
+  // (se crea automáticamente con la cuenta) y enfoca el lector de código de
+  // barras para que el cajero escanee sin tocar el mouse.
   function ventaRapida() {
     abrir()
+    setVentaRapidaActiva(true)
     const generico = clientes.find((c) => (c.nombre_completo || '').toLowerCase().includes('consumidor final'))
     if (generico) setCab((prev) => ({ ...prev, cliente_id: String(generico.id) }))
     else alert('Crea un cliente llamado "Consumidor Final" para usar la venta rápida.')
   }
 
-  // Lector de código de barras / SKU: Enter agrega el producto como línea nueva.
+  // Lector de código de barras / SKU: Enter agrega el producto como línea nueva
+  // y devuelve el foco al input para seguir escaneando sin interrupciones.
   function escanear(e) {
     if (e.key !== 'Enter') return
     e.preventDefault()
@@ -97,6 +112,7 @@ export default function Facturacion() {
     // Reemplaza la primera línea si está vacía; si no, agrega al final.
     setLineas((prev) => (prev.length === 1 && !prev[0].descripcion ? [nueva] : [...prev, nueva]))
     e.target.value = ''
+    e.target.focus()
   }
 
   function guardarMiFirma() {
@@ -230,7 +246,7 @@ export default function Facturacion() {
             {/* Lector de código de barras / búsqueda rápida por SKU */}
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-sky-800/60 bg-sky-500/5 px-3 py-2">
               <span>📷</span>
-              <input onKeyDown={escanear} placeholder="Escanea el código de barras o escribe el SKU y presiona Enter…"
+              <input ref={scanRef} onKeyDown={escanear} placeholder="Escanea el código de barras o escribe el SKU y presiona Enter…"
                 className="w-full bg-transparent text-sm focus:outline-none placeholder-slate-500" />
             </div>
 

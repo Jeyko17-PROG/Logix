@@ -36,6 +36,8 @@ class Funcionalidades
         'correos' => 'Envío de correos',
         'servicios' => 'Taller / Órdenes de Servicio',
         'caja' => 'Caja y Gastos',
+        'mesas' => 'Restaurante: Mesas y Comandas',
+        'cocina' => 'Restaurante: Pantalla de Cocina (KDS)',
     ];
 
     public const ESTADOS = ['ACTIVADA', 'RESTRINGIDA', 'DESACTIVADA'];
@@ -45,7 +47,9 @@ class Funcionalidades
      * 'servicios' y 'caja' van en la base porque son el corazón del POS de taller
      * (además, los planes ya guardados en BD no las incluyen y quedarían bloqueadas).
      */
-    private const BASE = ['dashboard', 'notificaciones', 'notas', 'calculadora', 'servicios', 'caja'];
+    // 'mesas' y 'cocina' también van en BASE: el TIPO DE NEGOCIO es quien las
+    // limita (solo los tipos que las incluyen en modulos_default las ven).
+    private const BASE = ['dashboard', 'notificaciones', 'notas', 'calculadora', 'servicios', 'caja', 'mesas', 'cocina'];
 
     /**
      * Funcionalidades ACTIVADAS por defecto según el plan.

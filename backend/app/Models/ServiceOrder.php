@@ -25,6 +25,7 @@ class ServiceOrder extends Model
         'km_entrada',
         'nivel_gasolina',
         'accesorios',
+        'checklist_entrada',
         'subtotal',
         'total',
         'total_comisiones',
@@ -45,6 +46,7 @@ class ServiceOrder extends Model
         'fecha_recepcion' => 'datetime',
         'fecha_entrega_estimada' => 'datetime',
         'fecha_entrega_real' => 'datetime',
+        'checklist_entrada' => 'array',
     ];
 
     protected $appends = ['estado_label'];
@@ -93,6 +95,7 @@ class ServiceOrder extends Model
         return collect([
             'recibido' => 'Recibido',
             'en_proceso' => 'En Proceso',
+            'secando' => 'Secando',
             'listo' => 'Listo',
             'facturado' => 'Facturado',
             'cancelado' => 'Cancelado',

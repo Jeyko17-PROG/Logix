@@ -69,6 +69,7 @@ const MENU = [
     grupo: 'Taller y POS',
     items: [
       { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios' },
+      { to: '/restaurante', label: 'Mesas y Comandas', icon: '🍽️', feat: 'mesas' },
       { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
     ],
   },
