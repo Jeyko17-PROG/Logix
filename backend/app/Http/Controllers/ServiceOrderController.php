@@ -47,6 +47,7 @@ class ServiceOrderController extends Controller
             'cliente:id,nombre_completo',
             'assetVehicle:id,placa_identificador,marca,modelo,tipo_activo',
             'planLavado:id,nombre,icono',
+            'servicio:id,nombre',
             'mecanicoAsignado:id,nombre,apellido',
             'details.operablesEmployee:id,nombre,apellido',
             'details.producto:id,nombre,precio_venta',
@@ -87,7 +88,7 @@ class ServiceOrderController extends Controller
         $data['numero_orden'] = ServiceOrder::generarNumeroOrden($ownerId);
 
         $orden = ServiceOrder::create($data);
-        return response()->json($orden->load('cliente:id,nombre_completo', 'assetVehicle:id,placa_identificador,marca,modelo,tipo_activo', 'planLavado:id,nombre,icono', 'mecanicoAsignado:id,nombre,apellido'), 201);
+        return response()->json($orden->load('cliente:id,nombre_completo', 'assetVehicle:id,placa_identificador,marca,modelo,tipo_activo', 'planLavado:id,nombre,icono', 'servicio:id,nombre', 'mecanicoAsignado:id,nombre,apellido'), 201);
     }
 
     /**
@@ -103,6 +104,7 @@ class ServiceOrderController extends Controller
                 'mecanicoAsignado:id,nombre,apellido,ci_cedula',
                 'assetVehicle:id,placa_identificador,marca,modelo,anio,color,tipo_activo',
                 'planLavado:id,nombre,precio,icono',
+                'servicio:id,nombre,precio',
                 'details' => fn ($q) => $q->with([
                     'producto:id,nombre,precio_venta,is_service',
                     'operablesEmployee:id,nombre,apellido,ci_cedula',
@@ -411,6 +413,7 @@ class ServiceOrderController extends Controller
             'cliente_id' => ['required', 'exists:clientes,id'],
             'asset_vehicle_id' => [$conVehiculo ? 'required' : 'nullable', 'exists:assets_vehicles,id'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
+            'servicio_id' => ['nullable', 'exists:servicios,id'],
             'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
             'descripcion_trabajo' => ['nullable', 'string'],
             // Talleres/lavadero: estado de entrada del vehículo. Servicio técnico: accesorios recibidos.

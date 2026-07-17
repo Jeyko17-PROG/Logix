@@ -23,8 +23,8 @@ class TipoNegocioSeeder extends Seeder
             'clientes', 'facturacion', 'pdf', 'correos', 'exportacion', 'reportes', 'caja',
         ];
 
-        // "Todos los módulos" excepto los exclusivos de restaurante o de lavadero.
-        $todosSinRestaurante = array_values(array_diff(array_keys(Funcionalidades::CATALOGO), ['mesas', 'cocina', 'lavadero']));
+        // "Todos los módulos" excepto los exclusivos de restaurante, lavadero o barbería.
+        $todosSinRestaurante = array_values(array_diff(array_keys(Funcionalidades::CATALOGO), ['mesas', 'cocina', 'lavadero', 'barberia']));
 
         $tipos = [
             ['clave' => 'taller_motos', 'nombre' => 'Taller de motos', 'orden' => 1,
@@ -40,7 +40,7 @@ class TipoNegocioSeeder extends Seeder
             ['clave' => 'restaurante', 'nombre' => 'Restaurante / comidas', 'orden' => 6,
                 'modulos_default' => array_merge($comunes, ['mesas', 'cocina', 'productos', 'inventario', 'proveedores', 'agenda', 'reservas', 'qr'])],
             ['clave' => 'barberia', 'nombre' => 'Barbería / belleza', 'orden' => 7,
-                'modulos_default' => array_merge($comunes, ['servicios', 'agenda', 'reservas', 'qr', 'productos', 'inventario'])],
+                'modulos_default' => array_merge($comunes, ['servicios', 'barberia', 'agenda', 'reservas', 'qr', 'productos', 'inventario'])],
             ['clave' => 'otro', 'nombre' => 'Otro negocio', 'orden' => 99,
                 'modulos_default' => $todosSinRestaurante],
         ];
@@ -81,6 +81,7 @@ class TipoNegocioSeeder extends Seeder
         $nuevos = [
             'restaurante' => ['mesas', 'cocina'],
             'lavadero' => ['lavadero'],
+            'barberia' => ['barberia'],
         ];
 
         foreach ($nuevos as $clave => $modulos) {

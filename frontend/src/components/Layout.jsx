@@ -68,8 +68,9 @@ const MENU = [
   {
     grupo: 'Taller y POS',
     items: [
-      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featLavadero: 'lavadero' },
-      { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloLavadero: true },
+      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia' } },
+      { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloTipo: 'lavadero' },
+      { to: '/servicios', label: 'Servicios / Cortes', icon: '💈', feat: 'barberia', soloTipo: 'barberia' },
       { to: '/restaurante', label: 'Mesas y Comandas', icon: '🍽️', feat: 'mesas' },
       { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
     ],
@@ -169,9 +170,15 @@ export default function Layout() {
 
   // El Super Administrador ve además la sección de plataforma.
   const base = user?.es_super_admin ? [...MENU, MENU_SUPER_ADMIN] : MENU
+  const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
   const esMecanico = user?.rol?.nombre === 'Mecanico'
   const esLavadorRol = user?.rol?.nombre === 'Lavador'
-  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
+  const esOperarioRol = esMecanico || esLavadorRol
+  // "Taller / Órdenes" cambia de nombre según el tipo de negocio (misma ruta /taller).
+  const LABEL_POR_TIPO = {
+    lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
+    barberia: { label: 'Barbería / Agenda', icon: '💈' },
+  }
   // Oculta del menú las funcionalidades DESACTIVADAS para el usuario.
   // El Mecánico/Lavador solo ve sus órdenes y catálogo: nada de facturación ni dinero.
   const secciones = base
@@ -179,12 +186,11 @@ export default function Layout() {
       ...s,
       items: s.items
         .filter((m) => {
-          // Negocios lavadero: el módulo relevante es 'lavadero', independiente de 'servicios' (talleres).
-          const feat = (esLavadero && m.featLavadero) ? m.featLavadero : m.feat
-          return (!feat || visible(feat)) && (!(esMecanico || esLavadorRol) || RUTAS_MECANICO.includes(m.to)) && (!m.soloLavadero || esLavadero)
+          // Negocios lavadero/barbería: el módulo relevante es el propio, independiente de 'servicios' (talleres).
+          const feat = (tipoNegocio && m.featPorTipo?.[tipoNegocio]) ? m.featPorTipo[tipoNegocio] : m.feat
+          return (!feat || visible(feat)) && (!esOperarioRol || RUTAS_MECANICO.includes(m.to)) && (!m.soloTipo || m.soloTipo === tipoNegocio)
         })
-        // El lavadero no repara vehículos: el módulo "Taller" pasa a llamarse "Servicios de Lavado".
-        .map((m) => (m.to === '/taller' && esLavadero ? { ...m, label: 'Servicios de Lavado', icon: '🧼' } : m)),
+        .map((m) => (m.to === '/taller' && LABEL_POR_TIPO[tipoNegocio] ? { ...m, ...LABEL_POR_TIPO[tipoNegocio] } : m)),
     }))
     .filter((s) => s.items.length > 0)
 

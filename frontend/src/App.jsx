@@ -12,6 +12,7 @@ import Documentos from './pages/Documentos'
 import Clientes from './pages/Clientes'
 import Agenda from './pages/Agenda'
 import PlanesLavado from './pages/PlanesLavado'
+import Servicios from './pages/Servicios'
 import Configuracion from './pages/Configuracion'
 import Reserva from './pages/Reserva'
 import QR from './pages/QR'
@@ -64,6 +65,7 @@ function App() {
 
         <Route path="/agenda" element={<Agenda />} />
         <Route path="/planes-lavado" element={<PlanesLavado />} />
+        <Route path="/servicios" element={<Servicios />} />
         <Route path="/qr" element={<QR />} />
         <Route path="/configuracion" element={<Configuracion />} />
 

@@ -8,6 +8,9 @@ const fmtFecha = (iso) => new Date(iso).toLocaleString('es', { dateStyle: 'mediu
 // Ícono del tipo de vehículo elegido en la cita/reserva.
 const iconoVehiculo = (tipo) => (tipo === 'moto' ? '🏍️' : tipo === 'carro' ? '🚗' : '')
 
+// Ícono por defecto según el rubro del negocio, mientras no suba su propio logo.
+const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈' }
+
 // Página PÚBLICA de reservas (destino del QR). No requiere iniciar sesión.
 // La URL incluye el slug del negocio: /reservar/:slug (cada usuario tiene el suyo).
 export default function Reserva() {
@@ -27,9 +30,19 @@ export default function Reserva() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 px-4 py-8">
       <div className="max-w-md mx-auto">
-        <img src={negocio?.logo_url || '/logo.svg'} alt={negocio?.nombre || 'Logix'}
-          className="h-16 w-16 object-contain mx-auto mb-3 rounded-lg drop-shadow-lg"
-          onError={(e) => { e.currentTarget.style.display = 'none' }} />
+        {negocio?.logo_url ? (
+          <img src={negocio.logo_url} alt={negocio.nombre || 'Logix'}
+            className="h-16 w-16 object-contain mx-auto mb-3 rounded-lg drop-shadow-lg"
+            onError={(e) => { e.currentTarget.style.display = 'none' }} />
+        ) : ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio] ? (
+          <div className="h-16 w-16 mx-auto mb-3 rounded-lg bg-slate-800 flex items-center justify-center text-4xl drop-shadow-lg">
+            {ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]}
+          </div>
+        ) : (
+          <img src="/logo.svg" alt="Logix"
+            className="h-16 w-16 object-contain mx-auto mb-3 drop-shadow-lg"
+            onError={(e) => { e.currentTarget.style.display = 'none' }} />
+        )}
         <h1 className="text-2xl font-bold text-center">Reserva tu cita</h1>
         <p className="text-slate-400 text-center text-sm mb-6">{negocio?.nombre || 'Logix'}</p>
 

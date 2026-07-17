@@ -31,31 +31,49 @@ const Chip = ({ estado }) => (
 // Ícono según el tipo de vehículo del activo (🏍️ moto, 🚗 carro/otro).
 const iconoVehiculo = (tipoActivo) => (tipoActivo === 'moto' ? '🏍️' : '🚗')
 
+// Textos/labels que cambian según el tipo de negocio (misma pantalla, distinto rubro).
+const CONFIG_POR_TIPO = {
+  lavadero: {
+    titulo: 'Servicios de Lavado', tabOrdenes: '🧼 Órdenes de Lavado', tabEmpleados: '🧼 Lavadores',
+    subtitulo: 'Órdenes de lavado, planes contratados y equipo de lavadores.',
+    mostrarVehiculos: true, iconoOperario: '🧼',
+  },
+  barberia: {
+    titulo: 'Barbería / Agenda', tabOrdenes: '💈 Órdenes de Barbería', tabEmpleados: '💈 Barberos',
+    subtitulo: 'Órdenes de servicio, cortes contratados y equipo de barberos.',
+    mostrarVehiculos: false, iconoOperario: '💈',
+  },
+}
+const config = (tipoNegocio) => CONFIG_POR_TIPO[tipoNegocio] ?? {
+  titulo: 'Taller', tabOrdenes: '🔧 Órdenes de Servicio', tabEmpleados: '👨‍🔧 Empleados del Taller',
+  subtitulo: 'Órdenes de servicio, hoja de vida de vehículos y equipo de mecánicos.',
+  mostrarVehiculos: true, iconoOperario: '👨‍🔧',
+}
+
 export default function Taller() {
   const { user } = useAuth()
   const esMecanico = user?.rol?.nombre === 'Mecanico'
   const esLavadorRol = user?.rol?.nombre === 'Lavador'
   const esOperario = esMecanico || esLavadorRol
-  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
+  const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
+  const esLavadero = tipoNegocio === 'lavadero'
+  const esBarberia = tipoNegocio === 'barberia'
+  const cfg = config(tipoNegocio)
   const [tab, setTab] = useState('ordenes')
 
   const tabs = [
-    { id: 'ordenes', label: esLavadero ? '🧼 Órdenes de Lavado' : '🔧 Órdenes de Servicio' },
+    { id: 'ordenes', label: cfg.tabOrdenes },
     ...(!esOperario ? [
-      { id: 'vehiculos', label: '🏍️ Vehículos / Activos' },
-      { id: 'empleados', label: esLavadero ? '🧼 Lavadores' : '👨‍🔧 Empleados del Taller' },
+      ...(cfg.mostrarVehiculos ? [{ id: 'vehiculos', label: '🏍️ Vehículos / Activos' }] : []),
+      { id: 'empleados', label: cfg.tabEmpleados },
     ] : []),
   ]
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">{esLavadero ? 'Servicios de Lavado' : 'Taller'}</h1>
+      <h1 className="text-2xl font-bold mb-1">{cfg.titulo}</h1>
       <p className="text-slate-400 text-sm mb-5">
-        {esOperario
-          ? 'Tus órdenes asignadas: registra el trabajo realizado y los repuestos usados.'
-          : esLavadero
-            ? 'Órdenes de lavado, planes contratados y equipo de lavadores.'
-            : 'Órdenes de servicio, hoja de vida de vehículos y equipo de mecánicos.'}
+        {esOperario ? 'Tus órdenes asignadas: registra el trabajo realizado y los repuestos usados.' : cfg.subtitulo}
       </p>
 
       <div className="flex gap-2 mb-6 flex-wrap">
@@ -68,9 +86,9 @@ export default function Taller() {
         {!esOperario && <BuscadorHistorial />}
       </div>
 
-      {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} />}
-      {tab === 'vehiculos' && !esOperario && <Vehiculos />}
-      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} />}
+      {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} esBarberia={esBarberia} iconoOperario={cfg.iconoOperario} />}
+      {tab === 'vehiculos' && !esOperario && cfg.mostrarVehiculos && <Vehiculos />}
+      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} esBarberia={esBarberia} />}
     </div>
   )
 }
@@ -153,7 +171,7 @@ function BuscadorHistorial() {
 
 /* ============ Órdenes de servicio ============ */
 // esMecanico aquí significa "operario limitado" (rol Mecanico o Lavador): solo ve lo suyo, sin precios.
-function Ordenes({ esMecanico, esLavadero }) {
+function Ordenes({ esMecanico, esLavadero, esBarberia, iconoOperario = '👨‍🔧' }) {
   const [ordenes, setOrdenes] = useState([])
   const [estado, setEstado] = useState('')
   const [buscar, setBuscar] = useState('')
@@ -202,7 +220,7 @@ function Ordenes({ esMecanico, esLavadero }) {
             {Object.entries(ESTADOS).map(([v, e]) => <option key={v} value={v}>{e.label}</option>)}
           </select>
         )}
-        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar orden, cliente, placa…" className="input !mt-0 w-56" />
+        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={esBarberia ? 'Buscar orden, cliente…' : 'Buscar orden, cliente, placa…'} className="input !mt-0 w-56" />
         {!esMecanico && (
           <button onClick={() => setCreando(true)}
             className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nueva orden</button>
@@ -226,8 +244,9 @@ function Ordenes({ esMecanico, esLavadero }) {
                   <span className="text-sm text-slate-400">{iconoVehiculo(o.asset_vehicle.tipo_activo)} {o.asset_vehicle.marca} {o.asset_vehicle.modelo} · {o.asset_vehicle.placa_identificador}</span>
                 )}
                 {o.plan_lavado && <span className="text-sm text-slate-400">🧼 {o.plan_lavado.nombre}</span>}
+                {o.servicio && <span className="text-sm text-slate-400">💈 {o.servicio.nombre}</span>}
                 {o.mecanico_asignado && (
-                  <span className="text-sm text-slate-400">{esLavadero ? '🧼' : '👨‍🔧'} {o.mecanico_asignado.nombre} {o.mecanico_asignado.apellido}</span>
+                  <span className="text-sm text-slate-400">{iconoOperario} {o.mecanico_asignado.nombre} {o.mecanico_asignado.apellido}</span>
                 )}
                 {!esMecanico && <span className="ml-auto font-semibold">{COP(o.total)}</span>}
               </div>
@@ -291,8 +310,10 @@ function ModalCrearOrden({ onClose, onCreada }) {
   const esTallerVehiculos = ['taller_motos', 'taller_carros'].includes(tipoNegocio)
   const esServicioTecnico = ['taller_general', 'otro'].includes(tipoNegocio)
   const esLavadero = tipoNegocio === 'lavadero'
-  // El vehículo es obligatorio en talleres y lavadero (el backend también lo exige).
+  const esBarberia = tipoNegocio === 'barberia'
+  // El vehículo es obligatorio en talleres y lavadero; la barbería no maneja vehículos.
   const vehiculoObligatorio = esTallerVehiculos || esServicioTecnico || esLavadero
+  const mostrarVehiculo = !esBarberia
 
   const [resultados, setResultados] = useState([])
   const [buscarCliente, setBuscarCliente] = useState('')
@@ -300,7 +321,8 @@ function ModalCrearOrden({ onClose, onCreada }) {
   const [vehiculos, setVehiculos] = useState([])
   const [empleados, setEmpleados] = useState([])
   const [planes, setPlanes] = useState([])
-  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', plan_lavado_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '', km_entrada: '', nivel_gasolina: '', accesorios: '' })
+  const [servicios, setServicios] = useState([])
+  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', plan_lavado_id: '', servicio_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '', km_entrada: '', nivel_gasolina: '', accesorios: '' })
   const [nuevoVehiculo, setNuevoVehiculo] = useState(null) // {placa, marca, modelo}
   // Checklist de entrada (talleres y lavadero): estado visual del vehículo al recibirlo.
   const [checklist, setChecklist] = useState(
@@ -314,7 +336,8 @@ function ModalCrearOrden({ onClose, onCreada }) {
   useEffect(() => {
     api('/empleados').then((r) => setEmpleados(r.data ?? [])).catch(() => {})
     if (esLavadero) api('/planes-lavado').then(setPlanes).catch(() => {})
-  }, [esLavadero])
+    if (esBarberia) api('/servicios').then(setServicios).catch(() => {})
+  }, [esLavadero, esBarberia])
 
   // Búsqueda reactiva: los resultados son una lista clicable, y el cliente
   // elegido queda fijado aparte (no se pierde al seguir escribiendo).
@@ -328,11 +351,11 @@ function ModalCrearOrden({ onClose, onCreada }) {
   }, [buscarCliente])
 
   useEffect(() => {
-    if (!clienteSel?.id) { setVehiculos([]); return }
+    if (!mostrarVehiculo || !clienteSel?.id) { setVehiculos([]); return }
     api(`/activos?cliente_id=${clienteSel.id}`)
       .then((r) => setVehiculos(r.data ?? []))
       .catch((e) => setErrorCarga(e.message || 'No se pudieron cargar los vehículos.'))
-  }, [clienteSel])
+  }, [clienteSel, mostrarVehiculo])
 
   async function crear(e) {
     e.preventDefault()
@@ -358,6 +381,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
         asset_vehicle_id: vehiculoId ? Number(vehiculoId) : null,
         operables_employee_id: form.operables_employee_id ? Number(form.operables_employee_id) : null,
         plan_lavado_id: form.plan_lavado_id ? Number(form.plan_lavado_id) : null,
+        servicio_id: form.servicio_id ? Number(form.servicio_id) : null,
         descripcion_trabajo: form.descripcion_trabajo || null,
         fecha_entrega_estimada: form.fecha_entrega_estimada || null,
         km_entrada: form.km_entrada ? aNumero(form.km_entrada) : null,
@@ -378,7 +402,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4">Nueva orden de servicio</h2>
+        <h2 className="text-lg font-bold mb-4">{esBarberia ? 'Nueva orden de barbería' : 'Nueva orden de servicio'}</h2>
         <form onSubmit={crear} className="space-y-3">
           {errorCarga && <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-300">{errorCarga}</div>}
 
@@ -407,32 +431,36 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </label>
           )}
 
-          <label className="block text-sm text-slate-300">Vehículo / equipo del cliente{vehiculoObligatorio && ' *'}
-            <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1"
-              disabled={!!nuevoVehiculo || !clienteSel} required={vehiculoObligatorio && !nuevoVehiculo}>
-              <option value="">{clienteSel ? (vehiculos.length ? '— Sin vehículo —' : 'Este cliente no tiene vehículos registrados') : 'Primero elige el cliente'}</option>
-              {vehiculos.map((v) => <option key={v.id} value={v.id}>{v.marca} {v.modelo} · {v.placa_identificador ?? 's/placa'}</option>)}
-            </select>
-          </label>
-
-          {nuevoVehiculo ? (
-            <div className="rounded-lg border border-slate-700 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Nuevo vehículo</p>
-                <button type="button" onClick={() => setNuevoVehiculo(null)} className="text-xs text-slate-400 hover:text-white">Cancelar</button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input placeholder="Placa" value={nuevoVehiculo.placa ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, placa: e.target.value.toUpperCase() })} className="input !mt-0" />
-                <select value={nuevoVehiculo.tipo ?? 'moto'} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, tipo: e.target.value })} className="input !mt-0">
-                  <option value="moto">Moto</option><option value="auto">Auto</option><option value="celular">Celular</option><option value="otro">Otro</option>
+          {mostrarVehiculo && (
+            <>
+              <label className="block text-sm text-slate-300">Vehículo / equipo del cliente{vehiculoObligatorio && ' *'}
+                <select value={form.asset_vehicle_id} onChange={set('asset_vehicle_id')} className="input mt-1"
+                  disabled={!!nuevoVehiculo || !clienteSel} required={vehiculoObligatorio && !nuevoVehiculo}>
+                  <option value="">{clienteSel ? (vehiculos.length ? '— Sin vehículo —' : 'Este cliente no tiene vehículos registrados') : 'Primero elige el cliente'}</option>
+                  {vehiculos.map((v) => <option key={v.id} value={v.id}>{v.marca} {v.modelo} · {v.placa_identificador ?? 's/placa'}</option>)}
                 </select>
-                <input placeholder="Marca *" value={nuevoVehiculo.marca ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, marca: e.target.value })} className="input !mt-0" />
-                <input placeholder="Modelo *" value={nuevoVehiculo.modelo ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, modelo: e.target.value })} className="input !mt-0" />
-              </div>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setNuevoVehiculo({ tipo: 'moto' })} disabled={!clienteSel}
-              className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-40">+ Registrar vehículo nuevo</button>
+              </label>
+
+              {nuevoVehiculo ? (
+                <div className="rounded-lg border border-slate-700 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">Nuevo vehículo</p>
+                    <button type="button" onClick={() => setNuevoVehiculo(null)} className="text-xs text-slate-400 hover:text-white">Cancelar</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Placa" value={nuevoVehiculo.placa ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, placa: e.target.value.toUpperCase() })} className="input !mt-0" />
+                    <select value={nuevoVehiculo.tipo ?? 'moto'} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, tipo: e.target.value })} className="input !mt-0">
+                      <option value="moto">Moto</option><option value="auto">Auto</option><option value="celular">Celular</option><option value="otro">Otro</option>
+                    </select>
+                    <input placeholder="Marca *" value={nuevoVehiculo.marca ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, marca: e.target.value })} className="input !mt-0" />
+                    <input placeholder="Modelo *" value={nuevoVehiculo.modelo ?? ''} onChange={(e) => setNuevoVehiculo({ ...nuevoVehiculo, modelo: e.target.value })} className="input !mt-0" />
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setNuevoVehiculo({ tipo: 'moto' })} disabled={!clienteSel}
+                  className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-40">+ Registrar vehículo nuevo</button>
+              )}
+            </>
           )}
 
           {esLavadero && (
@@ -446,7 +474,18 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </label>
           )}
 
-          <label className="block text-sm text-slate-300">{esLavadero ? 'Lavador asignado' : 'Mecánico / técnico asignado'}
+          {esBarberia && (
+            <label className="block text-sm text-slate-300">Tipo de corte / servicio
+              <select value={form.servicio_id} onChange={set('servicio_id')} className="input mt-1">
+                <option value="">— Sin servicio —</option>
+                {servicios.filter((s) => s.activo).map((s) => (
+                  <option key={s.id} value={s.id}>{s.nombre} · {s.duracion_min} min · ${Number(s.precio).toLocaleString()}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className="block text-sm text-slate-300">{esLavadero ? 'Lavador asignado' : esBarberia ? 'Barbero / estilista asignado' : 'Mecánico / técnico asignado'}
             <select value={form.operables_employee_id} onChange={set('operables_employee_id')} className="input mt-1">
               <option value="">— Sin asignar —</option>
               {empleados.map((m) => <option key={m.id} value={m.id}>{m.nombre} {m.apellido}</option>)}
@@ -486,7 +525,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </div>
           )}
 
-          <label className="block text-sm text-slate-300">{esLavadero ? 'Notas adicionales (opcional)' : esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
+          <label className="block text-sm text-slate-300">{esLavadero || esBarberia ? 'Notas adicionales (opcional)' : esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
             <textarea value={form.descripcion_trabajo} onChange={set('descripcion_trabajo')} rows="3" className="input mt-1" placeholder="Ej: cambio de aceite, revisión de frenos…" />
           </label>
 
@@ -508,7 +547,10 @@ function ModalCrearOrden({ onClose, onCreada }) {
 
 function ModalOrden({ id, esMecanico, onClose }) {
   const { user } = useAuth()
-  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
+  const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
+  const esLavadero = tipoNegocio === 'lavadero'
+  const esBarberia = tipoNegocio === 'barberia'
+  const iconoOperario = esLavadero ? '🧼' : esBarberia ? '💈' : '👨‍🔧'
   const [orden, setOrden] = useState(null)
   const [productos, setProductos] = useState([])
   const [empleados, setEmpleados] = useState([])
@@ -574,7 +616,8 @@ function ModalOrden({ id, esMecanico, onClose }) {
               {orden.asset_vehicle && <> · {iconoVehiculo(orden.asset_vehicle.tipo_activo)} {orden.asset_vehicle.marca} {orden.asset_vehicle.modelo} ({orden.asset_vehicle.placa_identificador ?? 's/placa'})</>}
             </p>
             {orden.plan_lavado && <p className="text-sm text-slate-400">🧼 Plan: {orden.plan_lavado.nombre}</p>}
-            {orden.mecanico_asignado && <p className="text-sm text-slate-400">{esLavadero ? '🧼' : '👨‍🔧'} {orden.mecanico_asignado.nombre} {orden.mecanico_asignado.apellido}</p>}
+            {orden.servicio && <p className="text-sm text-slate-400">💈 Servicio: {orden.servicio.nombre}</p>}
+            {orden.mecanico_asignado && <p className="text-sm text-slate-400">{iconoOperario} {orden.mecanico_asignado.nombre} {orden.mecanico_asignado.apellido}</p>}
             {(orden.km_entrada || orden.nivel_gasolina != null || orden.accesorios) && (
               <p className="text-sm text-slate-400">
                 {orden.km_entrada ? `📏 ${Number(orden.km_entrada).toLocaleString('es-CO')} km` : ''}
@@ -806,9 +849,10 @@ function ModalVehiculo({ onClose, onGuardado }) {
 }
 
 /* ============ Empleados del taller ============ */
-function Empleados({ esLavadero }) {
+function Empleados({ esLavadero, esBarberia }) {
   const [lista, setLista] = useState([])
   const [editando, setEditando] = useState(null) // null | 'nuevo' | empleado
+  const icono = esLavadero ? '🧼' : esBarberia ? '💈' : '👨‍🔧'
 
   const cargar = useCallback(() => api('/empleados').then((r) => setLista(r.data ?? [])).catch(() => {}), [])
   useEffect(() => { cargar() }, [cargar])
@@ -828,7 +872,7 @@ function Empleados({ esLavadero }) {
         {lista.map((m) => (
           <div key={m.id} className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
             <div className="flex items-center justify-between">
-              <span className="font-bold">{esLavadero ? '🧼' : '👨‍🔧'} {m.nombre} {m.apellido}</span>
+              <span className="font-bold">{icono} {m.nombre} {m.apellido}</span>
               <span className="text-xs rounded-full bg-slate-700 px-2 py-0.5">{m.tipo_operario}</span>
             </div>
             <p className="text-sm text-slate-400 mt-1">CC {m.ci_cedula}{m.telefono ? ` · ${m.telefono}` : ''}</p>
@@ -841,26 +885,32 @@ function Empleados({ esLavadero }) {
             </div>
           </div>
         ))}
-        {lista.length === 0 && <p className="text-slate-500 col-span-2 text-center py-6">{esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}</p>}
+        {lista.length === 0 && (
+          <p className="text-slate-500 col-span-2 text-center py-6">
+            {esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : esBarberia ? 'Sin barberos. Crea tu equipo de estilistas.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}
+          </p>
+        )}
       </div>
       {editando && (
-        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero}
+        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero} esBarberia={esBarberia}
           onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar() }} />
       )}
-      <p className="text-xs text-slate-500 mt-4">
-        💡 Para que {esLavadero ? 'un lavador entre' : 'un mecánico entre'} al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
-        <span className="font-semibold"> {esLavadero ? 'Lavador' : 'Mecanico'}</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
-      </p>
+      {!esBarberia && (
+        <p className="text-xs text-slate-500 mt-4">
+          💡 Para que {esLavadero ? 'un lavador entre' : 'un mecánico entre'} al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
+          <span className="font-semibold"> {esLavadero ? 'Lavador' : 'Mecanico'}</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
+        </p>
+      )}
     </div>
   )
 }
 
-function ModalEmpleado({ empleado, esLavadero, onClose, onGuardado }) {
+function ModalEmpleado({ empleado, esLavadero, esBarberia, onClose, onGuardado }) {
   const [tipos, setTipos] = useState([])
   const [form, setForm] = useState({
     nombre: empleado?.nombre ?? '', apellido: empleado?.apellido ?? '',
     ci_cedula: empleado?.ci_cedula ?? '', telefono: empleado?.telefono ?? '',
-    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : 'mecanico'),
+    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : esBarberia ? 'barbero' : 'mecanico'),
     comision_default: empleado?.comision_default ?? '',
     tipo_comision_default: empleado?.tipo_comision_default ?? 'percentage',
   })
@@ -886,7 +936,7 @@ function ModalEmpleado({ empleado, esLavadero, onClose, onGuardado }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : esLavadero ? 'Nuevo lavador' : 'Nuevo empleado del taller'}</h2>
+        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : esLavadero ? 'Nuevo lavador' : esBarberia ? 'Nuevo barbero' : 'Nuevo empleado del taller'}</h2>
         <form onSubmit={guardar} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm text-slate-300">Nombre *
