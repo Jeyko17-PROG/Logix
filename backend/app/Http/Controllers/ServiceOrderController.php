@@ -45,7 +45,8 @@ class ServiceOrderController extends Controller
     {
         $query = ServiceOrder::with([
             'cliente:id,nombre_completo',
-            'assetVehicle:id,placa_identificador,marca,modelo',
+            'assetVehicle:id,placa_identificador,marca,modelo,tipo_activo',
+            'planLavado:id,nombre,icono',
             'mecanicoAsignado:id,nombre,apellido',
             'details.operablesEmployee:id,nombre,apellido',
             'details.producto:id,nombre,precio_venta',
@@ -86,7 +87,7 @@ class ServiceOrderController extends Controller
         $data['numero_orden'] = ServiceOrder::generarNumeroOrden($ownerId);
 
         $orden = ServiceOrder::create($data);
-        return response()->json($orden->load('cliente:id,nombre_completo', 'assetVehicle:id,placa_identificador,marca,modelo', 'mecanicoAsignado:id,nombre,apellido'), 201);
+        return response()->json($orden->load('cliente:id,nombre_completo', 'assetVehicle:id,placa_identificador,marca,modelo,tipo_activo', 'planLavado:id,nombre,icono', 'mecanicoAsignado:id,nombre,apellido'), 201);
     }
 
     /**
@@ -100,7 +101,8 @@ class ServiceOrderController extends Controller
             $serviceOrder->load([
                 'cliente:id,nombre_completo,telefono,email',
                 'mecanicoAsignado:id,nombre,apellido,ci_cedula',
-                'assetVehicle:id,placa_identificador,marca,modelo,anio,color',
+                'assetVehicle:id,placa_identificador,marca,modelo,anio,color,tipo_activo',
+                'planLavado:id,nombre,precio,icono',
                 'details' => fn ($q) => $q->with([
                     'producto:id,nombre,precio_venta,is_service',
                     'operablesEmployee:id,nombre,apellido,ci_cedula',
@@ -135,7 +137,7 @@ class ServiceOrderController extends Controller
         ]);
 
         // El mecánico solo registra diagnóstico/avance: no toca anticipos ni reasigna la orden.
-        if ($request->user()->esMecanico()) {
+        if ($this->esOperarioLimitado($request->user())) {
             $data = array_intersect_key($data, array_flip(['descripcion_trabajo', 'estado', 'checklist_entrada']));
         }
 
@@ -165,7 +167,7 @@ class ServiceOrderController extends Controller
         $producto = Producto::find($data['producto_id']);
 
         // El mecánico no puede fijar precios ni comisiones: se usa el precio de lista del producto.
-        if ($request->user()->esMecanico()) {
+        if ($this->esOperarioLimitado($request->user())) {
             $data['precio_unitario'] = (float) ($producto?->precio_venta ?? 0);
             unset($data['tiene_comision'], $data['tipo_comision'], $data['comision_value']);
             $data['tiene_comision'] = false;
@@ -219,7 +221,7 @@ class ServiceOrderController extends Controller
         ]);
 
         // El mecánico solo puede ajustar cantidades, nunca precios ni comisiones.
-        if ($request->user()->esMecanico()) {
+        if ($this->esOperarioLimitado($request->user())) {
             $data = array_intersect_key($data, array_flip(['cantidad']));
         }
 
@@ -408,6 +410,7 @@ class ServiceOrderController extends Controller
         return $request->validate([
             'cliente_id' => ['required', 'exists:clientes,id'],
             'asset_vehicle_id' => [$conVehiculo ? 'required' : 'nullable', 'exists:assets_vehicles,id'],
+            'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'operables_employee_id' => ['nullable', 'exists:operables_employees,id'],
             'descripcion_trabajo' => ['nullable', 'string'],
             // Talleres/lavadero: estado de entrada del vehículo. Servicio técnico: accesorios recibidos.
@@ -424,13 +427,13 @@ class ServiceOrderController extends Controller
     }
 
     /**
-     * Si el usuario tiene rol Mecanico, limita la consulta a las órdenes
-     * asignadas a su ficha de empleado (a nivel de orden o de detalle).
+     * Si el usuario tiene rol Mecanico o Lavador, limita la consulta a las
+     * órdenes asignadas a su ficha de empleado (a nivel de orden o de detalle).
      */
     private function limitarAMecanico(Request $request, Builder $query): void
     {
         $user = $request->user();
-        if (! $user?->esMecanico()) {
+        if (! $this->esOperarioLimitado($user)) {
             return;
         }
 
@@ -442,11 +445,11 @@ class ServiceOrderController extends Controller
         });
     }
 
-    /** Aborta con 403 si un Mecanico intenta acceder a una orden que no tiene asignada. */
+    /** Aborta con 403 si un Mecanico/Lavador intenta acceder a una orden que no tiene asignada. */
     private function autorizarMecanico(ServiceOrder $serviceOrder): void
     {
         $user = request()->user();
-        if (! $user?->esMecanico()) {
+        if (! $this->esOperarioLimitado($user)) {
             return;
         }
 
@@ -458,5 +461,11 @@ class ServiceOrderController extends Controller
         if (! $asignada) {
             abort(403, 'Solo puedes ver las órdenes que tienes asignadas.');
         }
+    }
+
+    /** El rol Mecanico (talleres) y el rol Lavador (lavaderos) son ambos "operarios limitados": ven y editan solo lo suyo. */
+    private function esOperarioLimitado(?\App\Models\User $user): bool
+    {
+        return (bool) ($user?->esMecanico() || $user?->esLavador());
     }
 }

@@ -95,4 +95,51 @@ class ProfileController extends Controller
             'user' => $user->fresh()->load('rol'),
         ]);
     }
+
+    /**
+     * Sube/actualiza el logo del negocio (empresa del usuario autenticado).
+     * Se muestra en el portal público de reservas y en el QR de reserva.
+     */
+    public function subirLogoEmpresa(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->esPropietario()) {
+            return response()->json(['message' => 'Solo el propietario del negocio puede cambiar el logo.'], 403);
+        }
+
+        $empresa = $user->empresaDeCobro();
+        if (! $empresa) {
+            return response()->json(['message' => 'Tu cuenta aún no tiene una empresa asociada.'], 422);
+        }
+
+        $request->validate([
+            'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'], // 5 MB
+        ]);
+
+        // Guarda en storage/app/public/logos (accesible vía /storage gracias a storage:link).
+        $path = $request->file('logo')->store('logos', 'public');
+        $url = Storage::url($path);
+
+        $archivo = Archivo::create([
+            'nombre_original' => $request->file('logo')->getClientOriginalName(),
+            'ruta' => $path,
+            'url' => $url,
+            'tipo_mime' => $request->file('logo')->getClientMimeType(),
+            'tamano_bytes' => $request->file('logo')->getSize(),
+            'subido_por' => $user->id,
+        ]);
+
+        // Borra el logo anterior del disco si existía.
+        if ($empresa->logo_url) {
+            $anterior = str_replace('/storage/', '', $empresa->logo_url);
+            Storage::disk('public')->delete($anterior);
+        }
+
+        $empresa->update(['logo_url' => $url]);
+
+        return response()->json([
+            'logo_url' => $url,
+            'archivo_id' => $archivo->id,
+        ]);
+    }
 }

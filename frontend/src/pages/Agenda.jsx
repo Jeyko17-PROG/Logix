@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+
+const iconoVehiculo = (tipo) => (tipo === 'moto' ? '🏍️' : tipo === 'carro' ? '🚗' : '')
 
 const ESTADO_COLOR = {
   PENDIENTE: 'bg-amber-600', CONFIRMADA: 'bg-emerald-600', CANCELADA: 'bg-red-600',
@@ -29,11 +32,14 @@ const startOfWeek = (d) => addDays(d, -d.getDay())
 const fmtHora = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 
 export default function Agenda() {
+  const { user } = useAuth()
+  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
   const [vista, setVista] = useState('dia')
   const [fecha, setFecha] = useState(new Date())
   const [citas, setCitas] = useState([])
   const [clientes, setClientes] = useState([])
   const [servicios, setServicios] = useState([])
+  const [planes, setPlanes] = useState([])
   const [nueva, setNueva] = useState(null) // null | fecha (Date) con la que abrir el formulario
 
   // Rango visible según la vista
@@ -54,8 +60,9 @@ export default function Agenda() {
   useEffect(() => { cargar() }, [desde, hasta]) // eslint-disable-line
   useEffect(() => {
     api('/clientes').then((d) => setClientes(d.data ?? d)).catch(() => {})
-    api('/servicios').then(setServicios).catch(() => {})
-  }, [])
+    if (esLavadero) api('/planes-lavado').then(setPlanes).catch(() => {})
+    else api('/servicios').then(setServicios).catch(() => {})
+  }, [esLavadero])
 
   const citasDe = (d) => citas.filter((c) => c.inicio.slice(0, 10) === ymd(d))
 
@@ -107,7 +114,8 @@ export default function Agenda() {
                 <div>
                   <span className="font-mono text-emerald-400">{fmtHora(c.inicio)}–{fmtHora(c.fin)}</span>
                   <span className="ml-3">{c.cliente?.nombre_completo}</span>
-                  <span className="ml-2 text-slate-400 text-sm">{c.servicio?.nombre ?? ''}</span>
+                  <span className="ml-2 text-slate-400 text-sm">{c.plan_lavado?.nombre ?? c.servicio?.nombre ?? ''}</span>
+                  {c.tipo_vehiculo && <span className="ml-2 text-slate-400 text-sm">{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[c.estado]}`}>{ESTADO_LABEL[c.estado] ?? c.estado}</span>
@@ -143,7 +151,7 @@ export default function Agenda() {
       {vista === 'mes' && <VistaMes fecha={fecha} citas={citas} onDia={(d) => { setFecha(d); setNueva(d) }} />}
 
       {nueva && (
-        <NuevaCita clientes={clientes} servicios={servicios} fechaInicial={nueva}
+        <NuevaCita clientes={clientes} servicios={servicios} planes={planes} esLavadero={esLavadero} fechaInicial={nueva}
           onClose={() => setNueva(null)} onCreada={() => { setNueva(null); cargar() }} />
       )}
     </div>
@@ -189,10 +197,13 @@ function VistaMes({ fecha, citas, onDia }) {
   )
 }
 
-function NuevaCita({ clientes, servicios, fechaInicial, onClose, onCreada }) {
+function NuevaCita({ clientes, servicios, planes, esLavadero, fechaInicial, onClose, onCreada }) {
   const [lista, setLista] = useState(clientes)        // clientes (incluye los creados aquí)
   const [cliente_id, setCliente] = useState('')
   const [servicio_id, setServicio] = useState('')
+  const [plan_lavado_id, setPlan] = useState('')
+  const [tipo_vehiculo, setTipoVehiculo] = useState('')
+  const [placa, setPlaca] = useState('')
   const [fecha, setFecha] = useState(ymd(fechaInicial instanceof Date ? fechaInicial : new Date()))
   const [slots, setSlots] = useState([])
   const [buscando, setBuscando] = useState(false)
@@ -220,18 +231,32 @@ function NuevaCita({ clientes, servicios, fechaInicial, onClose, onCreada }) {
   useEffect(() => {
     let cancelado = false
     setBuscando(true); setError('')
-    api(`/citas/disponibilidad?fecha=${fecha}${servicio_id ? `&servicio_id=${servicio_id}` : ''}`)
+    const filtro = esLavadero
+      ? (plan_lavado_id ? `&plan_lavado_id=${plan_lavado_id}` : '')
+      : (servicio_id ? `&servicio_id=${servicio_id}` : '')
+    api(`/citas/disponibilidad?fecha=${fecha}${filtro}`)
       .then((data) => { if (!cancelado) setSlots(data.slots ?? []) })
       .catch((err) => { if (!cancelado) { setSlots([]); setError(err.message || 'No se pudo cargar la disponibilidad.') } })
       .finally(() => { if (!cancelado) setBuscando(false) })
     return () => { cancelado = true }
-  }, [fecha, servicio_id])
+  }, [fecha, servicio_id, plan_lavado_id, esLavadero])
 
   async function reservar(inicio) {
     if (!cliente_id) { setError('Selecciona o crea un cliente primero.'); return }
+    if (esLavadero && (!tipo_vehiculo || !placa)) { setError('Indica el tipo de vehículo y la placa.'); return }
     setError(''); setGuardando(true)
     try {
-      await api('/citas', { method: 'POST', body: { cliente_id, servicio_id: servicio_id || null, inicio } })
+      await api('/citas', {
+        method: 'POST',
+        body: {
+          cliente_id,
+          servicio_id: servicio_id || null,
+          plan_lavado_id: plan_lavado_id || null,
+          tipo_vehiculo: tipo_vehiculo || null,
+          placa: placa || null,
+          inicio,
+        },
+      })
       onCreada()
     } catch (err) { setError(err.message) } finally { setGuardando(false) }
   }
@@ -254,10 +279,27 @@ function NuevaCita({ clientes, servicios, fechaInicial, onClose, onCreada }) {
               className="rounded-lg bg-slate-600 hover:bg-slate-500 disabled:opacity-50 px-3 text-sm whitespace-nowrap">{creandoCli ? '…' : '+ Crear'}</button>
           </div>
 
-          <select value={servicio_id} onChange={(e) => setServicio(e.target.value)} className="input">
-            <option value="">Servicio (opcional)…</option>
-            {servicios.map((s) => <option key={s.id} value={s.id}>{s.nombre} ({s.duracion_min} min)</option>)}
-          </select>
+          {esLavadero ? (
+            <>
+              <select value={plan_lavado_id} onChange={(e) => setPlan(e.target.value)} className="input">
+                <option value="">Plan de lavado (opcional)…</option>
+                {planes.map((p) => <option key={p.id} value={p.id}>{p.icono ? `${p.icono} ` : ''}{p.nombre} ({p.duracion_min} min)</option>)}
+              </select>
+              <div className="flex gap-2">
+                <select required value={tipo_vehiculo} onChange={(e) => setTipoVehiculo(e.target.value)} className="input">
+                  <option value="">Tipo de vehículo…</option>
+                  <option value="moto">🏍️ Moto</option>
+                  <option value="carro">🚗 Carro</option>
+                </select>
+                <input required placeholder="Placa" value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} className="input uppercase" />
+              </div>
+            </>
+          ) : (
+            <select value={servicio_id} onChange={(e) => setServicio(e.target.value)} className="input">
+              <option value="">Servicio (opcional)…</option>
+              {servicios.map((s) => <option key={s.id} value={s.id}>{s.nombre} ({s.duracion_min} min)</option>)}
+            </select>
+          )}
 
           <div className="grid gap-2">
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input" />

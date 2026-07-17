@@ -18,6 +18,7 @@ class ServiceOrder extends Model
         'owner_id',
         'cliente_id',
         'asset_vehicle_id',
+        'plan_lavado_id',
         'operables_employee_id',
         'numero_orden',
         'estado',
@@ -64,6 +65,11 @@ class ServiceOrder extends Model
     public function assetVehicle(): BelongsTo
     {
         return $this->belongsTo(AssetVehicle::class, 'asset_vehicle_id');
+    }
+
+    public function planLavado(): BelongsTo
+    {
+        return $this->belongsTo(PlanLavado::class, 'plan_lavado_id');
     }
 
     /** Mecánico/técnico responsable de toda la orden. */

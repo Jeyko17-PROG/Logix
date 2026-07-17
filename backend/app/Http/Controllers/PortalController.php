@@ -46,10 +46,12 @@ class PortalController extends Controller
     {
         $id = $this->negocioId($slug);
         $u = User::find($id);
-        $empresa = \App\Models\Empresa::where('owner_user_id', $id)->first();
+        $empresa = \App\Models\Empresa::with('tipoNegocio:id,clave,nombre')->where('owner_user_id', $id)->first();
         return response()->json([
             'nombre' => $empresa?->nombre ?? $u?->name,
             'slug' => $empresa?->reservas_slug ?? $u?->reservas_slug,
+            'logo_url' => $empresa?->logo_url,
+            'tipo_negocio' => $empresa?->tipoNegocio?->clave,
         ]);
     }
 
@@ -61,16 +63,27 @@ class PortalController extends Controller
             ->get(['id', 'nombre', 'descripcion', 'duracion_min', 'precio']);
     }
 
+    /** Planes de lavado activos que el cliente puede reservar (Lavadero). */
+    public function planesLavado(?string $slug = null)
+    {
+        return \App\Models\PlanLavado::where('owner_id', $this->negocioId($slug))
+            ->where('activo', true)->orderBy('orden')->orderBy('nombre')
+            ->get(['id', 'nombre', 'descripcion', 'duracion_min', 'precio', 'aplica_moto', 'aplica_carro', 'icono']);
+    }
+
     /** Horarios disponibles en tiempo real para una fecha. */
     public function disponibilidad(Request $request, ?string $slug = null)
     {
         $data = $request->validate([
             'fecha' => ['required', 'date'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
+            'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
         ]);
 
         $duracion = 30;
-        if (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
+        if (! empty($data['plan_lavado_id']) && $p = \App\Models\PlanLavado::find($data['plan_lavado_id'])) {
+            $duracion = $p->duracion_min;
+        } elseif (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
             $duracion = $s->duracion_min;
         }
 
@@ -81,22 +94,29 @@ class PortalController extends Controller
     /** El cliente reserva una cita desde el portal/QR. */
     public function reservar(Request $request, ?string $slug = null)
     {
+        $negocio = $this->negocioId($slug);
+        $conVehiculo = $this->tipoNegocioDe($negocio) === 'lavadero';
+
         $data = $request->validate([
             'nombre_completo' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email'],
             'telefono' => ['required', 'string', 'max:50'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
+            'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
+            'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
+            'placa' => [$conVehiculo ? 'required' : 'nullable', 'string', 'max:20'],
             'inicio' => ['required', 'date'],
         ]);
 
         $duracion = 30;
-        if (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
+        if (! empty($data['plan_lavado_id']) && $p = \App\Models\PlanLavado::find($data['plan_lavado_id'])) {
+            $duracion = $p->duracion_min;
+        } elseif (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
             $duracion = $s->duracion_min;
         }
 
         $inicio = Carbon::parse($data['inicio']);
         $fin = $inicio->copy()->addMinutes($duracion);
-        $negocio = $this->negocioId($slug);
 
         // Garantía anti doble-reserva (misma lógica que el panel admin).
         $this->agenda->asegurarDisponible($inicio, $fin, null, $negocio);
@@ -112,6 +132,9 @@ class PortalController extends Controller
                 'owner_id' => $negocio,
                 'cliente_id' => $cliente->id,
                 'servicio_id' => $data['servicio_id'] ?? null,
+                'plan_lavado_id' => $data['plan_lavado_id'] ?? null,
+                'tipo_vehiculo' => $data['tipo_vehiculo'] ?? null,
+                'placa' => $data['placa'] ?? null,
                 'inicio' => $inicio,
                 'fin' => $fin,
                 'estado' => 'PENDIENTE',
@@ -130,9 +153,16 @@ class PortalController extends Controller
 
             return response()->json([
                 'mensaje' => 'Reserva confirmada.',
-                'cita' => $cita->load('servicio:id,nombre'),
+                'cita' => $cita->load('servicio:id,nombre', 'planLavado:id,nombre'),
             ], 201);
         });
+    }
+
+    /** Clave del tipo de negocio del dueño resuelto por negocioId(). */
+    private function tipoNegocioDe(int $negocioId): ?string
+    {
+        return \App\Models\Empresa::with('tipoNegocio:id,clave')
+            ->where('owner_user_id', $negocioId)->first()?->tipoNegocio?->clave;
     }
 
     /** Consulta de citas del cliente por su correo (sin login, apto móvil). */
@@ -147,7 +177,7 @@ class PortalController extends Controller
         }
 
         $citas = $cliente->citas()
-            ->with('servicio:id,nombre')
+            ->with('servicio:id,nombre', 'planLavado:id,nombre')
             ->orderByDesc('inicio')
             ->get();
 

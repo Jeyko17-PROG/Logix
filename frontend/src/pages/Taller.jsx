@@ -28,27 +28,34 @@ const Chip = ({ estado }) => (
   </span>
 )
 
+// Ícono según el tipo de vehículo del activo (🏍️ moto, 🚗 carro/otro).
+const iconoVehiculo = (tipoActivo) => (tipoActivo === 'moto' ? '🏍️' : '🚗')
+
 export default function Taller() {
   const { user } = useAuth()
   const esMecanico = user?.rol?.nombre === 'Mecanico'
+  const esLavadorRol = user?.rol?.nombre === 'Lavador'
+  const esOperario = esMecanico || esLavadorRol
   const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
   const [tab, setTab] = useState('ordenes')
 
   const tabs = [
-    { id: 'ordenes', label: '🔧 Órdenes de Servicio' },
-    ...(!esMecanico ? [
+    { id: 'ordenes', label: esLavadero ? '🧼 Órdenes de Lavado' : '🔧 Órdenes de Servicio' },
+    ...(!esOperario ? [
       { id: 'vehiculos', label: '🏍️ Vehículos / Activos' },
-      { id: 'empleados', label: '👨‍🔧 Empleados del Taller' },
+      { id: 'empleados', label: esLavadero ? '🧼 Lavadores' : '👨‍🔧 Empleados del Taller' },
     ] : []),
   ]
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">Taller</h1>
+      <h1 className="text-2xl font-bold mb-1">{esLavadero ? 'Servicios de Lavado' : 'Taller'}</h1>
       <p className="text-slate-400 text-sm mb-5">
-        {esMecanico
+        {esOperario
           ? 'Tus órdenes asignadas: registra el trabajo realizado y los repuestos usados.'
-          : 'Órdenes de servicio, hoja de vida de vehículos y equipo de mecánicos.'}
+          : esLavadero
+            ? 'Órdenes de lavado, planes contratados y equipo de lavadores.'
+            : 'Órdenes de servicio, hoja de vida de vehículos y equipo de mecánicos.'}
       </p>
 
       <div className="flex gap-2 mb-6 flex-wrap">
@@ -58,12 +65,12 @@ export default function Taller() {
             {t.label}
           </button>
         ))}
-        {!esMecanico && <BuscadorHistorial />}
+        {!esOperario && <BuscadorHistorial />}
       </div>
 
-      {tab === 'ordenes' && <Ordenes esMecanico={esMecanico} esLavadero={esLavadero} />}
-      {tab === 'vehiculos' && !esMecanico && <Vehiculos />}
-      {tab === 'empleados' && !esMecanico && <Empleados />}
+      {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} />}
+      {tab === 'vehiculos' && !esOperario && <Vehiculos />}
+      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} />}
     </div>
   )
 }
@@ -145,6 +152,7 @@ function BuscadorHistorial() {
 }
 
 /* ============ Órdenes de servicio ============ */
+// esMecanico aquí significa "operario limitado" (rol Mecanico o Lavador): solo ve lo suyo, sin precios.
 function Ordenes({ esMecanico, esLavadero }) {
   const [ordenes, setOrdenes] = useState([])
   const [estado, setEstado] = useState('')
@@ -215,10 +223,11 @@ function Ordenes({ esMecanico, esLavadero }) {
                 <Chip estado={o.estado} />
                 <span className="text-sm text-slate-300">{o.cliente?.nombre_completo}</span>
                 {o.asset_vehicle && (
-                  <span className="text-sm text-slate-400">🏍️ {o.asset_vehicle.marca} {o.asset_vehicle.modelo} · {o.asset_vehicle.placa_identificador}</span>
+                  <span className="text-sm text-slate-400">{iconoVehiculo(o.asset_vehicle.tipo_activo)} {o.asset_vehicle.marca} {o.asset_vehicle.modelo} · {o.asset_vehicle.placa_identificador}</span>
                 )}
+                {o.plan_lavado && <span className="text-sm text-slate-400">🧼 {o.plan_lavado.nombre}</span>}
                 {o.mecanico_asignado && (
-                  <span className="text-sm text-slate-400">👨‍🔧 {o.mecanico_asignado.nombre} {o.mecanico_asignado.apellido}</span>
+                  <span className="text-sm text-slate-400">{esLavadero ? '🧼' : '👨‍🔧'} {o.mecanico_asignado.nombre} {o.mecanico_asignado.apellido}</span>
                 )}
                 {!esMecanico && <span className="ml-auto font-semibold">{COP(o.total)}</span>}
               </div>
@@ -255,8 +264,9 @@ function KanbanLavadero({ ordenes, onAvanzar, onAbrir }) {
                   <p className="font-semibold text-sm">{o.numero_orden}</p>
                   <p className="text-xs text-slate-400">{o.cliente?.nombre_completo}</p>
                   {o.asset_vehicle && (
-                    <p className="text-xs text-slate-400">🏍️ {o.asset_vehicle.placa_identificador ?? '—'}</p>
+                    <p className="text-xs text-slate-400">{iconoVehiculo(o.asset_vehicle.tipo_activo)} {o.asset_vehicle.placa_identificador ?? '—'}</p>
                   )}
+                  {o.plan_lavado && <p className="text-xs text-slate-400">🧼 {o.plan_lavado.nombre}</p>}
                 </button>
                 {KANBAN_LAVADERO[ci + 1] && (
                   <button onClick={() => onAvanzar(o, KANBAN_LAVADERO[ci + 1].valor)}
@@ -289,7 +299,8 @@ function ModalCrearOrden({ onClose, onCreada }) {
   const [clienteSel, setClienteSel] = useState(null) // cliente elegido (objeto completo, no depende de la lista)
   const [vehiculos, setVehiculos] = useState([])
   const [empleados, setEmpleados] = useState([])
-  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '', km_entrada: '', nivel_gasolina: '', accesorios: '' })
+  const [planes, setPlanes] = useState([])
+  const [form, setForm] = useState({ asset_vehicle_id: '', operables_employee_id: '', plan_lavado_id: '', descripcion_trabajo: '', fecha_entrega_estimada: '', km_entrada: '', nivel_gasolina: '', accesorios: '' })
   const [nuevoVehiculo, setNuevoVehiculo] = useState(null) // {placa, marca, modelo}
   // Checklist de entrada (talleres y lavadero): estado visual del vehículo al recibirlo.
   const [checklist, setChecklist] = useState(
@@ -302,7 +313,8 @@ function ModalCrearOrden({ onClose, onCreada }) {
 
   useEffect(() => {
     api('/empleados').then((r) => setEmpleados(r.data ?? [])).catch(() => {})
-  }, [])
+    if (esLavadero) api('/planes-lavado').then(setPlanes).catch(() => {})
+  }, [esLavadero])
 
   // Búsqueda reactiva: los resultados son una lista clicable, y el cliente
   // elegido queda fijado aparte (no se pierde al seguir escribiendo).
@@ -345,6 +357,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
         cliente_id: Number(clienteSel.id),
         asset_vehicle_id: vehiculoId ? Number(vehiculoId) : null,
         operables_employee_id: form.operables_employee_id ? Number(form.operables_employee_id) : null,
+        plan_lavado_id: form.plan_lavado_id ? Number(form.plan_lavado_id) : null,
         descripcion_trabajo: form.descripcion_trabajo || null,
         fecha_entrega_estimada: form.fecha_entrega_estimada || null,
         km_entrada: form.km_entrada ? aNumero(form.km_entrada) : null,
@@ -422,7 +435,18 @@ function ModalCrearOrden({ onClose, onCreada }) {
               className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-40">+ Registrar vehículo nuevo</button>
           )}
 
-          <label className="block text-sm text-slate-300">Mecánico / técnico asignado
+          {esLavadero && (
+            <label className="block text-sm text-slate-300">Plan de lavado
+              <select value={form.plan_lavado_id} onChange={set('plan_lavado_id')} className="input mt-1">
+                <option value="">— Sin plan —</option>
+                {planes.filter((p) => p.activo).map((p) => (
+                  <option key={p.id} value={p.id}>{p.icono ? `${p.icono} ` : ''}{p.nombre} · {p.duracion_min} min · ${Number(p.precio).toLocaleString()}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className="block text-sm text-slate-300">{esLavadero ? 'Lavador asignado' : 'Mecánico / técnico asignado'}
             <select value={form.operables_employee_id} onChange={set('operables_employee_id')} className="input mt-1">
               <option value="">— Sin asignar —</option>
               {empleados.map((m) => <option key={m.id} value={m.id}>{m.nombre} {m.apellido}</option>)}
@@ -462,7 +486,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </div>
           )}
 
-          <label className="block text-sm text-slate-300">{esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
+          <label className="block text-sm text-slate-300">{esLavadero ? 'Notas adicionales (opcional)' : esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
             <textarea value={form.descripcion_trabajo} onChange={set('descripcion_trabajo')} rows="3" className="input mt-1" placeholder="Ej: cambio de aceite, revisión de frenos…" />
           </label>
 
@@ -547,9 +571,10 @@ function ModalOrden({ id, esMecanico, onClose }) {
             <h2 className="text-lg font-bold flex items-center gap-2">{orden.numero_orden} <Chip estado={orden.estado} /></h2>
             <p className="text-sm text-slate-400">
               {orden.cliente?.nombre_completo} · {orden.cliente?.telefono ?? ''}
-              {orden.asset_vehicle && <> · 🏍️ {orden.asset_vehicle.marca} {orden.asset_vehicle.modelo} ({orden.asset_vehicle.placa_identificador ?? 's/placa'})</>}
+              {orden.asset_vehicle && <> · {iconoVehiculo(orden.asset_vehicle.tipo_activo)} {orden.asset_vehicle.marca} {orden.asset_vehicle.modelo} ({orden.asset_vehicle.placa_identificador ?? 's/placa'})</>}
             </p>
-            {orden.mecanico_asignado && <p className="text-sm text-slate-400">👨‍🔧 {orden.mecanico_asignado.nombre} {orden.mecanico_asignado.apellido}</p>}
+            {orden.plan_lavado && <p className="text-sm text-slate-400">🧼 Plan: {orden.plan_lavado.nombre}</p>}
+            {orden.mecanico_asignado && <p className="text-sm text-slate-400">{esLavadero ? '🧼' : '👨‍🔧'} {orden.mecanico_asignado.nombre} {orden.mecanico_asignado.apellido}</p>}
             {(orden.km_entrada || orden.nivel_gasolina != null || orden.accesorios) && (
               <p className="text-sm text-slate-400">
                 {orden.km_entrada ? `📏 ${Number(orden.km_entrada).toLocaleString('es-CO')} km` : ''}
@@ -781,7 +806,7 @@ function ModalVehiculo({ onClose, onGuardado }) {
 }
 
 /* ============ Empleados del taller ============ */
-function Empleados() {
+function Empleados({ esLavadero }) {
   const [lista, setLista] = useState([])
   const [editando, setEditando] = useState(null) // null | 'nuevo' | empleado
 
@@ -803,7 +828,7 @@ function Empleados() {
         {lista.map((m) => (
           <div key={m.id} className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
             <div className="flex items-center justify-between">
-              <span className="font-bold">👨‍🔧 {m.nombre} {m.apellido}</span>
+              <span className="font-bold">{esLavadero ? '🧼' : '👨‍🔧'} {m.nombre} {m.apellido}</span>
               <span className="text-xs rounded-full bg-slate-700 px-2 py-0.5">{m.tipo_operario}</span>
             </div>
             <p className="text-sm text-slate-400 mt-1">CC {m.ci_cedula}{m.telefono ? ` · ${m.telefono}` : ''}</p>
@@ -816,26 +841,26 @@ function Empleados() {
             </div>
           </div>
         ))}
-        {lista.length === 0 && <p className="text-slate-500 col-span-2 text-center py-6">Sin empleados. Crea tu equipo de mecánicos/técnicos.</p>}
+        {lista.length === 0 && <p className="text-slate-500 col-span-2 text-center py-6">{esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}</p>}
       </div>
       {editando && (
-        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando}
+        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero}
           onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar() }} />
       )}
       <p className="text-xs text-slate-500 mt-4">
-        💡 Para que un mecánico entre al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
-        <span className="font-semibold"> Mecanico</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
+        💡 Para que {esLavadero ? 'un lavador entre' : 'un mecánico entre'} al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
+        <span className="font-semibold"> {esLavadero ? 'Lavador' : 'Mecanico'}</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
       </p>
     </div>
   )
 }
 
-function ModalEmpleado({ empleado, onClose, onGuardado }) {
+function ModalEmpleado({ empleado, esLavadero, onClose, onGuardado }) {
   const [tipos, setTipos] = useState([])
   const [form, setForm] = useState({
     nombre: empleado?.nombre ?? '', apellido: empleado?.apellido ?? '',
     ci_cedula: empleado?.ci_cedula ?? '', telefono: empleado?.telefono ?? '',
-    tipo_operario: empleado?.tipo_operario ?? 'mecanico',
+    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : 'mecanico'),
     comision_default: empleado?.comision_default ?? '',
     tipo_comision_default: empleado?.tipo_comision_default ?? 'percentage',
   })
@@ -861,7 +886,7 @@ function ModalEmpleado({ empleado, onClose, onGuardado }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : 'Nuevo empleado del taller'}</h2>
+        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : esLavadero ? 'Nuevo lavador' : 'Nuevo empleado del taller'}</h2>
         <form onSubmit={guardar} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm text-slate-300">Nombre *

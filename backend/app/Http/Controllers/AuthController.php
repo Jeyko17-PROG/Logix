@@ -274,6 +274,7 @@ class AuthController extends Controller
                 'tipo_negocio' => $empresa->tipoNegocio?->only(['id', 'clave', 'nombre']),
                 'plan' => $empresa->plan?->only(['id', 'nombre']),
                 'estado' => $empresa->estado,
+                'logo_url' => $empresa->logo_url,
                 'es_admin_empresa' => (bool) $user->es_admin_empresa,
             ]);
         }

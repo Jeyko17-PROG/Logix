@@ -13,9 +13,12 @@ class Cita extends Model
 
     protected $table = 'citas';
 
+    protected $appends = ['icono_vehiculo'];
+
     protected $fillable = [
         'owner_id',
         'cliente_id', 'servicio_id', 'empleado_id',
+        'tipo_vehiculo', 'placa', 'plan_lavado_id',
         'inicio', 'fin', 'estado', 'observaciones', 'origen', 'created_by',
     ];
 
@@ -34,9 +37,24 @@ class Cita extends Model
         return $this->belongsTo(Servicio::class, 'servicio_id');
     }
 
+    public function planLavado(): BelongsTo
+    {
+        return $this->belongsTo(PlanLavado::class, 'plan_lavado_id');
+    }
+
     public function empleado(): BelongsTo
     {
         return $this->belongsTo(User::class, 'empleado_id');
+    }
+
+    /** Ícono del tipo de vehículo, para pintar en agenda/portal/QR (🏍️ moto, 🚗 carro). */
+    public function getIconoVehiculoAttribute(): ?string
+    {
+        return match ($this->tipo_vehiculo) {
+            'moto' => '🏍️',
+            'carro' => '🚗',
+            default => null,
+        };
     }
 
     /** Estados que ocupan un horario (no liberan el slot). */

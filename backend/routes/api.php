@@ -26,6 +26,7 @@ use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ServicioController;
+use App\Http\Controllers\PlanLavadoController;
 use App\Http\Controllers\ServiceOrderController;
 use App\Http\Controllers\UsuarioAdminController;
 use Illuminate\Support\Facades\Route;
@@ -106,6 +107,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::prefix('publico/{slug}')->group(function () {
     Route::get('negocio', [PortalController::class, 'negocio']);
     Route::get('servicios', [PortalController::class, 'servicios']);
+    Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
     Route::post('reservar', [PortalController::class, 'reservar']);
     Route::get('mis-citas', [PortalController::class, 'misCitas']);
@@ -115,6 +117,7 @@ Route::prefix('publico/{slug}')->group(function () {
 // Compatibilidad: enlace antiguo sin slug → negocio principal.
 Route::prefix('publico')->group(function () {
     Route::get('servicios', [PortalController::class, 'servicios']);
+    Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
     Route::post('reservar', [PortalController::class, 'reservar']);
     Route::get('mis-citas', [PortalController::class, 'misCitas']);
@@ -131,6 +134,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     // Perfil del usuario autenticado
     Route::put('/perfil', [ProfileController::class, 'update']);
     Route::post('/perfil/foto', [ProfileController::class, 'uploadFoto']);
+    Route::post('/perfil/logo-empresa', [ProfileController::class, 'subirLogoEmpresa']);
     Route::put('/perfil/password', [ProfileController::class, 'cambiarPassword']);
 
     // Catálogo de planes (visible para usuarios autenticados: dashboard, "actualizar plan")
@@ -187,9 +191,13 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
             abort_unless(config('services.gmail.client_id') && config('services.gmail.client_secret'), 422,
                 'Define GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en el servidor primero (console.cloud.google.com).');
 
+            // Explícita (GOOGLE_REDIRECT_URI) si está configurada; si no, se deriva de la
+            // petición actual (ya con esquema HTTPS correcto gracias a trustProxies).
+            $redirectUri = config('services.gmail.redirect') ?: url('/api/gmail/callback');
+
             $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
                 'client_id' => config('services.gmail.client_id'),
-                'redirect_uri' => url('/api/gmail/callback'),
+                'redirect_uri' => $redirectUri,
                 'response_type' => 'code',
                 'scope' => 'https://www.googleapis.com/auth/gmail.send',
                 'access_type' => 'offline',
@@ -199,7 +207,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
             return response()->json([
                 'autorizar_url' => $url,
                 'instrucciones' => 'Abre autorizar_url en el navegador con la cuenta Gmail remitente y acepta. El refresh token queda guardado automáticamente.',
-                'redirect_uri_requerida' => url('/api/gmail/callback'),
+                'redirect_uri_requerida' => $redirectUri,
             ]);
         });
 
@@ -262,6 +270,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
 
     // ===== BLOQUE B: Agenda, Citas y Servicios =====
     Route::get('servicios', [ServicioController::class, 'index']);
+    Route::get('planes-lavado', [PlanLavadoController::class, 'index']);
     Route::get('citas', [CitaController::class, 'index']);
     Route::get('citas/disponibilidad', [CitaController::class, 'disponibilidad']);
     Route::get('citas/{cita}', [CitaController::class, 'show']);
@@ -280,6 +289,9 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::post('servicios', [ServicioController::class, 'store']);
         Route::put('servicios/{servicio}', [ServicioController::class, 'update']);
         Route::delete('servicios/{servicio}', [ServicioController::class, 'destroy']);
+        Route::post('planes-lavado', [PlanLavadoController::class, 'store']);
+        Route::put('planes-lavado/{planLavado}', [PlanLavadoController::class, 'update']);
+        Route::delete('planes-lavado/{planLavado}', [PlanLavadoController::class, 'destroy']);
         Route::put('agenda/ajustes', [ConfiguracionAgendaController::class, 'guardarAjustes']);
         Route::put('agenda/horarios', [ConfiguracionAgendaController::class, 'guardarHorarios']);
         Route::post('agenda/bloqueos', [ConfiguracionAgendaController::class, 'crearBloqueo']);
@@ -414,12 +426,15 @@ Route::get('publico/facturas/{factura}/pdf', [FacturaController::class, 'pdfPubl
 Route::get('gmail/callback', function (Illuminate\Http\Request $request) {
     abort_unless($request->query('code'), 400, 'Falta el código de autorización de Google.');
 
+    // Debe ser IDÉNTICA a la enviada en /gmail/conectar (Google la valida por igualdad exacta).
+    $redirectUri = config('services.gmail.redirect') ?: url('/api/gmail/callback');
+
     $res = Illuminate\Support\Facades\Http::asForm()->timeout(20)->post('https://oauth2.googleapis.com/token', [
         'client_id' => config('services.gmail.client_id'),
         'client_secret' => config('services.gmail.client_secret'),
         'code' => $request->query('code'),
         'grant_type' => 'authorization_code',
-        'redirect_uri' => url('/api/gmail/callback'),
+        'redirect_uri' => $redirectUri,
     ]);
 
     if ($res->failed() || ! $res->json('refresh_token')) {

@@ -53,6 +53,10 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'refresh_token' => env('GMAIL_REFRESH_TOKEN'), // opcional: el flujo /api/admin/gmail/conectar lo guarda en BD
+        // URI exacta registrada en Google Cloud Console (debe coincidir carácter por
+        // carácter, incluido http vs https). Si no se define, cae a url('/api/gmail/callback'),
+        // que en producción depende de que el proxy reporte bien el esquema HTTPS.
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
     // Pasarela de pagos Wompi (Bancolombia): PSE, Nequi, tarjetas.

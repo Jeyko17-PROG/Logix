@@ -141,10 +141,13 @@ class UsuarioAdminController extends Controller
             abort_unless((int) $empleadoTaller->owner_id === $ownerId || $request->user()->esSuperAdmin(), 403, 'El empleado no pertenece a tu negocio.');
         }
 
+        // Generamos la contraseña en plano y la encriptamos antes de guardarla en la Base de Datos
+        $passwordPlano = $data['password'] ?? Str::password(12);
+
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
-            'password' => $data['password'] ?? Str::password(12),
+            'password' => Hash::make($passwordPlano), // Encriptación correcta
             'rol_id' => $data['rol_id'],
             'workspace_owner_id' => $ownerId,
             'bodega_id' => $data['bodega_id'],
@@ -190,11 +193,12 @@ class UsuarioAdminController extends Controller
         }
 
         $rolId = Role::where('nombre', 'Empleado')->value('id') ?? Role::where('nombre', 'Usuario')->value('id');
+        $passwordPlano = Str::password(12);
 
         $user = User::create([
             'name' => trim($data['nombre'] . ' ' . $data['apellido']),
             'email' => Str::slug($data['nombre'] . '.' . $data['apellido']) . '.' . Str::random(4) . '@noemail.local',
-            'password' => Str::password(12),
+            'password' => Hash::make($passwordPlano), // Encriptación correcta
             'rol_id' => $rolId,
             'workspace_owner_id' => $ownerId,
             'bodega_id' => $bodegaId,
@@ -326,7 +330,14 @@ class UsuarioAdminController extends Controller
         ];
 
         DB::transaction(function () use ($userId, $tablas, $usuario) {
-            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            $isPgsql = (DB::getDriverName() === 'pgsql');
+
+            // 1. Desactivar llaves foráneas dinámicamente según la Base de Datos activa (PostgreSQL o MySQL)
+            if ($isPgsql) {
+                DB::statement("SET session_replication_role = 'replica';");
+            } else {
+                DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            }
 
             // Hijos (detalles) de los registros del propietario.
             DB::table('factura_detalle')->whereIn('factura_id', fn ($q) => $q->select('id')->from('facturas')->where('owner_id', $userId))->delete();
@@ -339,10 +350,16 @@ class UsuarioAdminController extends Controller
 
             DB::table('notificaciones')->where('user_id', $userId)->delete();
             DB::table('user_funcionalidades')->where('user_id', $userId)->delete();
+            
             $usuario->tokens()->delete();
             $usuario->forceDelete();
 
-            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            // 2. Volver a activar las llaves foráneas al terminar la transacción
+            if ($isPgsql) {
+                DB::statement("SET session_replication_role = 'origin';");
+            } else {
+                DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+            }
         });
 
         Auditoria::registrar($request->user()->id, null, 'ELIMINAR', 'PERMANENTE', $email, $nombre);

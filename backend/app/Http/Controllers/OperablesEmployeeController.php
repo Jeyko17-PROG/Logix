@@ -79,6 +79,7 @@ class OperablesEmployeeController extends Controller
         return response()->json([
             'tipos' => [
                 ['valor' => 'mecanico', 'etiqueta' => 'Mecánico'],
+                ['valor' => 'lavador', 'etiqueta' => 'Lavador'],
                 ['valor' => 'electricista', 'etiqueta' => 'Electricista'],
                 ['valor' => 'esteticien', 'etiqueta' => 'Esteticien'],
                 ['valor' => 'tecnico', 'etiqueta' => 'Técnico'],
@@ -100,7 +101,7 @@ class OperablesEmployeeController extends Controller
             'email' => ['nullable', 'email', "unique:operables_employees,email{$unique}"],
             'telefono' => ['nullable', 'string', 'max:20'],
             'ci_cedula' => ['required', 'string', 'max:50', "unique:operables_employees,ci_cedula{$unique}"],
-            'tipo_operario' => ['required', 'in:mecanico,electricista,esteticien,tecnico,asesor,otro'],
+            'tipo_operario' => ['required', 'in:mecanico,lavador,electricista,esteticien,tecnico,asesor,otro'],
             'comision_default' => ['nullable', 'numeric', 'min:0'],
             'tipo_comision_default' => ['nullable', 'in:percentage,fixed'],
             'activo' => ['boolean'],

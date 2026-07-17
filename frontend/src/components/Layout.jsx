@@ -68,7 +68,8 @@ const MENU = [
   {
     grupo: 'Taller y POS',
     items: [
-      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios' },
+      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featLavadero: 'lavadero' },
+      { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloLavadero: true },
       { to: '/restaurante', label: 'Mesas y Comandas', icon: '🍽️', feat: 'mesas' },
       { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
     ],
@@ -169,14 +170,21 @@ export default function Layout() {
   // El Super Administrador ve además la sección de plataforma.
   const base = user?.es_super_admin ? [...MENU, MENU_SUPER_ADMIN] : MENU
   const esMecanico = user?.rol?.nombre === 'Mecanico'
+  const esLavadorRol = user?.rol?.nombre === 'Lavador'
+  const esLavadero = user?.empresa_info?.tipo_negocio?.clave === 'lavadero'
   // Oculta del menú las funcionalidades DESACTIVADAS para el usuario.
-  // El Mecánico solo ve sus órdenes y catálogo: nada de facturación ni dinero.
+  // El Mecánico/Lavador solo ve sus órdenes y catálogo: nada de facturación ni dinero.
   const secciones = base
     .map((s) => ({
       ...s,
-      items: s.items.filter((m) =>
-        (!m.feat || visible(m.feat)) && (!esMecanico || RUTAS_MECANICO.includes(m.to))
-      ),
+      items: s.items
+        .filter((m) => {
+          // Negocios lavadero: el módulo relevante es 'lavadero', independiente de 'servicios' (talleres).
+          const feat = (esLavadero && m.featLavadero) ? m.featLavadero : m.feat
+          return (!feat || visible(feat)) && (!(esMecanico || esLavadorRol) || RUTAS_MECANICO.includes(m.to)) && (!m.soloLavadero || esLavadero)
+        })
+        // El lavadero no repara vehículos: el módulo "Taller" pasa a llamarse "Servicios de Lavado".
+        .map((m) => (m.to === '/taller' && esLavadero ? { ...m, label: 'Servicios de Lavado', icon: '🧼' } : m)),
     }))
     .filter((s) => s.items.length > 0)
 

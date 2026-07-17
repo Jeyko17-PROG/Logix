@@ -30,6 +30,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Evita que las peticiones de la API o del navegador hacia rutas protegidas
         // busquen la ruta 'login'. En su lugar, simplemente detenemos la redirección.
         $middleware->redirectGuestsTo(fn (Request $request) => null);
+
+        // Render (y cualquier PaaS con proxy inverso) termina el HTTPS en su borde
+        // y reenvía la petición como HTTP puro a la app. Sin confiar en el proxy,
+        // Request::isSecure()/url() creen que todo es HTTP y generan enlaces http://
+        // (rompiendo el redirect_uri de Google OAuth y cualquier URL absoluta).
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

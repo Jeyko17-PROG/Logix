@@ -107,6 +107,12 @@ class User extends Authenticatable
         return $this->tieneRol('Mecanico');
     }
 
+    /** Rol Lavador (operario del lavadero): solo ve las citas que tiene asignadas. */
+    public function esLavador(): bool
+    {
+        return $this->tieneRol('Lavador');
+    }
+
     /**
      * FACHADA — Usuario responsable del cobro SaaS: el dueño de la empresa.
      * (Si aún no hay empresa, cae al dueño del workspace como antes.)
