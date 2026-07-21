@@ -347,7 +347,7 @@ class FacturaController extends Controller
     {
         $data = $request->validate(['email' => ['required', 'email']]);
         $this->autorizarBodega($factura);
-        $factura->load(['cliente', 'detalles']);
+        $factura->load(['cliente', 'detalles', 'empresa']);
 
         // Asegura que el PDF exista.
         if (! $factura->pdf_url) {
@@ -357,6 +357,10 @@ class FacturaController extends Controller
         $adjunto = $factura->pdf_url
             ? Storage::disk('public')->path(str_replace('/storage/', '', $factura->pdf_url))
             : null;
+
+        // Si la empresa configuró su propio correo de facturación, la factura
+        // sale a nombre de ella (From/Reply-To) en vez del remitente genérico.
+        $empresa = $factura->empresa;
 
         $enviado = $this->notificador->correo(
             $data['email'],
@@ -369,6 +373,8 @@ class FacturaController extends Controller
             ],
             $adjunto,
             'FACTURA',
+            $empresa?->email_facturacion,
+            $empresa?->nombre,
         );
 
         if (! $enviado) {

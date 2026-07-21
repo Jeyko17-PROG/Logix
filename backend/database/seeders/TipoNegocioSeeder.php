@@ -41,6 +41,10 @@ class TipoNegocioSeeder extends Seeder
                 'modulos_default' => array_merge($comunes, ['mesas', 'cocina', 'productos', 'inventario', 'proveedores', 'agenda', 'reservas', 'qr'])],
             ['clave' => 'barberia', 'nombre' => 'Barbería / belleza', 'orden' => 7,
                 'modulos_default' => array_merge($comunes, ['servicios', 'barberia', 'agenda', 'reservas', 'qr', 'productos', 'inventario'])],
+            // Spa/estética: solo agenda de citas y portal de reservas (sin el POS de
+            // órdenes con vehículo/comisiones que sí usan lavadero y barbería).
+            ['clave' => 'spa', 'nombre' => 'Spa / Estética de belleza', 'orden' => 8,
+                'modulos_default' => array_merge($comunes, ['agenda', 'reservas', 'qr', 'productos', 'inventario'])],
             ['clave' => 'otro', 'nombre' => 'Otro negocio', 'orden' => 99,
                 'modulos_default' => $todosSinRestaurante],
         ];

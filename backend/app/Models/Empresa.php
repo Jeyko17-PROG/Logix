@@ -24,6 +24,7 @@ class Empresa extends Model
         'numero_documento',
         'telefono',
         'email',
+        'email_facturacion',
         'direccion',
         'logo_url',
         'tipo_negocio_id',

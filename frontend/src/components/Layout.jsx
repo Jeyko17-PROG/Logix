@@ -70,7 +70,7 @@ const MENU = [
     items: [
       { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia' } },
       { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloTipo: 'lavadero' },
-      { to: '/servicios', label: 'Servicios / Cortes', icon: '💈', feat: 'barberia', soloTipo: 'barberia' },
+      { to: '/servicios', label: 'Servicios', icon: '💈', feat: 'barberia', featPorTipo: { spa: 'agenda' }, soloTipo: ['barberia', 'spa'] },
       { to: '/restaurante', label: 'Mesas y Comandas', icon: '🍽️', feat: 'mesas' },
       { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
     ],
@@ -188,7 +188,8 @@ export default function Layout() {
         .filter((m) => {
           // Negocios lavadero/barbería: el módulo relevante es el propio, independiente de 'servicios' (talleres).
           const feat = (tipoNegocio && m.featPorTipo?.[tipoNegocio]) ? m.featPorTipo[tipoNegocio] : m.feat
-          return (!feat || visible(feat)) && (!esOperarioRol || RUTAS_MECANICO.includes(m.to)) && (!m.soloTipo || m.soloTipo === tipoNegocio)
+          const permitidoPorTipo = !m.soloTipo || (Array.isArray(m.soloTipo) ? m.soloTipo.includes(tipoNegocio) : m.soloTipo === tipoNegocio)
+          return (!feat || visible(feat)) && (!esOperarioRol || RUTAS_MECANICO.includes(m.to)) && permitidoPorTipo
         })
         .map((m) => (m.to === '/taller' && LABEL_POR_TIPO[tipoNegocio] ? { ...m, ...LABEL_POR_TIPO[tipoNegocio] } : m)),
     }))

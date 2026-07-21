@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -21,11 +22,30 @@ class CorreoLogix extends Mailable
         public string $titulo,
         public array $lineas = [],
         public ?string $adjuntoPath = null,
+        // Remitente propio de la empresa (ej. facturas): si viene vacío, se usa
+        // el remitente global de config('mail.from'). Ver Notificador::correo().
+        public ?string $fromEmail = null,
+        public ?string $fromName = null,
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->asunto);
+        $envelope = new Envelope(
+            subject: $this->asunto,
+        );
+
+        // Remitente propio de la empresa (ej. facturas): si no se inyectó desde
+        // Notificador::correo(), el mensaje conserva el remitente global de
+        // config('mail.from') sin tocar el Envelope (compatibilidad total).
+        if (! empty($this->fromEmail)) {
+            $displayName = $this->fromName ?? config('mail.from.name', 'Facturación');
+            $remitente = new Address($this->fromEmail, $displayName);
+
+            $envelope->from = $remitente;
+            $envelope->replyTo = [$remitente];
+        }
+
+        return $envelope;
     }
 
     public function content(): Content

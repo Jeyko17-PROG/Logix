@@ -9,7 +9,7 @@ class ServicioController extends Controller
 {
     public function index()
     {
-        return Servicio::orderBy('nombre')->get();
+        return Servicio::with('categoria:id,nombre')->orderBy('nombre')->get();
     }
 
     public function store(Request $request)
@@ -34,6 +34,8 @@ class ServicioController extends Controller
         return $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],
+            'categoria_id' => ['nullable', 'exists:categorias,id'],
+            'imagen' => ['nullable', 'string', 'max:2048'],
             'duracion_min' => ['required', 'integer', 'min:5'],
             'precio' => ['nullable', 'numeric', 'min:0'],
             'activo' => ['boolean'],

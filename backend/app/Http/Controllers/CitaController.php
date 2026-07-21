@@ -19,7 +19,7 @@ class CitaController extends Controller
      */
     public function index(Request $request)
     {
-        $q = Cita::with(['cliente:id,nombre_completo', 'servicio:id,nombre,duracion_min', 'empleado:id,name', 'planLavado:id,nombre,precio']);
+        $q = Cita::with(['cliente:id,nombre_completo', 'servicio:id,nombre,duracion_min', 'empleado:id,name', 'planLavado:id,nombre,precio', 'bodega:id,nombre']);
 
         // Rol Lavador: solo ve las citas que tiene asignadas.
         $this->limitarALavador($request, $q);
@@ -45,10 +45,11 @@ class CitaController extends Controller
         $data = $request->validate([
             'fecha' => ['required', 'date'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
         ]);
 
         $duracion = $this->duracionPara($data['servicio_id'] ?? null);
-        $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion);
+        $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion, null, $data['bodega_id'] ?? null);
 
         return response()->json(['duracion_min' => $duracion, 'slots' => $slots]);
     }
@@ -60,7 +61,7 @@ class CitaController extends Controller
         $inicio = Carbon::parse($data['inicio']);
         $fin = $inicio->copy()->addMinutes($this->duracionPara($data['servicio_id'] ?? null, $data['plan_lavado_id'] ?? null));
 
-        $this->agenda->asegurarDisponible($inicio, $fin);
+        $this->agenda->asegurarDisponible($inicio, $fin, null, null, $data['bodega_id'] ?? null);
 
         $cita = Cita::create([
             ...$data,
@@ -71,14 +72,14 @@ class CitaController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        return response()->json($cita->load(['cliente:id,nombre_completo', 'servicio:id,nombre', 'planLavado:id,nombre']), 201);
+        return response()->json($cita->load(['cliente:id,nombre_completo', 'servicio:id,nombre', 'planLavado:id,nombre', 'bodega:id,nombre']), 201);
     }
 
     public function show(Cita $cita)
     {
         $this->autorizarLavador($cita);
 
-        return $cita->load(['cliente', 'servicio', 'planLavado', 'empleado:id,name']);
+        return $cita->load(['cliente', 'servicio', 'planLavado', 'empleado:id,name', 'bodega']);
     }
 
     public function update(Request $request, Cita $cita)
@@ -101,7 +102,7 @@ class CitaController extends Controller
         $inicio = Carbon::parse($data['inicio']);
         $fin = $inicio->copy()->addMinutes($this->duracionPara($cita->servicio_id, $cita->plan_lavado_id));
 
-        $this->agenda->asegurarDisponible($inicio, $fin, $cita->id);
+        $this->agenda->asegurarDisponible($inicio, $fin, $cita->id, null, $cita->bodega_id);
 
         $cita->update(['inicio' => $inicio, 'fin' => $fin, 'estado' => 'REPROGRAMADA']);
         return $cita;
@@ -150,6 +151,7 @@ class CitaController extends Controller
             'servicio_id' => ['nullable', 'exists:servicios,id'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'empleado_id' => ['nullable', 'exists:users,id'],
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
             'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
             'placa' => [$conVehiculo ? 'required' : 'nullable', 'string', 'max:20'],
             'inicio' => ['required', 'date'],

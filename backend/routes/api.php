@@ -106,6 +106,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 // Versión POR USUARIO: cada negocio tiene su slug único en la URL.
 Route::prefix('publico/{slug}')->group(function () {
     Route::get('negocio', [PortalController::class, 'negocio']);
+    Route::get('sucursales', [PortalController::class, 'sucursales']);
     Route::get('servicios', [PortalController::class, 'servicios']);
     Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
@@ -116,6 +117,7 @@ Route::prefix('publico/{slug}')->group(function () {
 
 // Compatibilidad: enlace antiguo sin slug → negocio principal.
 Route::prefix('publico')->group(function () {
+    Route::get('sucursales', [PortalController::class, 'sucursales']);
     Route::get('servicios', [PortalController::class, 'servicios']);
     Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
@@ -236,6 +238,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     // --- Lecturas: cualquier usuario autenticado ---
     Route::get('categorias', [CategoriaController::class, 'index']);
     Route::get('bodegas', [BodegaController::class, 'index'])->middleware('feature:inventario');
+    Route::get('bodegas/{bodega}/servicios', [BodegaController::class, 'servicios'])->middleware('feature:inventario');
     Route::get('productos', [ProductoController::class, 'index'])->middleware('feature:productos');
     Route::get('productos/{producto}', [ProductoController::class, 'show'])->middleware('feature:productos');
     Route::middleware('feature:inventario')->group(function () {
@@ -256,6 +259,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::apiResource('categorias', CategoriaController::class)->only(['store', 'update', 'destroy']);
         Route::apiResource('bodegas', BodegaController::class)->only(['store', 'update', 'destroy'])->middleware('feature:inventario');
         Route::post('bodegas/{bodega}/principal', [BodegaController::class, 'definirPrincipal'])->middleware('feature:inventario');
+        Route::put('bodegas/{bodega}/servicios', [BodegaController::class, 'sincronizarServicios']);
         Route::post('productos/{producto}/update', [ProductoController::class, 'update'])->middleware('feature:productos'); // multipart (imagen)
         Route::apiResource('productos', ProductoController::class)->only(['store', 'update', 'destroy'])->middleware('feature:productos');
 

@@ -61,11 +61,33 @@ class BodegaController extends Controller
         return response()->json($bodega);
     }
 
+    /** Servicios que ofrece esta sucursal (para el selector del panel y el portal público). */
+    public function servicios(Request $request, Bodega $bodega)
+    {
+        $this->autorizarBodega($request, $bodega);
+        return $bodega->servicios()->get(['servicios.id', 'servicios.nombre']);
+    }
+
+    /** Asigna (reemplaza) el conjunto de servicios que ofrece esta sucursal. */
+    public function sincronizarServicios(Request $request, Bodega $bodega)
+    {
+        $this->autorizarBodega($request, $bodega);
+        $data = $request->validate([
+            'servicio_ids' => ['present', 'array'],
+            'servicio_ids.*' => ['integer', 'exists:servicios,id'],
+        ]);
+
+        $bodega->servicios()->sync($data['servicio_ids']);
+        return response()->json($bodega->servicios()->get(['servicios.id', 'servicios.nombre']));
+    }
+
     private function validar(Request $request): array
     {
         return $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
             'direccion' => ['nullable', 'string', 'max:255'],
+            'telefono' => ['nullable', 'string', 'max:50'],
+            'ciudad' => ['nullable', 'string', 'max:100'],
             'responsable_id' => ['nullable', 'exists:users,id'],
             'activo' => ['boolean'],
         ]);

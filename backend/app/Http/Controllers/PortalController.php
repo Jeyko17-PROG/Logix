@@ -55,12 +55,32 @@ class PortalController extends Controller
         ]);
     }
 
-    /** Servicios activos que el cliente puede reservar. */
-    public function servicios(?string $slug = null)
+    /** Sucursales activas del negocio (multisucursal); el portal las ofrece como primer paso. */
+    public function sucursales(?string $slug = null)
     {
+        return \App\Models\Bodega::where('owner_id', $this->negocioId($slug))
+            ->where('activo', true)
+            ->orderByDesc('es_principal')->orderBy('nombre')
+            ->get(['id', 'nombre', 'direccion', 'telefono', 'ciudad']);
+    }
+
+    /**
+     * Servicios activos que el cliente puede reservar, agrupados por categoría.
+     * Si se indica bodega_id, solo trae los servicios de esa sucursal (un servicio
+     * sin sucursales asignadas se considera disponible en todas).
+     */
+    public function servicios(Request $request, ?string $slug = null)
+    {
+        $bodegaId = $request->query('bodega_id');
+
         return Servicio::where('owner_id', $this->negocioId($slug))
-            ->where('activo', true)->orderBy('nombre')
-            ->get(['id', 'nombre', 'descripcion', 'duracion_min', 'precio']);
+            ->where('activo', true)
+            ->when($bodegaId, fn ($q) => $q->where(
+                fn ($w) => $w->whereDoesntHave('bodegas')->orWhereHas('bodegas', fn ($b) => $b->where('bodegas.id', $bodegaId))
+            ))
+            ->with('categoria:id,nombre')
+            ->orderBy('nombre')
+            ->get(['id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'duracion_min', 'precio']);
     }
 
     /** Planes de lavado activos que el cliente puede reservar (Lavadero). */
@@ -74,10 +94,13 @@ class PortalController extends Controller
     /** Horarios disponibles en tiempo real para una fecha. */
     public function disponibilidad(Request $request, ?string $slug = null)
     {
+        $negocio = $this->negocioId($slug);
+
         $data = $request->validate([
             'fecha' => ['required', 'date'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
+            'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
         ]);
 
         $duracion = 30;
@@ -87,7 +110,7 @@ class PortalController extends Controller
             $duracion = $s->duracion_min;
         }
 
-        $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion, $this->negocioId($slug));
+        $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion, $negocio, $data['bodega_id'] ?? null);
         return response()->json(['slots' => $slots]);
     }
 
@@ -103,6 +126,7 @@ class PortalController extends Controller
             'telefono' => ['required', 'string', 'max:50'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
+            'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
             'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
             'placa' => [$conVehiculo ? 'required' : 'nullable', 'string', 'max:20'],
             'inicio' => ['required', 'date'],
@@ -118,8 +142,8 @@ class PortalController extends Controller
         $inicio = Carbon::parse($data['inicio']);
         $fin = $inicio->copy()->addMinutes($duracion);
 
-        // Garantía anti doble-reserva (misma lógica que el panel admin).
-        $this->agenda->asegurarDisponible($inicio, $fin, null, $negocio);
+        // Garantía anti doble-reserva (misma lógica que el panel admin; scoped por sucursal).
+        $this->agenda->asegurarDisponible($inicio, $fin, null, $negocio, $data['bodega_id'] ?? null);
 
         return DB::transaction(function () use ($data, $inicio, $fin, $negocio) {
             // Reutiliza el cliente del negocio por email, o lo crea como POTENCIAL.
@@ -133,6 +157,7 @@ class PortalController extends Controller
                 'cliente_id' => $cliente->id,
                 'servicio_id' => $data['servicio_id'] ?? null,
                 'plan_lavado_id' => $data['plan_lavado_id'] ?? null,
+                'bodega_id' => $data['bodega_id'] ?? null,
                 'tipo_vehiculo' => $data['tipo_vehiculo'] ?? null,
                 'placa' => $data['placa'] ?? null,
                 'inicio' => $inicio,
@@ -153,7 +178,7 @@ class PortalController extends Controller
 
             return response()->json([
                 'mensaje' => 'Reserva confirmada.',
-                'cita' => $cita->load('servicio:id,nombre', 'planLavado:id,nombre'),
+                'cita' => $cita->load('servicio:id,nombre', 'planLavado:id,nombre', 'bodega:id,nombre'),
             ], 201);
         });
     }
@@ -177,7 +202,7 @@ class PortalController extends Controller
         }
 
         $citas = $cliente->citas()
-            ->with('servicio:id,nombre', 'planLavado:id,nombre')
+            ->with('servicio:id,nombre', 'planLavado:id,nombre', 'bodega:id,nombre')
             ->orderByDesc('inicio')
             ->get();
 

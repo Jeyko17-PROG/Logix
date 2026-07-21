@@ -40,6 +40,7 @@ export default function Agenda() {
   const [clientes, setClientes] = useState([])
   const [servicios, setServicios] = useState([])
   const [planes, setPlanes] = useState([])
+  const [sucursales, setSucursales] = useState([])
   const [nueva, setNueva] = useState(null) // null | fecha (Date) con la que abrir el formulario
 
   // Rango visible según la vista
@@ -60,6 +61,7 @@ export default function Agenda() {
   useEffect(() => { cargar() }, [desde, hasta]) // eslint-disable-line
   useEffect(() => {
     api('/clientes').then((d) => setClientes(d.data ?? d)).catch(() => {})
+    api('/bodegas').then(setSucursales).catch(() => {}) // multisucursal; si el negocio no tiene el módulo de inventario, queda vacío
     if (esLavadero) api('/planes-lavado').then(setPlanes).catch(() => {})
     else api('/servicios').then(setServicios).catch(() => {})
   }, [esLavadero])
@@ -116,6 +118,7 @@ export default function Agenda() {
                   <span className="ml-3">{c.cliente?.nombre_completo}</span>
                   <span className="ml-2 text-slate-400 text-sm">{c.plan_lavado?.nombre ?? c.servicio?.nombre ?? ''}</span>
                   {c.tipo_vehiculo && <span className="ml-2 text-slate-400 text-sm">{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
+                  {c.bodega && <span className="ml-2 text-slate-500 text-xs">📍 {c.bodega.nombre}</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[c.estado]}`}>{ESTADO_LABEL[c.estado] ?? c.estado}</span>
@@ -151,7 +154,7 @@ export default function Agenda() {
       {vista === 'mes' && <VistaMes fecha={fecha} citas={citas} onDia={(d) => { setFecha(d); setNueva(d) }} />}
 
       {nueva && (
-        <NuevaCita clientes={clientes} servicios={servicios} planes={planes} esLavadero={esLavadero} fechaInicial={nueva}
+        <NuevaCita clientes={clientes} servicios={servicios} planes={planes} sucursales={sucursales} esLavadero={esLavadero} fechaInicial={nueva}
           onClose={() => setNueva(null)} onCreada={() => { setNueva(null); cargar() }} />
       )}
     </div>
@@ -197,11 +200,12 @@ function VistaMes({ fecha, citas, onDia }) {
   )
 }
 
-function NuevaCita({ clientes, servicios, planes, esLavadero, fechaInicial, onClose, onCreada }) {
+function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaInicial, onClose, onCreada }) {
   const [lista, setLista] = useState(clientes)        // clientes (incluye los creados aquí)
   const [cliente_id, setCliente] = useState('')
   const [servicio_id, setServicio] = useState('')
   const [plan_lavado_id, setPlan] = useState('')
+  const [bodega_id, setBodega] = useState('')
   const [tipo_vehiculo, setTipoVehiculo] = useState('')
   const [placa, setPlaca] = useState('')
   const [fecha, setFecha] = useState(ymd(fechaInicial instanceof Date ? fechaInicial : new Date()))
@@ -231,15 +235,15 @@ function NuevaCita({ clientes, servicios, planes, esLavadero, fechaInicial, onCl
   useEffect(() => {
     let cancelado = false
     setBuscando(true); setError('')
-    const filtro = esLavadero
+    const filtro = (esLavadero
       ? (plan_lavado_id ? `&plan_lavado_id=${plan_lavado_id}` : '')
-      : (servicio_id ? `&servicio_id=${servicio_id}` : '')
+      : (servicio_id ? `&servicio_id=${servicio_id}` : '')) + (bodega_id ? `&bodega_id=${bodega_id}` : '')
     api(`/citas/disponibilidad?fecha=${fecha}${filtro}`)
       .then((data) => { if (!cancelado) setSlots(data.slots ?? []) })
       .catch((err) => { if (!cancelado) { setSlots([]); setError(err.message || 'No se pudo cargar la disponibilidad.') } })
       .finally(() => { if (!cancelado) setBuscando(false) })
     return () => { cancelado = true }
-  }, [fecha, servicio_id, plan_lavado_id, esLavadero])
+  }, [fecha, servicio_id, plan_lavado_id, bodega_id, esLavadero])
 
   async function reservar(inicio) {
     if (!cliente_id) { setError('Selecciona o crea un cliente primero.'); return }
@@ -252,6 +256,7 @@ function NuevaCita({ clientes, servicios, planes, esLavadero, fechaInicial, onCl
           cliente_id,
           servicio_id: servicio_id || null,
           plan_lavado_id: plan_lavado_id || null,
+          bodega_id: bodega_id || null,
           tipo_vehiculo: tipo_vehiculo || null,
           placa: placa || null,
           inicio,
@@ -278,6 +283,13 @@ function NuevaCita({ clientes, servicios, planes, esLavadero, fechaInicial, onCl
             <button type="button" onClick={crearCliente} disabled={creandoCli || !nuevoCliente.trim()}
               className="rounded-lg bg-slate-600 hover:bg-slate-500 disabled:opacity-50 px-3 text-sm whitespace-nowrap">{creandoCli ? '…' : '+ Crear'}</button>
           </div>
+
+          {sucursales.length > 1 && (
+            <select value={bodega_id} onChange={(e) => setBodega(e.target.value)} className="input">
+              <option value="">📍 Todas las sucursales…</option>
+              {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          )}
 
           {esLavadero ? (
             <>

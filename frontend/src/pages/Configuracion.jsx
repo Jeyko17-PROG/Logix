@@ -5,6 +5,8 @@ const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 
 export default function Configuracion() {
   const [servicios, setServicios] = useState([])
+  const [sucursales, setSucursales] = useState([])
+  const [bodegaId, setBodegaId] = useState('') // '' = horario/bloqueos generales de la empresa
   const [horarios, setHorarios] = useState([])
   const [ajustes, setAjustes] = useState({ duracion_cita_min: 30, buffer_min: 0 })
   const [bloqueos, setBloqueos] = useState([])
@@ -12,9 +14,14 @@ export default function Configuracion() {
   const [bloqueo, setBloqueo] = useState({ inicio: '', fin: '', motivo: '' })
   const [msg, setMsg] = useState('')
 
+  useEffect(() => {
+    api('/servicios').then(setServicios).catch(() => {})
+    api('/bodegas').then(setSucursales).catch(() => {}) // multisucursal; si no aplica, queda vacío
+  }, [])
+
   async function cargar() {
-    setServicios(await api('/servicios'))
-    const cfg = await api('/agenda/configuracion')
+    const q = bodegaId ? `?bodega_id=${bodegaId}` : ''
+    const cfg = await api(`/agenda/configuracion${q}`)
     setAjustes({ duracion_cita_min: cfg.ajustes.duracion_cita_min, buffer_min: cfg.ajustes.buffer_min })
     setBloqueos(cfg.bloqueos)
     // Mapa de horarios por día (un rango por día para la UI simple)
@@ -27,7 +34,7 @@ export default function Configuracion() {
       hora_fin: porDia[d]?.hora_fin?.slice(0, 5) ?? '18:00',
     })))
   }
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [bodegaId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function flash(t) { setMsg(t); setTimeout(() => setMsg(''), 2500) }
 
@@ -37,20 +44,22 @@ export default function Configuracion() {
   }
   async function guardarHorarios() {
     const payload = horarios.filter((h) => h.activo).map((h) => ({ dia_semana: h.dia_semana, hora_inicio: h.hora_inicio, hora_fin: h.hora_fin }))
-    await api('/agenda/horarios', { method: 'PUT', body: { horarios: payload } })
+    await api('/agenda/horarios', { method: 'PUT', body: { bodega_id: bodegaId || null, horarios: payload } })
     flash('Horario laboral guardado.')
   }
   async function crearServicio(e) {
     e.preventDefault()
     await api('/servicios', { method: 'POST', body: { ...nuevoServ, precio: Number(nuevoServ.precio) || 0 } })
-    setNuevoServ({ nombre: '', duracion_min: 30, precio: '' }); cargar()
+    setNuevoServ({ nombre: '', duracion_min: 30, precio: '' })
+    api('/servicios').then(setServicios)
   }
   async function eliminarServicio(id) {
-    await api(`/servicios/${id}`, { method: 'DELETE' }); cargar()
+    await api(`/servicios/${id}`, { method: 'DELETE' })
+    api('/servicios').then(setServicios)
   }
   async function crearBloqueo(e) {
     e.preventDefault()
-    await api('/agenda/bloqueos', { method: 'POST', body: bloqueo })
+    await api('/agenda/bloqueos', { method: 'POST', body: { ...bloqueo, bodega_id: bodegaId || null } })
     setBloqueo({ inicio: '', fin: '', motivo: '' }); cargar()
   }
   async function eliminarBloqueo(id) {
@@ -78,9 +87,25 @@ export default function Configuracion() {
         </div>
       </section>
 
+      {/* Selector de sucursal: gobierna el horario laboral y los bloqueos de abajo */}
+      {sucursales.length > 1 && (
+        <section>
+          <h2 className="font-semibold mb-2">Sucursal</h2>
+          <select value={bodegaId} onChange={(e) => setBodegaId(e.target.value)} className="input !w-auto">
+            <option value="">General (toda la empresa)</option>
+            {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+          <p className="text-xs text-slate-500 mt-1.5">
+            {bodegaId
+              ? 'Editando el horario y los bloqueos propios de esta sucursal. Si no defines nada aquí, usa el horario general.'
+              : 'Editando el horario general de la empresa. Cada sucursal puede definir el suyo propio para reemplazarlo.'}
+          </p>
+        </section>
+      )}
+
       {/* Horario laboral */}
       <section>
-        <h2 className="font-semibold mb-3">Horario laboral (días y horas)</h2>
+        <h2 className="font-semibold mb-3">Horario laboral (días y horas){bodegaId && sucursales.length > 1 && ` — ${sucursales.find((s) => String(s.id) === bodegaId)?.nombre}`}</h2>
         <div className="space-y-2">
           {horarios.map((h, i) => (
             <div key={i} className="flex items-center gap-3">
@@ -119,7 +144,7 @@ export default function Configuracion() {
 
       {/* Bloqueos */}
       <section>
-        <h2 className="font-semibold mb-3">Fechas bloqueadas (festivos, descanso)</h2>
+        <h2 className="font-semibold mb-3">Fechas bloqueadas (festivos, descanso){bodegaId && sucursales.length > 1 && ` — ${sucursales.find((s) => String(s.id) === bodegaId)?.nombre}`}</h2>
         <form onSubmit={crearBloqueo} className="flex flex-wrap gap-2 mb-3 items-end">
           <label className="text-sm">Desde<input type="datetime-local" required value={bloqueo.inicio} onChange={(e) => setBloqueo({ ...bloqueo, inicio: e.target.value })} className="input mt-1" /></label>
           <label className="text-sm">Hasta<input type="datetime-local" required value={bloqueo.fin} onChange={(e) => setBloqueo({ ...bloqueo, fin: e.target.value })} className="input mt-1" /></label>

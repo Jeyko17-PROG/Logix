@@ -9,17 +9,23 @@ use Illuminate\Http\Request;
 
 class ConfiguracionAgendaController extends Controller
 {
-    /** Devuelve toda la configuración de la agenda. */
-    public function index()
+    /**
+     * Devuelve toda la configuración de la agenda. Con `bodega_id` trae el
+     * horario/bloqueos PROPIOS de esa sucursal; sin él, el horario general
+     * de toda la empresa (bodega_id nulo).
+     */
+    public function index(Request $request)
     {
+        $bodegaId = $request->query('bodega_id');
+
         return response()->json([
             'ajustes' => AjusteAgenda::actual(),
-            'horarios' => HorarioLaboral::orderBy('dia_semana')->get(),
-            'bloqueos' => BloqueoAgenda::orderBy('inicio')->get(),
+            'horarios' => HorarioLaboral::where('bodega_id', $bodegaId)->orderBy('dia_semana')->get(),
+            'bloqueos' => BloqueoAgenda::where('bodega_id', $bodegaId)->orderBy('inicio')->get(),
         ]);
     }
 
-    /** Actualiza duración y buffer entre citas. */
+    /** Actualiza duración y buffer entre citas (general, aplica a toda la empresa). */
     public function guardarAjustes(Request $request)
     {
         $data = $request->validate([
@@ -31,27 +37,31 @@ class ConfiguracionAgendaController extends Controller
         return $ajustes;
     }
 
-    /** Reemplaza el horario laboral semanal completo. */
+    /** Reemplaza el horario laboral semanal de la empresa (bodega_id vacío) o de una sucursal específica. */
     public function guardarHorarios(Request $request)
     {
         $data = $request->validate([
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
             'horarios' => ['present', 'array'],
             'horarios.*.dia_semana' => ['required', 'integer', 'between:0,6'],
             'horarios.*.hora_inicio' => ['required', 'date_format:H:i'],
             'horarios.*.hora_fin' => ['required', 'date_format:H:i', 'after:horarios.*.hora_inicio'],
         ]);
+        $bodegaId = $data['bodega_id'] ?? null;
 
-        HorarioLaboral::query()->delete();
+        HorarioLaboral::where('bodega_id', $bodegaId)->delete();
         foreach ($data['horarios'] as $h) {
-            HorarioLaboral::create([...$h, 'activo' => true]);
+            HorarioLaboral::create([...$h, 'bodega_id' => $bodegaId, 'activo' => true]);
         }
 
-        return HorarioLaboral::orderBy('dia_semana')->get();
+        return HorarioLaboral::where('bodega_id', $bodegaId)->orderBy('dia_semana')->get();
     }
 
+    /** Bloquea un rango de fechas, general (toda la empresa) o de una sucursal específica. */
     public function crearBloqueo(Request $request)
     {
         $data = $request->validate([
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
             'inicio' => ['required', 'date'],
             'fin' => ['required', 'date', 'after:inicio'],
             'motivo' => ['nullable', 'string', 'max:255'],

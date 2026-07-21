@@ -20,6 +20,7 @@ export default function Empresas() {
   const [buscar, setBuscar] = useState('')
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  const [editando, setEditando] = useState(null) // empresa seleccionada para editar, o null
 
   async function cargar() {
     setCargando(true); setError('')
@@ -119,6 +120,8 @@ export default function Empresas() {
                     <div className="flex flex-wrap gap-1 justify-end">
                       <button onClick={() => navigate(`/funcionalidades?e=${e.id}`)}
                         className="text-xs rounded bg-slate-700 hover:bg-slate-600 px-2 py-1">🧩 Módulos</button>
+                      <button onClick={() => setEditando(e)}
+                        className="text-xs rounded bg-slate-700 hover:bg-slate-600 px-2 py-1">✏️ Editar</button>
                       {e.estado !== 'ACTIVO' && <button onClick={() => cambiarEstado(e, 'ACTIVO')} className="text-xs rounded bg-emerald-700 hover:bg-emerald-600 px-2 py-1">Activar</button>}
                       {e.estado !== 'SUSPENDIDO' && <button onClick={() => cambiarEstado(e, 'SUSPENDIDO')} className="text-xs rounded bg-amber-700 hover:bg-amber-600 px-2 py-1">Suspender</button>}
                       {e.estado !== 'DESACTIVADO' && <button onClick={() => cambiarEstado(e, 'DESACTIVADO')} className="text-xs rounded bg-red-800 hover:bg-red-700 px-2 py-1">Desactivar</button>}
@@ -131,6 +134,94 @@ export default function Empresas() {
           </table>
         </div>
       )}
+
+      {editando && (
+        <EditarEmpresaModal
+          empresa={editando}
+          onClose={() => setEditando(null)}
+          onGuardada={() => { setEditando(null); cargar() }}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Modal de edición de datos básicos de la empresa (incluye el remitente de facturación). */
+function EditarEmpresaModal({ empresa, onClose, onGuardada }) {
+  const [form, setForm] = useState({
+    nombre: empresa.nombre ?? '',
+    tipo_documento: empresa.tipo_documento ?? '',
+    numero_documento: empresa.numero_documento ?? '',
+    telefono: empresa.telefono ?? '',
+    email: empresa.email ?? '',
+    email_facturacion: empresa.email_facturacion ?? '',
+    direccion: empresa.direccion ?? '',
+  })
+  const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState(false)
+
+  const set = (k) => (ev) => setForm({ ...form, [k]: ev.target.value })
+
+  async function guardar(ev) {
+    ev.preventDefault(); setError(''); setGuardando(true)
+    try {
+      await api(`/admin/empresas/${empresa.id}`, { method: 'PUT', body: form })
+      onGuardada()
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar.')
+    } finally { setGuardando(false) }
+  }
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div onClick={(ev) => ev.stopPropagation()} className="bg-slate-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-bold mb-4">Editar empresa</h2>
+        <form onSubmit={guardar} className="space-y-3">
+          {error && <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-300">{error}</div>}
+
+          <label className="block text-sm text-slate-300">Nombre *
+            <input required value={form.nombre} onChange={set('nombre')} className="input mt-1" />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm text-slate-300">Tipo doc.
+              <select value={form.tipo_documento} onChange={set('tipo_documento')} className="input mt-1">
+                <option value="">—</option>
+                <option value="CC">CC</option><option value="CE">CE</option><option value="NIT">NIT</option><option value="PAS">PAS</option>
+              </select>
+            </label>
+            <label className="block text-sm text-slate-300">N° documento
+              <input value={form.numero_documento} onChange={set('numero_documento')} className="input mt-1" />
+            </label>
+          </div>
+
+          <label className="block text-sm text-slate-300">Teléfono
+            <input value={form.telefono} onChange={set('telefono')} className="input mt-1" />
+          </label>
+
+          <label className="block text-sm text-slate-300">Correo de contacto
+            <input type="email" value={form.email} onChange={set('email')} className="input mt-1" />
+          </label>
+
+          <label className="block text-sm text-slate-300">Correo remitente de facturación
+            <input type="email" placeholder="facturacion@sunegocio.com" value={form.email_facturacion} onChange={set('email_facturacion')} className="input mt-1" />
+          </label>
+          <p className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            ⚠️ Nota técnica: para que este correo pueda enviar facturas con éxito, el dominio o la dirección específica debe estar verificada previamente como Remitente (Sender) en el dashboard de Brevo.
+          </p>
+
+          <label className="block text-sm text-slate-300">Dirección
+            <input value={form.direccion} onChange={set('direccion')} className="input mt-1" />
+          </label>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
+            <button type="submit" disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

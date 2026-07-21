@@ -42,16 +42,19 @@ class Notificador
      * la petición HTTP responde de inmediato y el worker hace el envío SMTP,
      * evitando timeouts 502 en Render cuando Gmail tarda en responder.
      * Si la cola no está disponible, cae al envío directo (síncrono).
+     *
+     * $fromEmail/$fromName: remitente propio de la empresa (ej. facturas). Si
+     * se omiten, el correo sale con el remitente global (config('mail.from')).
      */
-    public function correo(string $para, string $asunto, string $titulo, array $lineas, ?string $adjuntoPath = null, string $tipo = 'ADMIN'): bool
+    public function correo(string $para, string $asunto, string $titulo, array $lineas, ?string $adjuntoPath = null, string $tipo = 'ADMIN', ?string $fromEmail = null, ?string $fromName = null): bool
     {
         try {
-            Mail::to($para)->queue(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath));
+            Mail::to($para)->queue(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath, $fromEmail, $fromName));
             return true;
         } catch (\Throwable $e) {
             Log::warning('No se pudo encolar el correo; intentando envío directo', ['para' => $para, 'error' => $e->getMessage()]);
             try {
-                Mail::to($para)->send(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath));
+                Mail::to($para)->send(new CorreoLogix($asunto, $titulo, $lineas, $adjuntoPath, $fromEmail, $fromName));
                 return true;
             } catch (\Throwable $e2) {
                 Log::warning('No se pudo enviar el correo de Logix', ['para' => $para, 'error' => $e2->getMessage()]);

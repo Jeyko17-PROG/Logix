@@ -47,7 +47,7 @@ class ReciboService
     public function enviarPorCorreo(Factura $factura): void
     {
         try {
-            $factura->loadMissing('cliente');
+            $factura->loadMissing('cliente', 'empresa');
             $email = $factura->cliente?->email;
             if (! $email) {
                 return;
@@ -62,6 +62,10 @@ class ReciboService
                 ? Storage::disk('public')->path(str_replace('/storage/', '', $factura->pdf_url))
                 : null;
 
+            // Si la empresa configuró su propio correo de facturación, la factura
+            // sale a nombre de ella (From/Reply-To) en vez del remitente genérico.
+            $empresa = $factura->empresa;
+
             $this->notificador->correo(
                 $email,
                 "Factura {$factura->numero} - Logix",
@@ -73,6 +77,8 @@ class ReciboService
                 ],
                 $adjunto,
                 'FACTURA',
+                $empresa?->email_facturacion,
+                $empresa?->nombre,
             );
         } catch (\Throwable $e) {
             Log::warning('Fallo el envío automático de la factura', [

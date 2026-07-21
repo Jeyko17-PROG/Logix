@@ -1,23 +1,27 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 
-const VACIO = { nombre: '', descripcion: '', precio: '', duracion_min: 30, activo: true }
+const VACIO = { nombre: '', descripcion: '', categoria_id: '', imagen: '', precio: '', duracion_min: 30, activo: true }
 
 export default function Servicios() {
   const [servicios, setServicios] = useState([])
+  const [categorias, setCategorias] = useState([])
   const [form, setForm] = useState(VACIO)
   const [editando, setEditando] = useState(null) // id del servicio en edición, o null para "nuevo"
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
 
   async function cargar() {
-    try { setServicios(await api('/servicios')) } catch { /* sesión expirada: client.js redirige al login */ }
+    try {
+      const [s, c] = await Promise.all([api('/servicios'), api('/categorias')])
+      setServicios(s); setCategorias(c)
+    } catch { /* sesión expirada: client.js redirige al login */ }
   }
   useEffect(() => { cargar() }, [])
 
   function editar(servicio) {
     setEditando(servicio.id)
-    setForm({ ...VACIO, ...servicio, precio: String(servicio.precio) })
+    setForm({ ...VACIO, ...servicio, categoria_id: servicio.categoria_id ?? '', precio: String(servicio.precio) })
   }
 
   function cancelar() {
@@ -45,14 +49,19 @@ export default function Servicios() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Servicios / Cortes</h1>
-      <p className="text-slate-400 text-sm mb-6">Define tus servicios (nombre, precio, duración estimada). Los clientes los eligen al reservar desde el portal público y tu equipo los asigna en las órdenes.</p>
+      <h1 className="text-2xl font-bold mb-2">Servicios</h1>
+      <p className="text-slate-400 text-sm mb-6">Define tus servicios agrupados por categoría (nombre, precio, duración). Los clientes los eligen al reservar desde el portal público y tu equipo los asigna en las órdenes.</p>
 
       <form onSubmit={guardar} className="rounded-2xl border border-slate-800 bg-slate-800/40 p-4 mb-6 space-y-3">
         <h2 className="font-semibold">{editando ? 'Editar servicio' : 'Nuevo servicio'}</h2>
         {error && <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-300">{error}</div>}
         <div className="grid gap-3 sm:grid-cols-2">
-          <input required placeholder="Nombre (ej. Corte Clásico, Corte + Barba)" value={form.nombre} onChange={set('nombre')} className="input sm:col-span-2" />
+          <input required placeholder="Nombre (ej. Corte Clásico, Manicure)" value={form.nombre} onChange={set('nombre')} className="input sm:col-span-2" />
+          <select value={form.categoria_id} onChange={set('categoria_id')} className="input">
+            <option value="">Sin categoría</option>
+            {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <input placeholder="URL de imagen (opcional)" value={form.imagen ?? ''} onChange={set('imagen')} className="input" />
           <input required type="number" min="0" step="0.01" placeholder="Precio" value={form.precio} onChange={set('precio')} className="input" />
           <input required type="number" min="5" placeholder="Duración (min)" value={form.duracion_min} onChange={set('duracion_min')} className="input" />
         </div>
@@ -70,9 +79,12 @@ export default function Servicios() {
         {servicios.length === 0 && <p className="text-slate-500 text-sm">Aún no tienes servicios creados.</p>}
         {servicios.map((s) => (
           <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/50 p-3">
-            <div>
-              <p className="font-medium">💈 {s.nombre} {!s.activo && <span className="text-xs text-slate-500">(inactivo)</span>}</p>
-              <p className="text-slate-400 text-sm">${Number(s.precio).toLocaleString()} · {s.duracion_min} min</p>
+            <div className="flex items-center gap-3">
+              {s.imagen && <img src={s.imagen} alt="" className="h-10 w-10 rounded-lg object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+              <div>
+                <p className="font-medium">💈 {s.nombre} {!s.activo && <span className="text-xs text-slate-500">(inactivo)</span>}</p>
+                <p className="text-slate-400 text-sm">${Number(s.precio).toLocaleString()} · {s.duracion_min} min{s.categoria && ` · ${s.categoria.nombre}`}</p>
+              </div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => editar(s)} className="text-sky-400 text-sm hover:underline">Editar</button>
