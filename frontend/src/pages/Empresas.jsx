@@ -156,9 +156,15 @@ function EditarEmpresaModal({ empresa, onClose, onGuardada }) {
     email: empresa.email ?? '',
     email_facturacion: empresa.email_facturacion ?? '',
     direccion: empresa.direccion ?? '',
+    tipo_negocio_id: empresa.tipo_negocio?.id ?? '',
   })
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [tiposNegocio, setTiposNegocio] = useState([])
+
+  useEffect(() => {
+    api('/tipos-negocio').then(setTiposNegocio).catch(() => {})
+  }, [])
 
   const set = (k) => (ev) => setForm({ ...form, [k]: ev.target.value })
 
@@ -183,24 +189,31 @@ function EditarEmpresaModal({ empresa, onClose, onGuardada }) {
             <input required value={form.nombre} onChange={set('nombre')} className="input mt-1" />
           </label>
 
+          <label className="block text-sm text-slate-300">Tipo de negocio *
+            <select required value={form.tipo_negocio_id} onChange={set('tipo_negocio_id')} className="input mt-1">
+              <option value="">Selecciona…</option>
+              {tiposNegocio.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm text-slate-300">Tipo doc.
-              <select value={form.tipo_documento} onChange={set('tipo_documento')} className="input mt-1">
+            <label className="block text-sm text-slate-300">Tipo doc. *
+              <select required value={form.tipo_documento} onChange={set('tipo_documento')} className="input mt-1">
                 <option value="">—</option>
                 <option value="CC">CC</option><option value="CE">CE</option><option value="NIT">NIT</option><option value="PAS">PAS</option>
               </select>
             </label>
-            <label className="block text-sm text-slate-300">N° documento
-              <input value={form.numero_documento} onChange={set('numero_documento')} className="input mt-1" />
+            <label className="block text-sm text-slate-300">N° documento *
+              <input required value={form.numero_documento} onChange={set('numero_documento')} className="input mt-1" />
             </label>
           </div>
 
-          <label className="block text-sm text-slate-300">Teléfono
-            <input value={form.telefono} onChange={set('telefono')} className="input mt-1" />
+          <label className="block text-sm text-slate-300">Teléfono *
+            <input required value={form.telefono} onChange={set('telefono')} className="input mt-1" />
           </label>
 
-          <label className="block text-sm text-slate-300">Correo de contacto
-            <input type="email" value={form.email} onChange={set('email')} className="input mt-1" />
+          <label className="block text-sm text-slate-300">Correo de contacto *
+            <input required type="email" value={form.email} onChange={set('email')} className="input mt-1" />
           </label>
 
           <label className="block text-sm text-slate-300">Correo remitente de facturación
@@ -210,8 +223,8 @@ function EditarEmpresaModal({ empresa, onClose, onGuardada }) {
             ⚠️ Nota técnica: para que este correo pueda enviar facturas con éxito, el dominio o la dirección específica debe estar verificada previamente como Remitente (Sender) en el dashboard de Brevo.
           </p>
 
-          <label className="block text-sm text-slate-300">Dirección
-            <input value={form.direccion} onChange={set('direccion')} className="input mt-1" />
+          <label className="block text-sm text-slate-300">Dirección *
+            <input required minLength={10} value={form.direccion} onChange={set('direccion')} className="input mt-1" />
           </label>
 
           <div className="flex justify-end gap-2 pt-2">

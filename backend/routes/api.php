@@ -137,6 +137,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     Route::put('/perfil', [ProfileController::class, 'update']);
     Route::post('/perfil/foto', [ProfileController::class, 'uploadFoto']);
     Route::post('/perfil/logo-empresa', [ProfileController::class, 'subirLogoEmpresa']);
+    Route::put('/perfil/logo-emoji', [ProfileController::class, 'actualizarLogoEmoji']);
     Route::put('/perfil/password', [ProfileController::class, 'cambiarPassword']);
 
     // Catálogo de planes (visible para usuarios autenticados: dashboard, "actualizar plan")

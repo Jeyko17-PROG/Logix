@@ -56,6 +56,37 @@ class ProfileController extends Controller
     }
 
     /**
+     * Disco para archivos públicos (fotos de perfil, logos): usa S3 (u otro
+     * proveedor S3-compatible: R2, Backblaze B2, Spaces...) cuando hay
+     * credenciales configuradas, porque persiste entre despliegues. Si no,
+     * cae al disco local 'public' (válido en desarrollo; en Render ese disco
+     * es efímero y el archivo se pierde en el siguiente reinicio/deploy).
+     */
+    private function discoPublico(): string
+    {
+        return filled(config('filesystems.disks.s3.key')) ? 's3' : 'public';
+    }
+
+    /**
+     * Elimina el archivo anterior del disco correspondiente a su URL, sin
+     * lanzar error si ya no existe o si viene de un disco distinto al actual
+     * (p. ej. quedó en el disco local antes de migrar a S3).
+     */
+    private function borrarAnterior(?string $urlAnterior): void
+    {
+        if (! $urlAnterior) {
+            return;
+        }
+        foreach (['s3', 'public'] as $disco) {
+            $base = rtrim((string) config("filesystems.disks.$disco.url"), '/');
+            if ($base && str_starts_with($urlAnterior, $base . '/')) {
+                Storage::disk($disco)->delete(substr($urlAnterior, strlen($base) + 1));
+                return;
+            }
+        }
+    }
+
+    /**
      * Sube/actualiza la foto de perfil.
      * Acepta tanto un archivo del computador como una captura de la cámara (PWA).
      */
@@ -66,10 +97,10 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+        $disco = $this->discoPublico();
 
-        // Guarda en storage/app/public/perfiles (accesible vía /storage gracias a storage:link).
-        $path = $request->file('foto')->store('perfiles', 'public');
-        $url = Storage::url($path);
+        $path = $request->file('foto')->store('perfiles', ['disk' => $disco, 'visibility' => 'public']);
+        $url = Storage::disk($disco)->url($path);
 
         // Registra el archivo en la tabla central de archivos.
         $archivo = Archivo::create([
@@ -81,11 +112,8 @@ class ProfileController extends Controller
             'subido_por' => $user->id,
         ]);
 
-        // Borra la foto anterior del disco si existía.
-        if ($user->foto_perfil_url) {
-            $anterior = str_replace('/storage/', '', $user->foto_perfil_url);
-            Storage::disk('public')->delete($anterior);
-        }
+        // Borra la foto anterior si existía.
+        $this->borrarAnterior($user->foto_perfil_url);
 
         $user->update(['foto_perfil_url' => $url]);
 
@@ -116,9 +144,9 @@ class ProfileController extends Controller
             'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'], // 5 MB
         ]);
 
-        // Guarda en storage/app/public/logos (accesible vía /storage gracias a storage:link).
-        $path = $request->file('logo')->store('logos', 'public');
-        $url = Storage::url($path);
+        $disco = $this->discoPublico();
+        $path = $request->file('logo')->store('logos', ['disk' => $disco, 'visibility' => 'public']);
+        $url = Storage::disk($disco)->url($path);
 
         $archivo = Archivo::create([
             'nombre_original' => $request->file('logo')->getClientOriginalName(),
@@ -129,11 +157,8 @@ class ProfileController extends Controller
             'subido_por' => $user->id,
         ]);
 
-        // Borra el logo anterior del disco si existía.
-        if ($empresa->logo_url) {
-            $anterior = str_replace('/storage/', '', $empresa->logo_url);
-            Storage::disk('public')->delete($anterior);
-        }
+        // Borra el logo anterior si existía.
+        $this->borrarAnterior($empresa->logo_url);
 
         $empresa->update(['logo_url' => $url]);
 
@@ -141,5 +166,31 @@ class ProfileController extends Controller
             'logo_url' => $url,
             'archivo_id' => $archivo->id,
         ]);
+    }
+
+    /**
+     * Alternativa al logo real: el dueño elige un emoji como "marca" del negocio
+     * (ej. 💅 para un spa de uñas). Se usa en el portal público y el QR mientras
+     * no haya un logo_url cargado. Enviar logo_emoji vacío lo quita.
+     */
+    public function actualizarLogoEmoji(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->esPropietario()) {
+            return response()->json(['message' => 'Solo el propietario del negocio puede cambiar el logo.'], 403);
+        }
+
+        $empresa = $user->empresaDeCobro();
+        if (! $empresa) {
+            return response()->json(['message' => 'Tu cuenta aún no tiene una empresa asociada.'], 422);
+        }
+
+        $data = $request->validate([
+            'logo_emoji' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $empresa->update(['logo_emoji' => $data['logo_emoji'] ?? null]);
+
+        return response()->json(['logo_emoji' => $empresa->logo_emoji]);
     }
 }

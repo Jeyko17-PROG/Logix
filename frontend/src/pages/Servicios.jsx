@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 
-const VACIO = { nombre: '', descripcion: '', categoria_id: '', imagen: '', precio: '', duracion_min: 30, activo: true }
+const VACIO = { nombre: '', descripcion: '', categoria_id: '', imagen: '', icono: '', precio: '', duracion_min: 30, activo: true }
 
 export default function Servicios() {
   const [servicios, setServicios] = useState([])
@@ -61,7 +61,8 @@ export default function Servicios() {
             <option value="">Sin categoría</option>
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
-          <input placeholder="URL de imagen (opcional)" value={form.imagen ?? ''} onChange={set('imagen')} className="input" />
+          <input placeholder="Emoji (ej. 💅, opcional)" value={form.icono ?? ''} onChange={set('icono')} className="input" maxLength={10} />
+          <input placeholder="URL de imagen (opcional)" value={form.imagen ?? ''} onChange={set('imagen')} className="input sm:col-span-2" />
           <input required type="number" min="0" step="0.01" placeholder="Precio" value={form.precio} onChange={set('precio')} className="input" />
           <input required type="number" min="5" placeholder="Duración (min)" value={form.duracion_min} onChange={set('duracion_min')} className="input" />
         </div>
@@ -82,7 +83,7 @@ export default function Servicios() {
             <div className="flex items-center gap-3">
               {s.imagen && <img src={s.imagen} alt="" className="h-10 w-10 rounded-lg object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />}
               <div>
-                <p className="font-medium">💈 {s.nombre} {!s.activo && <span className="text-xs text-slate-500">(inactivo)</span>}</p>
+                <p className="font-medium">{s.icono ? `${s.icono} ` : ''}{s.nombre} {!s.activo && <span className="text-xs text-slate-500">(inactivo)</span>}</p>
                 <p className="text-slate-400 text-sm">${Number(s.precio).toLocaleString()} · {s.duracion_min} min{s.categoria && ` · ${s.categoria.nombre}`}</p>
               </div>
             </div>

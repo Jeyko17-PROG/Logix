@@ -50,7 +50,7 @@ export default function Login() {
           password: form.password,
           password_confirmation: form.password_confirmation,
           nombre_empresa: form.nombre_empresa || form.name,
-          tipo_negocio_id: form.tipo_negocio_id || null,
+          tipo_negocio_id: form.tipo_negocio_id,
         })
         navigate('/')
       } else if (modo === 'recuperar') {
@@ -129,7 +129,7 @@ export default function Login() {
                 <Campo icono="🏪" placeholder="Nombre de tu negocio" value={form.nombre_empresa} onChange={set('nombre_empresa')} />
                 <div className="flex items-center gap-2 border-b border-slate-200 focus-within:border-blue-500 transition pb-1">
                   <span className="text-slate-400 text-sm">🧰</span>
-                  <select value={form.tipo_negocio_id} onChange={set('tipo_negocio_id')}
+                  <select value={form.tipo_negocio_id} onChange={set('tipo_negocio_id')} required
                     className="w-full py-1.5 text-slate-800 bg-transparent focus:outline-none text-sm">
                     <option value="">Tipo de negocio…</option>
                     {tiposNegocio.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}

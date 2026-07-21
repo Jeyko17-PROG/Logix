@@ -1,21 +1,19 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 export default function Configuracion() {
-  const [servicios, setServicios] = useState([])
   const [sucursales, setSucursales] = useState([])
   const [bodegaId, setBodegaId] = useState('') // '' = horario/bloqueos generales de la empresa
   const [horarios, setHorarios] = useState([])
   const [ajustes, setAjustes] = useState({ duracion_cita_min: 30, buffer_min: 0 })
   const [bloqueos, setBloqueos] = useState([])
-  const [nuevoServ, setNuevoServ] = useState({ nombre: '', duracion_min: 30, precio: '' })
   const [bloqueo, setBloqueo] = useState({ inicio: '', fin: '', motivo: '' })
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    api('/servicios').then(setServicios).catch(() => {})
     api('/bodegas').then(setSucursales).catch(() => {}) // multisucursal; si no aplica, queda vacío
   }, [])
 
@@ -46,16 +44,6 @@ export default function Configuracion() {
     const payload = horarios.filter((h) => h.activo).map((h) => ({ dia_semana: h.dia_semana, hora_inicio: h.hora_inicio, hora_fin: h.hora_fin }))
     await api('/agenda/horarios', { method: 'PUT', body: { bodega_id: bodegaId || null, horarios: payload } })
     flash('Horario laboral guardado.')
-  }
-  async function crearServicio(e) {
-    e.preventDefault()
-    await api('/servicios', { method: 'POST', body: { ...nuevoServ, precio: Number(nuevoServ.precio) || 0 } })
-    setNuevoServ({ nombre: '', duracion_min: 30, precio: '' })
-    api('/servicios').then(setServicios)
-  }
-  async function eliminarServicio(id) {
-    await api(`/servicios/${id}`, { method: 'DELETE' })
-    api('/servicios').then(setServicios)
   }
   async function crearBloqueo(e) {
     e.preventDefault()
@@ -122,24 +110,13 @@ export default function Configuracion() {
         <button onClick={guardarHorarios} className="mt-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Guardar horario</button>
       </section>
 
-      {/* Servicios */}
+      {/* Servicios: se gestionan en su propia página (nombre, precio, categoría, imagen y emoji) */}
       <section>
-        <h2 className="font-semibold mb-3">Servicios</h2>
-        <form onSubmit={crearServicio} className="flex flex-wrap gap-2 mb-3">
-          <input required placeholder="Nombre" value={nuevoServ.nombre} onChange={(e) => setNuevoServ({ ...nuevoServ, nombre: e.target.value })} className="input !w-auto" />
-          <input type="number" placeholder="Duración (min)" value={nuevoServ.duracion_min} onChange={(e) => setNuevoServ({ ...nuevoServ, duracion_min: Number(e.target.value) })} className="input !w-auto" />
-          <input type="number" placeholder="Precio" value={nuevoServ.precio} onChange={(e) => setNuevoServ({ ...nuevoServ, precio: e.target.value })} className="input !w-auto" />
-          <button className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Agregar</button>
-        </form>
-        <ul className="rounded-xl border border-slate-800 divide-y divide-slate-800">
-          {servicios.map((s) => (
-            <li key={s.id} className="p-3 flex justify-between items-center">
-              <span>{s.nombre} · <span className="text-slate-400">{s.duracion_min} min · ${Number(s.precio).toLocaleString()}</span></span>
-              <button onClick={() => eliminarServicio(s.id)} className="text-red-400 text-sm hover:underline">Eliminar</button>
-            </li>
-          ))}
-          {servicios.length === 0 && <li className="p-4 text-slate-500 text-sm">Sin servicios.</li>}
-        </ul>
+        <h2 className="font-semibold mb-2">Servicios</h2>
+        <p className="text-sm text-slate-400">
+          Crea y edita tus servicios (con categoría, precio, imagen y emoji) desde{' '}
+          <Link to="/servicios" className="text-emerald-400 hover:underline">Servicios</Link> en el menú.
+        </p>
       </section>
 
       {/* Bloqueos */}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\RegistroEmpresaRequest;
 use App\Models\Plan;
 use App\Models\Role;
 use App\Models\User;
@@ -19,19 +20,9 @@ class AuthController extends Controller
     /**
      * Registro de un nuevo usuario (cuenta SaaS aislada).
      */
-    public function register(Request $request): JsonResponse
+    public function register(RegistroEmpresaRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'tipo_documento' => ['nullable', 'in:CC,CE,NIT,PAS'],
-            'numero_documento' => ['nullable', 'string', 'max:50'],
-            'telefono' => ['nullable', 'string', 'max:50'],
-            'email' => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            // Multiempresa: nombre del negocio y su tipo (define los módulos visibles).
-            'nombre_empresa' => ['nullable', 'string', 'max:255'],
-            'tipo_negocio_id' => ['nullable', 'exists:tipos_negocio,id'],
-        ]);
+        $data = $request->validated();
 
         // Todo usuario nuevo es "Usuario": propietario de su propio espacio aislado.
         $rolId = Role::where('nombre', 'Usuario')->value('id')
@@ -275,6 +266,7 @@ class AuthController extends Controller
                 'plan' => $empresa->plan?->only(['id', 'nombre']),
                 'estado' => $empresa->estado,
                 'logo_url' => $empresa->logo_url,
+                'logo_emoji' => $empresa->logo_emoji,
                 'es_admin_empresa' => (bool) $user->es_admin_empresa,
             ]);
         }

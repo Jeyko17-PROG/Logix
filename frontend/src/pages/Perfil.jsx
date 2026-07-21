@@ -20,6 +20,8 @@ export default function Perfil() {
   const [guardando, setGuardando] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
   const [subiendoLogo, setSubiendoLogo] = useState(false)
+  const [logoEmoji, setLogoEmoji] = useState(user?.empresa_info?.logo_emoji ?? '')
+  const [guardandoEmoji, setGuardandoEmoji] = useState(false)
 
   // Cambio de contraseña
   const [pwd, setPwd] = useState({ actual: '', nueva: '', confirmar: '' })
@@ -93,6 +95,19 @@ export default function Perfil() {
     }
   }
 
+  async function guardarLogoEmoji() {
+    setMsg(''); setError(''); setGuardandoEmoji(true)
+    try {
+      const data = await api('/perfil/logo-emoji', { method: 'PUT', body: { logo_emoji: logoEmoji || null } })
+      setUser({ ...user, empresa_info: { ...user.empresa_info, logo_emoji: data.logo_emoji } })
+      setMsg(data.logo_emoji ? 'Emoji del negocio guardado.' : 'Emoji quitado.')
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar el emoji.')
+    } finally {
+      setGuardandoEmoji(false)
+    }
+  }
+
   return (
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-white mb-6">Mi perfil</h1>
@@ -131,24 +146,36 @@ export default function Perfil() {
 
       {/* Logo del negocio: solo el propietario, se muestra en el portal público y el QR de reserva */}
       {esPropietario(user) && (
-        <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-800">
-          <div className="h-20 w-20 rounded-lg bg-slate-700 overflow-hidden flex items-center justify-center text-2xl text-slate-300">
-            {user?.empresa_info?.logo_url
-              ? <img src={user.empresa_info.logo_url} alt="Logo del negocio" className="h-full w-full object-cover" />
-              : '🏢'}
+        <div className="mb-8 pb-8 border-b border-slate-800">
+          <div className="flex items-center gap-4">
+            <div className="h-20 w-20 rounded-lg bg-slate-700 overflow-hidden flex items-center justify-center text-3xl text-slate-300">
+              {user?.empresa_info?.logo_url
+                ? <img src={user.empresa_info.logo_url} alt="Logo del negocio" className="h-full w-full object-cover" />
+                : (user?.empresa_info?.logo_emoji || '🏢')}
+            </div>
+            <div>
+              <input ref={logoInput} type="file" accept="image/*" onChange={subirLogo} className="hidden" />
+              <button
+                type="button"
+                onClick={() => logoInput.current?.click()}
+                disabled={subiendoLogo}
+                className="rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm px-4 py-2"
+              >
+                {subiendoLogo ? 'Subiendo…' : 'Cambiar logo del negocio'}
+              </button>
+              <p className="text-xs text-slate-500 mt-1">Se muestra en tu portal de reservas y en el QR · máx. 5 MB</p>
+            </div>
           </div>
-          <div>
-            <input ref={logoInput} type="file" accept="image/*" onChange={subirLogo} className="hidden" />
-            <button
-              type="button"
-              onClick={() => logoInput.current?.click()}
-              disabled={subiendoLogo}
-              className="rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm px-4 py-2"
-            >
-              {subiendoLogo ? 'Subiendo…' : 'Cambiar logo del negocio'}
+
+          <div className="mt-4 flex items-center gap-2">
+            <input value={logoEmoji} onChange={(e) => setLogoEmoji(e.target.value)} placeholder="🧖 o 💅 (opcional)"
+              maxLength={20} className="w-40 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-lg focus:outline-none focus:border-emerald-500" />
+            <button type="button" onClick={guardarLogoEmoji} disabled={guardandoEmoji}
+              className="rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm px-4 py-2 whitespace-nowrap">
+              {guardandoEmoji ? 'Guardando…' : 'Guardar emoji'}
             </button>
-            <p className="text-xs text-slate-500 mt-1">Se muestra en tu portal de reservas y en el QR · máx. 5 MB</p>
           </div>
+          <p className="text-xs text-slate-500 mt-1">¿No tienes un logo? Elige un emoji que represente tu negocio; se usa mientras no subas una imagen.</p>
         </div>
       )}
 

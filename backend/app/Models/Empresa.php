@@ -27,6 +27,7 @@ class Empresa extends Model
         'email_facturacion',
         'direccion',
         'logo_url',
+        'logo_emoji',
         'tipo_negocio_id',
         'owner_user_id',
         'plan_id',

@@ -40,6 +40,29 @@ services:
         value: database
       - key: FILESYSTEM_DISK
         value: public
+      # --- Almacenamiento de imágenes (fotos de perfil, logo del negocio) ---
+      # El disco local de Render es efímero (se borra en cada deploy/reinicio),
+      # así que las fotos/logos se guardan en S3 (o un proveedor S3-compatible:
+      # Cloudflare R2, Backblaze B2, DigitalOcean Spaces, etc.) cuando estas
+      # variables están definidas; si se dejan vacías, el código cae de vuelta
+      # al disco local 'public' (las imágenes volverán a romperse en cada deploy).
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        sync: false
+      - key: AWS_BUCKET
+        sync: false
+      # Solo si el proveedor NO es AWS (R2, Backblaze, Spaces...): la URL del endpoint S3.
+      - key: AWS_ENDPOINT
+        sync: false
+      # Solo si el proveedor NO es AWS: casi siempre 'true' para R2/Backblaze/MinIO.
+      - key: AWS_USE_PATH_STYLE_ENDPOINT
+        value: 'false'
+      # URL pública base para servir los archivos (dominio del bucket o CDN delante de él).
+      - key: AWS_URL
+        sync: false
       # --- Correo transaccional (envio de facturas) ---
       # MAIL_USERNAME y MAIL_PASSWORD se configuran como secretos en el dashboard de Render.
       # Ejemplos: Gmail (smtp.gmail.com:587 + App Password) o Brevo (smtp-relay.brevo.com:587).

@@ -70,7 +70,7 @@ const MENU = [
     items: [
       { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia' } },
       { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloTipo: 'lavadero' },
-      { to: '/servicios', label: 'Servicios', icon: '💈', feat: 'barberia', featPorTipo: { spa: 'agenda' }, soloTipo: ['barberia', 'spa'] },
+      { to: '/servicios', label: 'Servicios', icon: '💈', feat: 'agenda' },
       { to: '/restaurante', label: 'Mesas y Comandas', icon: '🍽️', feat: 'mesas' },
       { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
     ],

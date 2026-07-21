@@ -51,6 +51,7 @@ class PortalController extends Controller
             'nombre' => $empresa?->nombre ?? $u?->name,
             'slug' => $empresa?->reservas_slug ?? $u?->reservas_slug,
             'logo_url' => $empresa?->logo_url,
+            'logo_emoji' => $empresa?->logo_emoji,
             'tipo_negocio' => $empresa?->tipoNegocio?->clave,
         ]);
     }
@@ -80,7 +81,7 @@ class PortalController extends Controller
             ))
             ->with('categoria:id,nombre')
             ->orderBy('nombre')
-            ->get(['id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'duracion_min', 'precio']);
+            ->get(['id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'icono', 'duracion_min', 'precio']);
     }
 
     /** Planes de lavado activos que el cliente puede reservar (Lavadero). */
@@ -145,15 +146,24 @@ class PortalController extends Controller
         // Garantía anti doble-reserva (misma lógica que el panel admin; scoped por sucursal).
         $this->agenda->asegurarDisponible($inicio, $fin, null, $negocio, $data['bodega_id'] ?? null);
 
-        return DB::transaction(function () use ($data, $inicio, $fin, $negocio) {
+        // El portal es público (sin sesión), así que hay que fijar empresa_id a
+        // mano: el dueño autenticado filtra su Agenda/Clientes por empresa_id,
+        // y sin esto las reservas del QR quedarían invisibles para él.
+        $empresaId = $this->empresaIdDe($negocio);
+
+        return DB::transaction(function () use ($data, $inicio, $fin, $negocio, $empresaId) {
             // Reutiliza el cliente del negocio por email, o lo crea como POTENCIAL.
             $cliente = Cliente::firstOrCreate(
                 ['email' => $data['email'], 'owner_id' => $negocio],
-                ['nombre_completo' => $data['nombre_completo'], 'telefono' => $data['telefono'], 'estado' => 'POTENCIAL']
+                ['nombre_completo' => $data['nombre_completo'], 'telefono' => $data['telefono'], 'estado' => 'POTENCIAL', 'empresa_id' => $empresaId]
             );
+            if ($empresaId && ! $cliente->empresa_id) {
+                $cliente->update(['empresa_id' => $empresaId]);
+            }
 
             $cita = Cita::create([
                 'owner_id' => $negocio,
+                'empresa_id' => $empresaId,
                 'cliente_id' => $cliente->id,
                 'servicio_id' => $data['servicio_id'] ?? null,
                 'plan_lavado_id' => $data['plan_lavado_id'] ?? null,
@@ -178,7 +188,7 @@ class PortalController extends Controller
 
             return response()->json([
                 'mensaje' => 'Reserva confirmada.',
-                'cita' => $cita->load('servicio:id,nombre', 'planLavado:id,nombre', 'bodega:id,nombre'),
+                'cita' => $cita->load('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre'),
             ], 201);
         });
     }
@@ -188,6 +198,17 @@ class PortalController extends Controller
     {
         return \App\Models\Empresa::with('tipoNegocio:id,clave')
             ->where('owner_user_id', $negocioId)->first()?->tipoNegocio?->clave;
+    }
+
+    /**
+     * Id de la empresa (tenant) del dueño resuelto por negocioId(). El portal
+     * es público (sin usuario autenticado), así que PerteneceAUsuario NO
+     * asigna empresa_id automáticamente al crear; hay que fijarlo a mano o el
+     * dueño (que sí filtra por empresa_id) nunca vería estas citas/clientes.
+     */
+    private function empresaIdDe(int $negocioId): ?int
+    {
+        return \App\Models\Empresa::where('owner_user_id', $negocioId)->value('id');
     }
 
     /** Consulta de citas del cliente por su correo (sin login, apto móvil). */
@@ -202,7 +223,7 @@ class PortalController extends Controller
         }
 
         $citas = $cliente->citas()
-            ->with('servicio:id,nombre', 'planLavado:id,nombre', 'bodega:id,nombre')
+            ->with('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre')
             ->orderByDesc('inicio')
             ->get();
 

@@ -46,9 +46,9 @@ export default function Reserva() {
           <img src={negocio.logo_url} alt={negocio.nombre || 'Logix'}
             className="h-16 w-16 object-contain mx-auto mb-3 rounded-lg drop-shadow-lg"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
-        ) : ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio] ? (
+        ) : (negocio?.logo_emoji || ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio]) ? (
           <div className="h-16 w-16 mx-auto mb-3 rounded-lg bg-slate-800 flex items-center justify-center text-4xl drop-shadow-lg">
-            {ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]}
+            {negocio.logo_emoji || ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]}
           </div>
         ) : (
           <img src="/logo.svg" alt="Logix"
@@ -156,8 +156,8 @@ function FormReserva({ base, esLavadero }) {
         <h2 className="text-xl font-bold">¡Reserva confirmada!</h2>
         <p className="mt-2 text-slate-200">{fmtFecha(confirmada.inicio)}</p>
         {confirmada.bodega && <p className="text-slate-400 text-sm">📍 {confirmada.bodega.nombre}</p>}
-        {confirmada.plan_lavado && <p className="text-slate-400 text-sm">{confirmada.plan_lavado.nombre}</p>}
-        {confirmada.servicio && <p className="text-slate-400 text-sm">{confirmada.servicio.nombre}</p>}
+        {confirmada.plan_lavado && <p className="text-slate-400 text-sm">{confirmada.plan_lavado.icono ? `${confirmada.plan_lavado.icono} ` : ''}{confirmada.plan_lavado.nombre}</p>}
+        {confirmada.servicio && <p className="text-slate-400 text-sm">{confirmada.servicio.icono ? `${confirmada.servicio.icono} ` : ''}{confirmada.servicio.nombre}</p>}
         {confirmada.tipo_vehiculo && (
           <p className="text-slate-400 text-sm mt-1">{iconoVehiculo(confirmada.tipo_vehiculo)} {confirmada.tipo_vehiculo === 'moto' ? 'Moto' : 'Carro'} · Placa {confirmada.placa}</p>
         )}
@@ -222,7 +222,7 @@ function FormReserva({ base, esLavadero }) {
       ) : servicioSeleccionado ? (
         <div className="flex items-center justify-between rounded-lg border border-emerald-600/50 bg-emerald-500/10 px-3 py-2.5">
           <div className="text-sm">
-            <p className="font-semibold">{servicioSeleccionado.nombre}</p>
+            <p className="font-semibold">{servicioSeleccionado.icono ? `${servicioSeleccionado.icono} ` : ''}{servicioSeleccionado.nombre}</p>
             <p className="text-xs text-slate-400">{servicioSeleccionado.duracion_min} min · ${Number(servicioSeleccionado.precio).toLocaleString()}</p>
           </div>
           <button type="button" onClick={() => setForm({ ...form, servicio_id: '' })} className="text-xs text-slate-400 hover:text-white">Cambiar</button>
@@ -237,7 +237,7 @@ function FormReserva({ base, esLavadero }) {
                 className="text-left rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-800 overflow-hidden transition">
                 {s.imagen && <img src={s.imagen} alt="" className="w-full h-20 object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />}
                 <div className="p-2.5">
-                  <p className="text-sm font-medium leading-tight">{s.nombre}</p>
+                  <p className="text-sm font-medium leading-tight">{s.icono ? `${s.icono} ` : ''}{s.nombre}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{s.duracion_min} min · ${Number(s.precio).toLocaleString()}</p>
                 </div>
               </button>
@@ -311,7 +311,10 @@ function MisCitas({ base }) {
           <div key={c.id} className="rounded-lg border border-slate-800 bg-slate-800/50 p-3 flex justify-between items-center">
             <div>
               <p>{fmtFecha(c.inicio)}</p>
-              <p className="text-slate-400 text-sm">{c.plan_lavado?.nombre ?? c.servicio?.nombre ?? 'Cita'} · {c.estado}</p>
+              <p className="text-slate-400 text-sm">
+                {(c.plan_lavado?.icono || c.servicio?.icono) ? `${c.plan_lavado?.icono || c.servicio?.icono} ` : ''}
+                {c.plan_lavado?.nombre ?? c.servicio?.nombre ?? 'Cita'} · {c.estado}
+              </p>
               {c.bodega && <p className="text-slate-500 text-xs">📍 {c.bodega.nombre}</p>}
               {c.tipo_vehiculo && <p className="text-slate-500 text-xs">{iconoVehiculo(c.tipo_vehiculo)} {c.tipo_vehiculo === 'moto' ? 'Moto' : 'Carro'} · Placa {c.placa}</p>}
             </div>

@@ -13,9 +13,10 @@ export default function QR() {
   const url = getReservasUrl(user?.reservas_slug)
   const local = esUrlLocal(base)
   const mensaje = `¡Reserva tu cita en línea! 👉 ${url}`
-  // Mientras no subas tu propio logo (Perfil), el QR muestra un ícono según tu rubro.
+  // Prioridad: logo real subido > emoji propio elegido en Perfil > ícono genérico según el rubro.
   const logoUrl = user?.empresa_info?.logo_url
-  const iconoTipoNegocio = { lavadero: '🧼', barberia: '💈' }[user?.empresa_info?.tipo_negocio?.clave]
+  const logoEmoji = user?.empresa_info?.logo_emoji
+  const iconoTipoNegocio = { lavadero: '🧼', barberia: '💈', spa: '💆' }[user?.empresa_info?.tipo_negocio?.clave]
 
   function guardarBase() {
     setPublicBaseUrl(editando)
@@ -88,11 +89,11 @@ export default function QR() {
       </div>
 
       <div ref={ref} className="bg-white rounded-2xl p-6 w-fit mx-auto">
-        {(logoUrl || iconoTipoNegocio) && (
+        {(logoUrl || logoEmoji || iconoTipoNegocio) && (
           <div className="mb-3 flex justify-center">
             {logoUrl
               ? <img src={logoUrl} alt="" className="h-12 w-12 object-contain rounded" />
-              : <span className="text-4xl">{iconoTipoNegocio}</span>}
+              : <span className="text-4xl">{logoEmoji || iconoTipoNegocio}</span>}
           </div>
         )}
         <QRCodeCanvas value={url} size={220} level="M" includeMargin />

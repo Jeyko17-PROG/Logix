@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\PerteneceAUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Cita extends Model
@@ -35,6 +36,16 @@ class Cita extends Model
     public function servicio(): BelongsTo
     {
         return $this->belongsTo(Servicio::class, 'servicio_id');
+    }
+
+    /**
+     * Detalle de servicios de la cita (uno o varios, ej. Uñas + Pestañas).
+     * `servicio_id` (columna directa, arriba) queda con el primero para
+     * retrocompatibilidad; el desglose completo con precio/duración vive aquí.
+     */
+    public function detalleServicios(): HasMany
+    {
+        return $this->hasMany(CitaServicio::class);
     }
 
     public function planLavado(): BelongsTo

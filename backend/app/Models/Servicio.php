@@ -14,7 +14,7 @@ class Servicio extends Model
 
     protected $table = 'servicios';
 
-    protected $fillable = ['owner_id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'duracion_min', 'precio', 'activo'];
+    protected $fillable = ['owner_id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'icono', 'duracion_min', 'precio', 'activo'];
 
     protected $casts = [
         'duracion_min' => 'integer',

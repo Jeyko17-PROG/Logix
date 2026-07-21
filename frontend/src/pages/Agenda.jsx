@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext'
 
 const iconoVehiculo = (tipo) => (tipo === 'moto' ? '🏍️' : tipo === 'carro' ? '🚗' : '')
 
+// Emoji propio del servicio/plan elegido (ej. 💅 para "Uñas"), definido por el negocio en Servicios/Planes de Lavado.
+const iconoServicio = (c) => c.servicio?.icono || c.plan_lavado?.icono || ''
+
 const ESTADO_COLOR = {
   PENDIENTE: 'bg-amber-600', CONFIRMADA: 'bg-emerald-600', CANCELADA: 'bg-red-600',
   REPROGRAMADA: 'bg-sky-600', COMPLETADA: 'bg-slate-500', NO_ASISTIO: 'bg-rose-800',
@@ -115,6 +118,7 @@ export default function Agenda() {
               <div className="flex flex-1 items-center justify-between p-3">
                 <div>
                   <span className="font-mono text-emerald-400">{fmtHora(c.inicio)}–{fmtHora(c.fin)}</span>
+                  {iconoServicio(c) && <span className="ml-2 text-lg align-middle">{iconoServicio(c)}</span>}
                   <span className="ml-3">{c.cliente?.nombre_completo}</span>
                   <span className="ml-2 text-slate-400 text-sm">{c.plan_lavado?.nombre ?? c.servicio?.nombre ?? ''}</span>
                   {c.tipo_vehiculo && <span className="ml-2 text-slate-400 text-sm">{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
@@ -142,7 +146,7 @@ export default function Agenda() {
               <div className="text-xs text-slate-400 mb-1">{DIAS[d.getDay()]} {d.getDate()}</div>
               {citasDe(d).map((c) => (
                 <div key={c.id} className={`text-xs rounded px-1.5 py-1 mb-1 ${ESTADO_COLOR[c.estado]}`}>
-                  {fmtHora(c.inicio)} {c.cliente?.nombre_completo}
+                  {iconoServicio(c) && `${iconoServicio(c)} `}{fmtHora(c.inicio)} {c.cliente?.nombre_completo}
                 </div>
               ))}
             </div>
@@ -186,8 +190,13 @@ function VistaMes({ fecha, citas, onDia }) {
               {lista.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {lista.slice(0, 5).map((c) => (
-                    <span key={c.id} title={`${fmtHora(c.inicio)} ${c.cliente?.nombre_completo ?? ''}`}
-                      className={`h-2 w-2 rounded-full ${ESTADO_COLOR[c.estado]}`} />
+                    iconoServicio(c) ? (
+                      <span key={c.id} title={`${fmtHora(c.inicio)} ${c.cliente?.nombre_completo ?? ''} · ${c.plan_lavado?.nombre ?? c.servicio?.nombre ?? ''}`}
+                        className="text-xs leading-none">{iconoServicio(c)}</span>
+                    ) : (
+                      <span key={c.id} title={`${fmtHora(c.inicio)} ${c.cliente?.nombre_completo ?? ''}`}
+                        className={`h-2 w-2 rounded-full ${ESTADO_COLOR[c.estado]}`} />
+                    )
                   ))}
                   {lista.length > 5 && <span className="text-[10px] text-slate-500">+{lista.length - 5}</span>}
                 </div>
@@ -200,10 +209,11 @@ function VistaMes({ fecha, citas, onDia }) {
   )
 }
 
+const LINEA_VACIA = { servicio_id: '', personalizado: false, nombre_personalizado: '', precio_unitario: '', duracion_min: '' }
+
 function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaInicial, onClose, onCreada }) {
   const [lista, setLista] = useState(clientes)        // clientes (incluye los creados aquí)
   const [cliente_id, setCliente] = useState('')
-  const [servicio_id, setServicio] = useState('')
   const [plan_lavado_id, setPlan] = useState('')
   const [bodega_id, setBodega] = useState('')
   const [tipo_vehiculo, setTipoVehiculo] = useState('')
@@ -213,6 +223,23 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
   const [buscando, setBuscando] = useState(false)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
+
+  // Servicios de esta cita (varios posibles, ej. Uñas + Pestañas); no aplica al flujo de lavadero.
+  const [serviciosDisponibles, setServiciosDisponibles] = useState(servicios)
+  const [lineasServicio, setLineasServicio] = useState([{ ...LINEA_VACIA }])
+
+  const actualizarLinea = (i, cambios) => setLineasServicio((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...cambios } : l)))
+  const agregarLinea = () => setLineasServicio((ls) => [...ls, { ...LINEA_VACIA }])
+  const quitarLinea = (i) => setLineasServicio((ls) => ls.filter((_, idx) => idx !== i))
+
+  const totalPrecio = lineasServicio.reduce((s, l) => s + (Number(l.precio_unitario) || 0), 0)
+  const totalDuracion = lineasServicio.reduce((s, l) => s + (Number(l.duracion_min) || 0), 0)
+
+  // La sucursal elegida filtra el catálogo (servicios sin sucursal asignada se ven en todas).
+  useEffect(() => {
+    if (esLavadero) return
+    api(`/servicios${bodega_id ? `?bodega_id=${bodega_id}` : ''}`).then(setServiciosDisponibles).catch(() => {})
+  }, [bodega_id, esLavadero])
 
   // Crear cliente en línea (para usuarios que aún no tienen clientes).
   const [nuevoCliente, setNuevoCliente] = useState('')
@@ -237,24 +264,29 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
     setBuscando(true); setError('')
     const filtro = (esLavadero
       ? (plan_lavado_id ? `&plan_lavado_id=${plan_lavado_id}` : '')
-      : (servicio_id ? `&servicio_id=${servicio_id}` : '')) + (bodega_id ? `&bodega_id=${bodega_id}` : '')
+      : (totalDuracion ? `&duracion_min=${totalDuracion}` : '')) + (bodega_id ? `&bodega_id=${bodega_id}` : '')
     api(`/citas/disponibilidad?fecha=${fecha}${filtro}`)
       .then((data) => { if (!cancelado) setSlots(data.slots ?? []) })
       .catch((err) => { if (!cancelado) { setSlots([]); setError(err.message || 'No se pudo cargar la disponibilidad.') } })
       .finally(() => { if (!cancelado) setBuscando(false) })
     return () => { cancelado = true }
-  }, [fecha, servicio_id, plan_lavado_id, bodega_id, esLavadero])
+  }, [fecha, totalDuracion, plan_lavado_id, bodega_id, esLavadero])
 
   async function reservar(inicio) {
     if (!cliente_id) { setError('Selecciona o crea un cliente primero.'); return }
     if (esLavadero && (!tipo_vehiculo || !placa)) { setError('Indica el tipo de vehículo y la placa.'); return }
+    const servicios = esLavadero ? [] : lineasServicio
+      .filter((l) => (l.personalizado ? l.nombre_personalizado.trim() : l.servicio_id))
+      .map((l) => (l.personalizado
+        ? { nombre_personalizado: l.nombre_personalizado.trim(), precio_unitario: Number(l.precio_unitario) || 0, duracion_min: Number(l.duracion_min) || 0 }
+        : { servicio_id: l.servicio_id, precio_unitario: l.precio_unitario === '' ? undefined : Number(l.precio_unitario), duracion_min: l.duracion_min === '' ? undefined : Number(l.duracion_min) }))
     setError(''); setGuardando(true)
     try {
       await api('/citas', {
         method: 'POST',
         body: {
           cliente_id,
-          servicio_id: servicio_id || null,
+          servicios: servicios.length ? servicios : undefined,
           plan_lavado_id: plan_lavado_id || null,
           bodega_id: bodega_id || null,
           tipo_vehiculo: tipo_vehiculo || null,
@@ -307,10 +339,50 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
               </div>
             </>
           ) : (
-            <select value={servicio_id} onChange={(e) => setServicio(e.target.value)} className="input">
-              <option value="">Servicio (opcional)…</option>
-              {servicios.map((s) => <option key={s.id} value={s.id}>{s.nombre} ({s.duracion_min} min)</option>)}
-            </select>
+            <div className="space-y-2 rounded-lg border border-slate-700 p-3">
+              <p className="text-xs text-slate-400">Servicios de esta cita</p>
+              {lineasServicio.map((l, i) => (
+                <div key={i} className="space-y-1.5 border-b border-slate-700/50 pb-2 last:border-0 last:pb-0">
+                  <div className="flex gap-2">
+                    <select
+                      value={l.personalizado ? '__personalizado__' : l.servicio_id}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v === '__personalizado__') {
+                          actualizarLinea(i, { personalizado: true, servicio_id: '', nombre_personalizado: '', precio_unitario: '', duracion_min: '' })
+                        } else {
+                          const s = serviciosDisponibles.find((sv) => String(sv.id) === v)
+                          actualizarLinea(i, { personalizado: false, servicio_id: v, precio_unitario: s?.precio ?? '', duracion_min: s?.duracion_min ?? '' })
+                        }
+                      }}
+                      className="input flex-1">
+                      <option value="">Servicio…</option>
+                      {serviciosDisponibles.map((s) => <option key={s.id} value={s.id}>{s.icono ? `${s.icono} ` : ''}{s.nombre}</option>)}
+                      <option value="__personalizado__">✏️ Personalizado…</option>
+                    </select>
+                    {lineasServicio.length > 1 && (
+                      <button type="button" onClick={() => quitarLinea(i)} className="text-red-400 px-2" title="Quitar">✕</button>
+                    )}
+                  </div>
+                  {l.personalizado && (
+                    <input placeholder="Nombre del servicio" value={l.nombre_personalizado}
+                      onChange={(e) => actualizarLinea(i, { nombre_personalizado: e.target.value })} className="input" />
+                  )}
+                  <div className="flex gap-2">
+                    <input type="number" min="0" placeholder="Precio" value={l.precio_unitario}
+                      onChange={(e) => actualizarLinea(i, { precio_unitario: e.target.value })} className="input" />
+                    <input type="number" min="1" placeholder="Duración (min)" value={l.duracion_min}
+                      onChange={(e) => actualizarLinea(i, { duracion_min: e.target.value })} className="input" />
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={agregarLinea} className="text-sm text-emerald-400 hover:underline">+ Añadir otro servicio</button>
+              {(totalPrecio > 0 || totalDuracion > 0) && (
+                <p className="text-sm text-slate-300 pt-1 border-t border-slate-700">
+                  Total: <span className="font-semibold">${totalPrecio.toLocaleString('es-CO')}</span> · {totalDuracion} min
+                </p>
+              )}
+            </div>
           )}
 
           <div className="grid gap-2">

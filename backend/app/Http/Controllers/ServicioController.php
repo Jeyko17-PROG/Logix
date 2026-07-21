@@ -7,9 +7,15 @@ use Illuminate\Http\Request;
 
 class ServicioController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return Servicio::with('categoria:id,nombre')->orderBy('nombre')->get();
+        $bodegaId = $request->query('bodega_id');
+
+        return Servicio::with('categoria:id,nombre')
+            ->when($bodegaId, fn ($q) => $q->where(
+                fn ($w) => $w->whereDoesntHave('bodegas')->orWhereHas('bodegas', fn ($b) => $b->where('bodegas.id', $bodegaId))
+            ))
+            ->orderBy('nombre')->get();
     }
 
     public function store(Request $request)
@@ -36,6 +42,7 @@ class ServicioController extends Controller
             'descripcion' => ['nullable', 'string'],
             'categoria_id' => ['nullable', 'exists:categorias,id'],
             'imagen' => ['nullable', 'string', 'max:2048'],
+            'icono' => ['nullable', 'string', 'max:20'],
             'duracion_min' => ['required', 'integer', 'min:5'],
             'precio' => ['nullable', 'numeric', 'min:0'],
             'activo' => ['boolean'],

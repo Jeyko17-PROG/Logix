@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ActualizarEmpresaRequest;
 use App\Models\Auditoria;
 use App\Models\Empresa;
 use App\Models\EmpresaModulo;
@@ -70,20 +71,9 @@ class EmpresaAdminController extends Controller
     }
 
     /** Actualiza los datos básicos de la empresa. */
-    public function update(Request $request, Empresa $empresa): JsonResponse
+    public function update(ActualizarEmpresaRequest $request, Empresa $empresa): JsonResponse
     {
-        $data = $request->validate([
-            'nombre' => ['required', 'string', 'max:255'],
-            'tipo_documento' => ['nullable', 'in:CC,CE,NIT,PAS'],
-            'numero_documento' => ['nullable', 'string', 'max:50'],
-            'telefono' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email'],
-            'email_facturacion' => ['nullable', 'email'],
-            'direccion' => ['nullable', 'string', 'max:255'],
-            'modo_cobro' => ['nullable', 'in:membresia,prepago'],
-            'membresia_vence_at' => ['nullable', 'date'],
-            'tipo_negocio_id' => ['nullable', 'exists:tipos_negocio,id'],
-        ]);
+        $data = $request->validated();
 
         $empresa->update($data);
         Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA', 'EDITAR', null, $empresa->nombre);
