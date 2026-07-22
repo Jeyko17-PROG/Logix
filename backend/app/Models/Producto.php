@@ -42,7 +42,7 @@ class Producto extends Model
         'commission_value' => 'decimal:2',
     ];
 
-    protected $appends = ['stock_total'];
+    protected $appends = ['stock_total', 'salidas', 'valor_inventario'];
 
     public function categoria(): BelongsTo
     {
@@ -66,6 +66,12 @@ class Producto extends Model
         return $this->hasMany(MovimientoInventario::class, 'producto_id');
     }
 
+    /** Solo los movimientos de salida (venta, merma, servicio); para withSum() en listados. */
+    public function movimientosSalida(): HasMany
+    {
+        return $this->hasMany(MovimientoInventario::class, 'producto_id')->where('tipo', 'SALIDA');
+    }
+
     public function serviceOrderDetails(): HasMany
     {
         return $this->hasMany(ServiceOrderDetail::class, 'producto_id');
@@ -81,6 +87,29 @@ class Producto extends Model
             return (float) $this->stocks->sum('cantidad');
         }
         return (float) $this->stocks()->sum('cantidad');
+    }
+
+    /**
+     * Unidades egresadas (venta, merma o servicio): se calcula del kardex de
+     * movimientos (tipo SALIDA), no de una columna aparte, para que nunca quede
+     * desincronizado del historial real que ya registra KardexService.
+     * Usa el resultado de withSum('movimientosSalida as salidas_sum', ...) si el
+     * listado lo precargó (evita una consulta aparte por cada producto).
+     */
+    public function getSalidasAttribute(): float
+    {
+        if (array_key_exists('salidas_sum', $this->attributes)) {
+            return (float) $this->attributes['salidas_sum'];
+        }
+        return (float) $this->movimientosSalida()->sum('cantidad');
+    }
+
+    /**
+     * Valor total del inventario de este producto: stock actual x precio de costo.
+     */
+    public function getValorInventarioAttribute(): float
+    {
+        return round($this->stock_total * (float) $this->precio_costo, 2);
     }
 
     /**

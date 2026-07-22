@@ -162,6 +162,12 @@ class FacturaController extends Controller
     {
         $this->autorizarBodega($factura);
 
+        if (in_array($factura->estado, ['PAGADA', 'ANULADA'], true)) {
+            return response()->json([
+                'message' => 'No se puede editar una factura ' . strtolower($factura->estado) . '.',
+            ], 422);
+        }
+
         $data = $request->validate([
             'fecha' => ['nullable', 'date'],
             'bodega_id' => ['nullable', 'exists:bodegas,id'],

@@ -15,10 +15,12 @@ export default function Productos() {
   const [editId, setEditId] = useState(null)
   const [error, setError] = useState('')
   const [abierto, setAbierto] = useState(false)
+  const [valorTotalInventario, setValorTotalInventario] = useState(0)
 
   async function cargar() {
     const data = await api('/productos')
     setLista(data.data ?? data)
+    setValorTotalInventario(data.valor_total_inventario ?? 0)
   }
   useEffect(() => {
     cargar()
@@ -63,7 +65,12 @@ export default function Productos() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Productos</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Productos</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Valor total del inventario: <span className="text-white font-semibold">${Number(valorTotalInventario).toLocaleString()}</span>
+          </p>
+        </div>
         <button onClick={nuevo} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nuevo</button>
       </div>
 
@@ -91,14 +98,22 @@ export default function Productos() {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-300">
-            <tr><th className="p-3"></th><th className="text-left p-3">SKU</th><th className="text-left p-3">Nombre</th><th className="text-right p-3">Costo</th><th className="text-right p-3">Venta</th><th className="text-right p-3">Stock</th><th className="p-3"></th></tr>
+            <tr><th className="p-3"></th><th className="text-left p-3">SKU</th><th className="text-left p-3">Nombre</th><th className="text-right p-3">Costo</th><th className="text-right p-3">Venta</th><th className="text-right p-3">Stock</th><th className="text-right p-3">Salidas</th><th className="text-right p-3">Valor inv.</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
             {lista.map((p) => (
               <tr key={p.id} className="border-t border-slate-800">
                 <td className="p-2">
-                  <div className="h-10 w-10 rounded bg-slate-700 overflow-hidden">
-                    {p.imagen_url && <img src={p.imagen_url} alt="" className="h-full w-full object-cover" />}
+                  <div className="relative h-10 w-10 rounded bg-slate-700 overflow-hidden flex items-center justify-center text-slate-500 text-lg">
+                    📦
+                    {p.imagen_url && (
+                      <img
+                        src={p.imagen_url}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    )}
                   </div>
                 </td>
                 <td className="p-3 text-slate-400">{p.sku}</td>
@@ -106,13 +121,15 @@ export default function Productos() {
                 <td className="p-3 text-right text-slate-400">${Number(p.precio_costo).toLocaleString()}</td>
                 <td className="p-3 text-right">${Number(p.precio_venta).toLocaleString()}</td>
                 <td className="p-3 text-right">{Number(p.stock_total ?? 0)}</td>
+                <td className="p-3 text-right text-slate-400">{Number(p.salidas ?? 0)}</td>
+                <td className="p-3 text-right text-slate-400">${Number(p.valor_inventario ?? 0).toLocaleString()}</td>
                 <td className="p-3 text-right whitespace-nowrap">
                   <button onClick={() => editar(p)} className="text-emerald-400 hover:underline mr-3">Editar</button>
                   <button onClick={() => eliminar(p.id)} className="text-red-400 hover:underline">Eliminar</button>
                 </td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan="7" className="p-6 text-center text-slate-500">Sin productos aún.</td></tr>}
+            {lista.length === 0 && <tr><td colSpan="9" className="p-6 text-center text-slate-500">Sin productos aún.</td></tr>}
           </tbody>
         </table>
       </div>

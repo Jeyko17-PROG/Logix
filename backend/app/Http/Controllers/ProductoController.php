@@ -4,22 +4,42 @@ namespace App\Http\Controllers;
 
 use App\Models\Archivo;
 use App\Models\Producto;
+use App\Services\CloudinaryUploader;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class ProductoController extends Controller
 {
+    public function __construct(private CloudinaryUploader $cloudinary) {}
+
     public function index(Request $request)
     {
-        $q = Producto::with(['categoria:id,nombre', 'stocks']);
-        if ($buscar = $request->query('buscar')) {
-            $q->where(function ($w) use ($buscar) {
-                $w->where('nombre', 'like', "%{$buscar}%")
-                    ->orWhere('sku', 'like', "%{$buscar}%")
-                    ->orWhere('codigo_barras', 'like', "%{$buscar}%");
-            });
-        }
-        return $q->orderBy('nombre')->paginate(20);
+        $buscar = $request->query('buscar');
+        $filtro = function ($q) use ($buscar) {
+            if ($buscar) {
+                $q->where(function ($w) use ($buscar) {
+                    $w->where('nombre', 'like', "%{$buscar}%")
+                        ->orWhere('sku', 'like', "%{$buscar}%")
+                        ->orWhere('codigo_barras', 'like', "%{$buscar}%");
+                });
+            }
+        };
+
+        $paginado = Producto::with(['categoria:id,nombre', 'stocks'])
+            ->withSum('movimientosSalida as salidas_sum', 'cantidad')
+            ->tap($filtro)
+            ->orderBy('nombre')->paginate(20);
+
+        // Valor total del inventario (todos los productos que coinciden con el filtro,
+        // no solo la página actual): se suma en SQL para no cargar todo a PHP.
+        $valorTotal = Producto::query()->tap($filtro)
+            ->leftJoin('stock_por_bodega', 'stock_por_bodega.producto_id', '=', 'productos.id')
+            ->selectRaw('COALESCE(SUM(stock_por_bodega.cantidad * productos.precio_costo), 0) as total')
+            ->value('total');
+
+        $respuesta = $paginado->toArray();
+        $respuesta['valor_total_inventario'] = round((float) $valorTotal, 2);
+        return response()->json($respuesta);
     }
 
     public function store(Request $request)
@@ -29,14 +49,22 @@ class ProductoController extends Controller
         $data['created_by'] = $user->id;
         $data['owner_id'] = $user->workspaceOwnerId();
         $data['empresa_id'] = $user->empresaId();
-        $data['imagen_url'] = $this->guardarImagen($request, $user->id);
+
+        // El producto necesita existir primero: la imagen se sube bajo un public_id
+        // basado en su id, para que futuras resubidas reemplacen la misma imagen.
         $producto = Producto::create($data);
+
+        if ($url = $this->guardarImagen($request, $producto)) {
+            $producto->update(['imagen_url' => $url]);
+        }
+
         return response()->json($producto->load(['categoria:id,nombre', 'stocks']), 201);
     }
 
     public function show(Producto $producto)
     {
-        return $producto->load(['categoria:id,nombre', 'stocks.bodega:id,nombre', 'proveedores']);
+        return $producto->load(['categoria:id,nombre', 'stocks.bodega:id,nombre', 'proveedores'])
+            ->loadSum('movimientosSalida as salidas_sum', 'cantidad');
     }
 
     public function update(Request $request, Producto $producto)
@@ -45,12 +73,13 @@ class ProductoController extends Controller
         $data = $this->validar($request, $producto->id);
         $data['owner_id'] = $producto->owner_id ?? $user->workspaceOwnerId();
         $data['empresa_id'] = $producto->empresa_id ?? $user->empresaId();
-        if ($nueva = $this->guardarImagen($request, $user->id)) {
-            if ($producto->imagen_url) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $producto->imagen_url));
-            }
+
+        // overwrite:true en Cloudinary ya reemplaza la imagen anterior en el mismo public_id,
+        // no hace falta borrarla aparte.
+        if ($nueva = $this->guardarImagen($request, $producto)) {
             $data['imagen_url'] = $nueva;
         }
+
         $producto->update($data);
         return $producto->load(['categoria:id,nombre', 'stocks']);
     }
@@ -62,9 +91,11 @@ class ProductoController extends Controller
     }
 
     /**
-     * Guarda la imagen del producto (si viene) y la registra en archivos.
+     * Sube la imagen del producto a Cloudinary (si viene) y la registra en archivos.
+     * Si Cloudinary falla, no bloquea el guardado de los datos del producto — solo
+     * se queda sin imagen y se registra el error en el log para diagnosticarlo.
      */
-    private function guardarImagen(Request $request, int $userId): ?string
+    private function guardarImagen(Request $request, Producto $producto): ?string
     {
         if (! $request->hasFile('imagen')) {
             return null;
@@ -73,16 +104,23 @@ class ProductoController extends Controller
             'imagen' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
         ]);
         $file = $request->file('imagen');
-        $path = $file->store('productos', 'public');
-        $url = Storage::url($path);
+
+        try {
+            $resultado = $this->cloudinary->subir($file->getRealPath(), "logix/productos/producto_{$producto->id}");
+        } catch (\Throwable $e) {
+            Log::error('Cloudinary: fallo al subir imagen de producto', ['producto_id' => $producto->id, 'error' => $e->getMessage()]);
+            return null;
+        }
+
+        $url = $resultado['secure_url'];
 
         Archivo::create([
             'nombre_original' => $file->getClientOriginalName(),
-            'ruta' => $path,
+            'ruta' => $resultado['public_id'],
             'url' => $url,
             'tipo_mime' => $file->getClientMimeType(),
             'tamano_bytes' => $file->getSize(),
-            'subido_por' => $userId,
+            'subido_por' => $request->user()->id,
         ]);
 
         return $url;

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Archivo;
-use Cloudinary\Cloudinary;
+use App\Services\CloudinaryUploader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -13,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class ProfileController extends Controller
 {
+    public function __construct(private CloudinaryUploader $cloudinary) {}
+
     /**
      * Actualiza los datos básicos del perfil del usuario autenticado.
      */
@@ -57,25 +59,6 @@ class ProfileController extends Controller
     }
 
     /**
-     * Sube un archivo a Cloudinary bajo un public_id estable (uno por usuario/empresa)
-     * con overwrite: al resubir, reemplaza la imagen anterior en el mismo lugar en vez
-     * de dejar huérfanos que haya que borrar aparte, y el cambio de versión en la URL
-     * resultante evita que el navegador muestre la imagen vieja cacheada.
-     */
-    private function subirACloudinary(string $rutaTemporal, string $publicId): array
-    {
-        // uploadApi()->upload() devuelve un Cloudinary\Api\ApiResponse (ArrayObject), no un array;
-        // getArrayCopy() extrae los datos reales (secure_url, public_id, etc.) — un cast (array)
-        // aquí devolvería las propiedades públicas de la clase (headers, rateLimit*), no esos datos.
-        return (new Cloudinary())->uploadApi()->upload($rutaTemporal, [
-            'public_id' => $publicId,
-            'overwrite' => true,
-            'invalidate' => true,
-            'resource_type' => 'image',
-        ])->getArrayCopy();
-    }
-
-    /**
      * Sube/actualiza la foto de perfil.
      * Acepta tanto un archivo del computador como una captura de la cámara (PWA).
      */
@@ -91,7 +74,7 @@ class ProfileController extends Controller
         $file = $request->file('foto');
 
         try {
-            $resultado = $this->subirACloudinary($file->getRealPath(), "logix/perfiles/user_{$user->id}");
+            $resultado = $this->cloudinary->subir($file->getRealPath(), "logix/perfiles/user_{$user->id}");
         } catch (\Throwable $e) {
             Log::error('Cloudinary: fallo al subir foto de perfil', ['user_id' => $user->id, 'error' => $e->getMessage()]);
             return response()->json(['message' => 'No se pudo subir la foto a Cloudinary. Intenta de nuevo en un momento.'], 502);
@@ -143,7 +126,7 @@ class ProfileController extends Controller
         $file = $request->file('logo');
 
         try {
-            $resultado = $this->subirACloudinary($file->getRealPath(), "logix/logos/empresa_{$empresa->id}");
+            $resultado = $this->cloudinary->subir($file->getRealPath(), "logix/logos/empresa_{$empresa->id}");
         } catch (\Throwable $e) {
             Log::error('Cloudinary: fallo al subir logo de negocio', ['empresa_id' => $empresa->id, 'error' => $e->getMessage()]);
             return response()->json(['message' => 'No se pudo subir el logo a Cloudinary. Intenta de nuevo en un momento.'], 502);

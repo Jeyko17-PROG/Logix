@@ -28,7 +28,11 @@ export default function Facturacion() {
   const [lineas, setLineas] = useState([{ ...LINEA_VACIA }])
   const [firma, setFirma] = useState(null)
   const [ventaRapidaActiva, setVentaRapidaActiva] = useState(false)
+  const [editId, setEditId] = useState(null) // null = factura nueva; id = editando una existente
   const scanRef = useRef(null)
+
+  // Solo se puede editar mientras no esté pagada/anulada (el backend ya lo bloquea igual).
+  const esEditable = (f) => !['PAGADA', 'ANULADA'].includes(f.estado)
 
   // Foco automático en el lector de código de barras al abrir la venta rápida
   // (tienda/comercio): el cajero puede escanear de inmediato sin hacer clic.
@@ -77,13 +81,39 @@ export default function Facturacion() {
   const total = subtotal + ivaTotal
 
   function abrir() {
+    setEditId(null)
     setCab({ cliente_id: '', fecha: new Date().toISOString().slice(0, 10), notas: '' })
     setLineas([{ ...LINEA_VACIA }])
     setFirma(localStorage.getItem(FIRMA_KEY) || null) // precarga "mi firma" guardada
     setMedioPago('EFECTIVO')
+    setCurrency('COP'); setExchangeRate('')
     setVentaRapidaActiva(false)
     setError('')
     setAbierto(true)
+  }
+
+  // Carga la factura completa (detalles no vienen en el listado) y precarga el formulario.
+  async function editar(f) {
+    setError('')
+    try {
+      const completa = await api(`/facturas/${f.id}`)
+      setEditId(completa.id)
+      setCab({ cliente_id: String(completa.cliente_id ?? ''), fecha: completa.fecha, notas: completa.notas ?? '' })
+      setLineas((completa.detalles ?? []).map((d) => ({
+        producto_id: d.producto_id ? String(d.producto_id) : '',
+        descripcion: d.descripcion,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        impuesto_porcentaje: Number(d.impuesto_porcentaje) || 0,
+        ivaCustom: !IVA_FIJOS.includes(Number(d.impuesto_porcentaje)),
+      })))
+      setCurrency(completa.currency || 'COP')
+      setExchangeRate(completa.exchange_rate ?? '')
+      setMedioPago(completa.metodo_pago || 'EFECTIVO')
+      setFirma(null)
+      setVentaRapidaActiva(false)
+      setAbierto(true)
+    } catch (err) { setError(err.message) }
   }
 
   // Venta de mostrador: preselecciona el cliente genérico "Consumidor Final"
@@ -122,25 +152,37 @@ export default function Facturacion() {
     localStorage.removeItem(FIRMA_KEY); setFirma(null)
   }
 
-  async function crear(e) {
+  async function guardar(e) {
     e.preventDefault(); setError(''); setGuardando(true)
+    const lineasBody = lineas.map((l) => ({
+      descripcion: l.descripcion,
+      producto_id: l.producto_id ? Number(l.producto_id) : null,
+      cantidad: aNumero(l.cantidad),
+      precio_unitario: aNumero(l.precio_unitario),
+      impuesto_porcentaje: aNumero(l.impuesto_porcentaje) || 0,
+    }))
     try {
-      await api('/facturas', { method: 'POST', body: {
-        cliente_id: cab.cliente_id,
-        fecha: cab.fecha,
-        notas: cab.notas || null,
-        currency: currency || 'COP',
-        exchange_rate: exchangeRate || null,
-        metodo_pago: medioPago,
-        lineas: lineas.map((l) => ({
-          descripcion: l.descripcion,
-          producto_id: l.producto_id ? Number(l.producto_id) : null,
-          cantidad: aNumero(l.cantidad),
-          precio_unitario: aNumero(l.precio_unitario),
-          impuesto_porcentaje: aNumero(l.impuesto_porcentaje) || 0,
-        })),
-        firma: firma || null,
-      } })
+      if (editId) {
+        // El backend no permite cambiar cliente/medio de pago al editar, solo fecha/notas/líneas/divisa.
+        await api(`/facturas/${editId}`, { method: 'PUT', body: {
+          fecha: cab.fecha,
+          notas: cab.notas || null,
+          currency: currency || 'COP',
+          exchange_rate: exchangeRate || null,
+          lineas: lineasBody,
+        } })
+      } else {
+        await api('/facturas', { method: 'POST', body: {
+          cliente_id: cab.cliente_id,
+          fecha: cab.fecha,
+          notas: cab.notas || null,
+          currency: currency || 'COP',
+          exchange_rate: exchangeRate || null,
+          metodo_pago: medioPago,
+          lineas: lineasBody,
+          firma: firma || null,
+        } })
+      }
       setAbierto(false); cargar()
     } catch (err) { setError(err.message) } finally { setGuardando(false) }
   }
@@ -184,11 +226,11 @@ export default function Facturacion() {
       </div>
 
       {abierto && (
-        <form onSubmit={crear} className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl overflow-hidden">
+        <form onSubmit={guardar} className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl overflow-hidden">
           {/* Encabezado del formulario */}
           <div className="flex items-center justify-between border-b border-slate-800 bg-slate-800/40 px-6 py-4">
-            <h2 className="text-lg font-semibold">Nueva factura</h2>
-            <span className="text-xs text-slate-400">El número se asigna automáticamente</span>
+            <h2 className="text-lg font-semibold">{editId ? `Editar factura` : 'Nueva factura'}</h2>
+            <span className="text-xs text-slate-400">{editId ? 'El cliente y el medio de pago no se pueden cambiar' : 'El número se asigna automáticamente'}</span>
           </div>
 
           {error && <div className="mx-6 mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300">{error}</div>}
@@ -199,7 +241,7 @@ export default function Facturacion() {
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="block">
                 <span className="mb-1 block text-sm text-slate-300">Cliente</span>
-                <select required value={cab.cliente_id} onChange={(e) => setCab({ ...cab, cliente_id: e.target.value })} className="input">
+                <select required disabled={!!editId} value={cab.cliente_id} onChange={(e) => setCab({ ...cab, cliente_id: e.target.value })} className="input disabled:opacity-50">
                   <option value="">Seleccione un cliente…</option>
                   {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
                 </select>
@@ -215,8 +257,8 @@ export default function Facturacion() {
               <span className="mb-1 block text-sm text-slate-300">Medio de pago</span>
               <div className="flex flex-wrap gap-2">
                 {[['EFECTIVO', '💵 Efectivo'], ['TARJETA', '💳 Tarjeta'], ['NEQUI', '📱 Nequi'], ['DAVIPLATA', '📱 Daviplata'], ['TRANSFERENCIA', '🏦 Transferencia']].map(([v, label]) => (
-                  <button type="button" key={v} onClick={() => setMedioPago(v)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${medioPago === v ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                  <button type="button" key={v} disabled={!!editId} onClick={() => setMedioPago(v)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${medioPago === v ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
                     {label}
                   </button>
                 ))}
@@ -294,8 +336,8 @@ export default function Facturacion() {
             <button type="button" onClick={addLinea} className="mt-3 text-sm font-medium text-emerald-400 hover:text-emerald-300">+ Agregar línea</button>
           </section>
 
-          {/* Sección: firma digital (solo planes con firma digital) */}
-          {activa('firma') && (
+          {/* Sección: firma digital (solo planes con firma digital; no aplica al editar) */}
+          {activa('firma') && !editId && (
             <section className="px-6 py-5 border-b border-slate-800">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Firma digital</h3>
@@ -332,7 +374,7 @@ export default function Facturacion() {
           <div className="flex justify-end gap-2 border-t border-slate-800 bg-slate-800/40 px-6 py-4">
             <button type="button" onClick={() => setAbierto(false)} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
             <button disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-5 py-2 text-sm font-semibold disabled:opacity-50">
-              {guardando ? 'Emitiendo…' : 'Emitir factura'}
+              {guardando ? 'Guardando…' : (editId ? 'Guardar cambios' : 'Emitir factura')}
             </button>
           </div>
         </form>
@@ -352,6 +394,7 @@ export default function Facturacion() {
                 <td className="p-3 text-right">{money(f.total)}</td>
                 <td className="p-3"><span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[f.estado]}`}>{f.estado}</span></td>
                 <td className="p-3 text-right whitespace-nowrap">
+                  {esEditable(f) && <button onClick={() => editar(f)} className="text-amber-400 hover:underline mr-3">Editar</button>}
                   <button onClick={() => generarPdf(f)} className="text-sky-400 hover:underline mr-3">PDF</button>
                   <button onClick={() => enviarWhatsApp(f)} className="text-lime-400 hover:underline mr-3">WhatsApp</button>
                   <button onClick={() => enviar(f)} className="text-emerald-400 hover:underline">Enviar</button>
