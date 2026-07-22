@@ -7,6 +7,7 @@ use Cloudinary\Cloudinary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 
@@ -89,6 +90,7 @@ class ProfileController extends Controller
         try {
             $resultado = $this->subirACloudinary($file->getRealPath(), "logix/perfiles/user_{$user->id}");
         } catch (\Throwable $e) {
+            Log::error('Cloudinary: fallo al subir foto de perfil', ['user_id' => $user->id, 'error' => $e->getMessage()]);
             return response()->json(['message' => 'No se pudo subir la foto a Cloudinary. Intenta de nuevo en un momento.'], 502);
         }
 
@@ -140,6 +142,7 @@ class ProfileController extends Controller
         try {
             $resultado = $this->subirACloudinary($file->getRealPath(), "logix/logos/empresa_{$empresa->id}");
         } catch (\Throwable $e) {
+            Log::error('Cloudinary: fallo al subir logo de negocio', ['empresa_id' => $empresa->id, 'error' => $e->getMessage()]);
             return response()->json(['message' => 'No se pudo subir el logo a Cloudinary. Intenta de nuevo en un momento.'], 502);
         }
 
