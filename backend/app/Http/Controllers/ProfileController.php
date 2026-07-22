@@ -93,7 +93,9 @@ class ProfileController extends Controller
     public function uploadFoto(Request $request): JsonResponse
     {
         $request->validate([
-            'foto' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'], // 5 MB
+            // El frontend comprime la imagen a ~417 KB antes de subirla (misma resolución, menos peso);
+            // este límite es solo una red de seguridad por si llega sin comprimir (navegador viejo, API, etc).
+            'foto' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:1024'], // 1 MB
         ]);
 
         $user = $request->user();
@@ -141,7 +143,7 @@ class ProfileController extends Controller
         }
 
         $request->validate([
-            'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'], // 5 MB
+            'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:10240'], // 10 MB
         ]);
 
         $disco = $this->discoPublico();

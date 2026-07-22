@@ -7,6 +7,38 @@ const esPropietario = (user) =>
   !!user?.es_super_admin || !!user?.empresa_info?.es_admin_empresa ||
   ['Administrador', 'Usuario'].includes(user?.rol?.nombre)
 
+// Comprime la imagen en el navegador antes de subirla: mantiene el ancho/alto original
+// (misma resolución) y solo reduce la calidad JPEG/WebP hasta acercarse al peso objetivo.
+// Así una foto de cámara de 6-8 MB llega al servidor pesando unos cientos de KB.
+async function comprimirImagen(file, { objetivoKB = 417, calidadMinima = 0.5 } = {}) {
+  if (!file.type?.startsWith('image/')) return file
+  const objetivoBytes = objetivoKB * 1024
+  if (file.size <= objetivoBytes) return file
+
+  try {
+    const bitmap = await createImageBitmap(file)
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    canvas.getContext('2d').drawImage(bitmap, 0, 0)
+
+    const aCalidad = (calidad) => new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', calidad))
+
+    let calidad = 0.9
+    let blob = await aCalidad(calidad)
+    while (blob && blob.size > objetivoBytes && calidad > calidadMinima) {
+      calidad -= 0.1
+      blob = await aCalidad(calidad)
+    }
+
+    if (!blob || blob.size >= file.size) return file
+    const nombre = file.name.replace(/\.[^.]+$/, '') + '.webp'
+    return new File([blob], nombre, { type: 'image/webp' })
+  } catch {
+    return file // si el navegador no soporta la compresión, se sube el original (el backend valida el peso máximo)
+  }
+}
+
 export default function Perfil() {
   const { user, setUser } = useAuth()
   const fileInput = useRef(null)
@@ -66,8 +98,9 @@ export default function Perfil() {
     if (!file) return
     setMsg(''); setError(''); setSubiendo(true)
     try {
+      const comprimido = await comprimirImagen(file)
       const form = new FormData()
-      form.append('foto', file)
+      form.append('foto', comprimido)
       const data = await api('/perfil/foto', { method: 'POST', body: form, isForm: true })
       setUser(data.user)
       setMsg('Foto actualizada.')
@@ -83,8 +116,9 @@ export default function Perfil() {
     if (!file) return
     setMsg(''); setError(''); setSubiendoLogo(true)
     try {
+      const comprimido = await comprimirImagen(file)
       const form = new FormData()
-      form.append('logo', file)
+      form.append('logo', comprimido)
       const data = await api('/perfil/logo-empresa', { method: 'POST', body: form, isForm: true })
       setUser({ ...user, empresa_info: { ...user.empresa_info, logo_url: data.logo_url } })
       setMsg('Logo del negocio actualizado.')
@@ -140,7 +174,7 @@ export default function Perfil() {
           >
             {subiendo ? 'Subiendo…' : 'Cambiar foto'}
           </button>
-          <p className="text-xs text-slate-500 mt-1">Archivo o cámara · máx. 5 MB</p>
+          <p className="text-xs text-slate-500 mt-1">Archivo o cámara · se optimiza automáticamente a ~400 KB</p>
         </div>
       </div>
 
@@ -163,7 +197,7 @@ export default function Perfil() {
               >
                 {subiendoLogo ? 'Subiendo…' : 'Cambiar logo del negocio'}
               </button>
-              <p className="text-xs text-slate-500 mt-1">Se muestra en tu portal de reservas y en el QR · máx. 5 MB</p>
+              <p className="text-xs text-slate-500 mt-1">Se muestra en tu portal de reservas y en el QR · se optimiza automáticamente a ~400 KB</p>
             </div>
           </div>
 

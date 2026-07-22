@@ -85,7 +85,16 @@ export default function Agenda() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Agenda y Citas</h1>
+        <div className="flex items-center gap-3">
+          {(user?.empresa_info?.logo_url || user?.empresa_info?.logo_emoji) && (
+            <div className="h-10 w-10 shrink-0 rounded-lg bg-slate-800 overflow-hidden flex items-center justify-center text-xl">
+              {user.empresa_info.logo_url
+                ? <img src={user.empresa_info.logo_url} alt="Logo del negocio" className="h-full w-full object-cover" />
+                : user.empresa_info.logo_emoji}
+            </div>
+          )}
+          <h1 className="text-2xl font-bold">Agenda y Citas</h1>
+        </div>
         <div className="flex gap-2">
           {['dia', 'semana', 'mes'].map((v) => (
             <button key={v} onClick={() => setVista(v)}
@@ -113,18 +122,26 @@ export default function Agenda() {
         <div className="space-y-2">
           {citasDe(fecha).length === 0 && <p className="text-slate-500">Sin citas este día.</p>}
           {citasDe(fecha).map((c) => (
-            <div key={c.id} className="flex items-stretch gap-3 overflow-hidden rounded-lg border border-slate-800 bg-slate-800/50">
+            <div key={c.id} className="flex items-stretch overflow-hidden rounded-lg border border-slate-800 bg-slate-800/50">
               <div className={`w-1.5 shrink-0 ${ESTADO_COLOR[c.estado]}`} />
-              <div className="flex flex-1 items-center justify-between p-3">
-                <div>
-                  <span className="font-mono text-emerald-400">{fmtHora(c.inicio)}–{fmtHora(c.fin)}</span>
-                  {iconoServicio(c) && <span className="ml-2 text-lg align-middle">{iconoServicio(c)}</span>}
-                  <span className="ml-3">{c.cliente?.nombre_completo}</span>
-                  <span className="ml-2 text-slate-400 text-sm">{c.plan_lavado?.nombre ?? c.servicio?.nombre ?? ''}</span>
-                  {c.tipo_vehiculo && <span className="ml-2 text-slate-400 text-sm">{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
-                  {c.bodega && <span className="ml-2 text-slate-500 text-xs">📍 {c.bodega.nombre}</span>}
+              {/* Bloque de hora destacado */}
+              <div className="flex flex-col items-center justify-center px-3 py-2 min-w-[76px] border-r border-slate-800/80 bg-slate-800/40">
+                <span className="font-mono text-base font-bold text-emerald-400 leading-tight">{fmtHora(c.inicio)}</span>
+                <span className="font-mono text-xs text-slate-500 leading-tight">{fmtHora(c.fin)}</span>
+              </div>
+              <div className="flex flex-1 items-center justify-between p-3 gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {iconoServicio(c) && <span className="text-lg leading-none">{iconoServicio(c)}</span>}
+                    <span className="font-semibold text-white text-base truncate">{c.cliente?.nombre_completo}</span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-400">
+                    {(c.plan_lavado?.nombre ?? c.servicio?.nombre) && <span>{c.plan_lavado?.nombre ?? c.servicio?.nombre}</span>}
+                    {c.tipo_vehiculo && <span>{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
+                    {c.bodega && <span className="text-slate-500 text-xs">📍 {c.bodega.nombre}</span>}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[c.estado]}`}>{ESTADO_LABEL[c.estado] ?? c.estado}</span>
                   {!['CANCELADA', 'COMPLETADA'].includes(c.estado) && <>
                     <button onClick={() => accion(c.id, 'confirmar')} className="text-emerald-400 text-sm hover:underline">Confirmar</button>
