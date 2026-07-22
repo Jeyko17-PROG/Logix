@@ -64,12 +64,15 @@ class ProfileController extends Controller
      */
     private function subirACloudinary(string $rutaTemporal, string $publicId): array
     {
+        // uploadApi()->upload() devuelve un Cloudinary\Api\ApiResponse (ArrayObject), no un array;
+        // getArrayCopy() extrae los datos reales (secure_url, public_id, etc.) — un cast (array)
+        // aquí devolvería las propiedades públicas de la clase (headers, rateLimit*), no esos datos.
         return (new Cloudinary())->uploadApi()->upload($rutaTemporal, [
             'public_id' => $publicId,
             'overwrite' => true,
             'invalidate' => true,
             'resource_type' => 'image',
-        ]);
+        ])->getArrayCopy();
     }
 
     /**
