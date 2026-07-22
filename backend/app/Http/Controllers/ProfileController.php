@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Archivo;
+use Cloudinary\Cloudinary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 
@@ -56,34 +56,19 @@ class ProfileController extends Controller
     }
 
     /**
-     * Disco para archivos públicos (fotos de perfil, logos): usa S3 (u otro
-     * proveedor S3-compatible: R2, Backblaze B2, Spaces...) cuando hay
-     * credenciales configuradas, porque persiste entre despliegues. Si no,
-     * cae al disco local 'public' (válido en desarrollo; en Render ese disco
-     * es efímero y el archivo se pierde en el siguiente reinicio/deploy).
+     * Sube un archivo a Cloudinary bajo un public_id estable (uno por usuario/empresa)
+     * con overwrite: al resubir, reemplaza la imagen anterior en el mismo lugar en vez
+     * de dejar huérfanos que haya que borrar aparte, y el cambio de versión en la URL
+     * resultante evita que el navegador muestre la imagen vieja cacheada.
      */
-    private function discoPublico(): string
+    private function subirACloudinary(string $rutaTemporal, string $publicId): array
     {
-        return filled(config('filesystems.disks.s3.key')) ? 's3' : 'public';
-    }
-
-    /**
-     * Elimina el archivo anterior del disco correspondiente a su URL, sin
-     * lanzar error si ya no existe o si viene de un disco distinto al actual
-     * (p. ej. quedó en el disco local antes de migrar a S3).
-     */
-    private function borrarAnterior(?string $urlAnterior): void
-    {
-        if (! $urlAnterior) {
-            return;
-        }
-        foreach (['s3', 'public'] as $disco) {
-            $base = rtrim((string) config("filesystems.disks.$disco.url"), '/');
-            if ($base && str_starts_with($urlAnterior, $base . '/')) {
-                Storage::disk($disco)->delete(substr($urlAnterior, strlen($base) + 1));
-                return;
-            }
-        }
+        return (new Cloudinary())->uploadApi()->upload($rutaTemporal, [
+            'public_id' => $publicId,
+            'overwrite' => true,
+            'invalidate' => true,
+            'resource_type' => 'image',
+        ]);
     }
 
     /**
@@ -99,23 +84,25 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
-        $disco = $this->discoPublico();
+        $file = $request->file('foto');
 
-        $path = $request->file('foto')->store('perfiles', ['disk' => $disco, 'visibility' => 'public']);
-        $url = Storage::disk($disco)->url($path);
+        try {
+            $resultado = $this->subirACloudinary($file->getRealPath(), "logix/perfiles/user_{$user->id}");
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'No se pudo subir la foto a Cloudinary. Intenta de nuevo en un momento.'], 502);
+        }
+
+        $url = $resultado['secure_url'];
 
         // Registra el archivo en la tabla central de archivos.
         $archivo = Archivo::create([
-            'nombre_original' => $request->file('foto')->getClientOriginalName(),
-            'ruta' => $path,
+            'nombre_original' => $file->getClientOriginalName(),
+            'ruta' => $resultado['public_id'],
             'url' => $url,
-            'tipo_mime' => $request->file('foto')->getClientMimeType(),
-            'tamano_bytes' => $request->file('foto')->getSize(),
+            'tipo_mime' => $file->getClientMimeType(),
+            'tamano_bytes' => $file->getSize(),
             'subido_por' => $user->id,
         ]);
-
-        // Borra la foto anterior si existía.
-        $this->borrarAnterior($user->foto_perfil_url);
 
         $user->update(['foto_perfil_url' => $url]);
 
@@ -143,24 +130,29 @@ class ProfileController extends Controller
         }
 
         $request->validate([
-            'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:10240'], // 10 MB
+            // El frontend comprime la imagen a ~417 KB antes de subirla (misma resolución, menos peso);
+            // este límite es solo una red de seguridad por si llega sin comprimir (navegador viejo, API, etc).
+            'logo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:1024'], // 1 MB
         ]);
 
-        $disco = $this->discoPublico();
-        $path = $request->file('logo')->store('logos', ['disk' => $disco, 'visibility' => 'public']);
-        $url = Storage::disk($disco)->url($path);
+        $file = $request->file('logo');
+
+        try {
+            $resultado = $this->subirACloudinary($file->getRealPath(), "logix/logos/empresa_{$empresa->id}");
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'No se pudo subir el logo a Cloudinary. Intenta de nuevo en un momento.'], 502);
+        }
+
+        $url = $resultado['secure_url'];
 
         $archivo = Archivo::create([
-            'nombre_original' => $request->file('logo')->getClientOriginalName(),
-            'ruta' => $path,
+            'nombre_original' => $file->getClientOriginalName(),
+            'ruta' => $resultado['public_id'],
             'url' => $url,
-            'tipo_mime' => $request->file('logo')->getClientMimeType(),
-            'tamano_bytes' => $request->file('logo')->getSize(),
+            'tipo_mime' => $file->getClientMimeType(),
+            'tamano_bytes' => $file->getSize(),
             'subido_por' => $user->id,
         ]);
-
-        // Borra el logo anterior si existía.
-        $this->borrarAnterior($empresa->logo_url);
 
         $empresa->update(['logo_url' => $url]);
 

@@ -279,6 +279,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     Route::get('citas', [CitaController::class, 'index']);
     Route::get('citas/disponibilidad', [CitaController::class, 'disponibilidad']);
     Route::get('citas/{cita}', [CitaController::class, 'show']);
+    Route::get('personal', [CitaController::class, 'personal']);
     Route::get('agenda/configuracion', [ConfiguracionAgendaController::class, 'index']);
 
     Route::middleware(['role:Administrador,Empleado', 'feature:agenda'])->group(function () {

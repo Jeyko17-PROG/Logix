@@ -233,6 +233,8 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
   const [cliente_id, setCliente] = useState('')
   const [plan_lavado_id, setPlan] = useState('')
   const [bodega_id, setBodega] = useState('')
+  const [empleado_id, setEmpleado] = useState('')
+  const [personal, setPersonal] = useState([])
   const [tipo_vehiculo, setTipoVehiculo] = useState('')
   const [placa, setPlaca] = useState('')
   const [fecha, setFecha] = useState(ymd(fechaInicial instanceof Date ? fechaInicial : new Date()))
@@ -257,6 +259,11 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
     if (esLavadero) return
     api(`/servicios${bodega_id ? `?bodega_id=${bodega_id}` : ''}`).then(setServiciosDisponibles).catch(() => {})
   }, [bodega_id, esLavadero])
+
+  // El profesional disponible también depende de la sucursal (sin sede fija = disponible en todas).
+  useEffect(() => {
+    api(`/personal${bodega_id ? `?bodega_id=${bodega_id}` : ''}`).then(setPersonal).catch(() => {})
+  }, [bodega_id])
 
   // Crear cliente en línea (para usuarios que aún no tienen clientes).
   const [nuevoCliente, setNuevoCliente] = useState('')
@@ -306,6 +313,7 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
           servicios: servicios.length ? servicios : undefined,
           plan_lavado_id: plan_lavado_id || null,
           bodega_id: bodega_id || null,
+          empleado_id: empleado_id || null,
           tipo_vehiculo: tipo_vehiculo || null,
           placa: placa || null,
           inicio,
@@ -337,6 +345,13 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
             <select value={bodega_id} onChange={(e) => setBodega(e.target.value)} className="input">
               <option value="">📍 Todas las sucursales…</option>
               {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          )}
+
+          {personal.length > 0 && (
+            <select value={empleado_id} onChange={(e) => setEmpleado(e.target.value)} className="input">
+              <option value="">Profesional (opcional)…</option>
+              {personal.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
 

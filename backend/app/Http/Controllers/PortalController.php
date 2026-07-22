@@ -11,6 +11,7 @@ use App\Services\Notificador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Endpoints PÚBLICOS del portal de clientes (sin autenticación).
@@ -102,13 +103,18 @@ class PortalController extends Controller
             'servicio_id' => ['nullable', 'exists:servicios,id'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
+            // Spa: varios servicios en una misma reserva; el frontend suma sus
+            // duraciones y la manda aquí directo en vez de un servicio_id único.
+            'duracion_min' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $duracion = 30;
-        if (! empty($data['plan_lavado_id']) && $p = \App\Models\PlanLavado::find($data['plan_lavado_id'])) {
-            $duracion = $p->duracion_min;
-        } elseif (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
-            $duracion = $s->duracion_min;
+        $duracion = $data['duracion_min'] ?? 30;
+        if (empty($data['duracion_min'])) {
+            if (! empty($data['plan_lavado_id']) && $p = \App\Models\PlanLavado::find($data['plan_lavado_id'])) {
+                $duracion = $p->duracion_min;
+            } elseif (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
+                $duracion = $s->duracion_min;
+            }
         }
 
         $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion, $negocio, $data['bodega_id'] ?? null);
@@ -119,13 +125,20 @@ class PortalController extends Controller
     public function reservar(Request $request, ?string $slug = null)
     {
         $negocio = $this->negocioId($slug);
-        $conVehiculo = $this->tipoNegocioDe($negocio) === 'lavadero';
+        $tipoNegocio = $this->tipoNegocioDe($negocio);
+        $conVehiculo = $tipoNegocio === 'lavadero';
+        $conVariosServicios = $tipoNegocio === 'spa';
 
         $data = $request->validate([
             'nombre_completo' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email'],
             'telefono' => ['required', 'string', 'max:50'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
+            // Varios servicios en una misma reserva (solo Spa: ej. Uñas + Pestañas).
+            'servicios' => ['nullable', 'array', 'min:1'],
+            'servicios.*.servicio_id' => ['nullable', 'exists:servicios,id'],
+            'servicios.*.precio_unitario' => ['nullable', 'numeric', 'min:0'],
+            'servicios.*.duracion_min' => ['nullable', 'integer', 'min:1'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
             'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
@@ -133,8 +146,25 @@ class PortalController extends Controller
             'inicio' => ['required', 'date'],
         ]);
 
+        // El campo "servicios" (varios por reserva) solo aplica a negocios Spa;
+        // en cualquier otro tipo se ignora, igual que tipo_vehiculo/placa fuera de Lavadero.
+        $servicios = $conVariosServicios ? ($data['servicios'] ?? null) : null;
+        unset($data['servicios']);
+        foreach ($servicios ?? [] as $i => $item) {
+            if (empty($item['servicio_id'])) {
+                throw ValidationException::withMessages(["servicios.$i" => 'Selecciona un servicio del catálogo.']);
+            }
+        }
+
         $duracion = 30;
-        if (! empty($data['plan_lavado_id']) && $p = \App\Models\PlanLavado::find($data['plan_lavado_id'])) {
+        if ($servicios) {
+            $duracion = 0;
+            foreach ($servicios as $item) {
+                $min = $item['duracion_min'] ?? Servicio::find($item['servicio_id'])?->duracion_min;
+                $duracion += (int) ($min ?? 0);
+            }
+            $duracion = $duracion ?: 30;
+        } elseif (! empty($data['plan_lavado_id']) && $p = \App\Models\PlanLavado::find($data['plan_lavado_id'])) {
             $duracion = $p->duracion_min;
         } elseif (! empty($data['servicio_id']) && $s = Servicio::find($data['servicio_id'])) {
             $duracion = $s->duracion_min;
@@ -151,7 +181,11 @@ class PortalController extends Controller
         // y sin esto las reservas del QR quedarían invisibles para él.
         $empresaId = $this->empresaIdDe($negocio);
 
-        return DB::transaction(function () use ($data, $inicio, $fin, $negocio, $empresaId) {
+        if ($servicios && empty($data['servicio_id'])) {
+            $data['servicio_id'] = $servicios[0]['servicio_id'] ?? null;
+        }
+
+        return DB::transaction(function () use ($data, $servicios, $inicio, $fin, $negocio, $empresaId) {
             // Reutiliza el cliente del negocio por email, o lo crea como POTENCIAL.
             $cliente = Cliente::firstOrCreate(
                 ['email' => $data['email'], 'owner_id' => $negocio],
@@ -176,6 +210,17 @@ class PortalController extends Controller
                 'origen' => 'PORTAL',
             ]);
 
+            if ($servicios) {
+                foreach ($servicios as $item) {
+                    $catalogo = Servicio::find($item['servicio_id']);
+                    $cita->detalleServicios()->create([
+                        'servicio_id' => $item['servicio_id'],
+                        'precio_unitario' => $item['precio_unitario'] ?? $catalogo?->precio ?? 0,
+                        'duracion_min' => $item['duracion_min'] ?? $catalogo?->duracion_min ?? 0,
+                    ]);
+                }
+            }
+
             // Notificación interna SOLO para el dueño del negocio + correo al cliente.
             $this->notificador->aUsuario($negocio, 'RESERVA',
                 'Nueva reserva desde el portal', "{$cliente->nombre_completo} · {$inicio->format('d/m/Y H:i')}");
@@ -188,7 +233,7 @@ class PortalController extends Controller
 
             return response()->json([
                 'mensaje' => 'Reserva confirmada.',
-                'cita' => $cita->load('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre'),
+                'cita' => $cita->load('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre', 'detalleServicios.servicio:id,nombre,icono'),
             ], 201);
         });
     }
@@ -223,7 +268,7 @@ class PortalController extends Controller
         }
 
         $citas = $cliente->citas()
-            ->with('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre')
+            ->with('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre', 'detalleServicios.servicio:id,nombre,icono')
             ->orderByDesc('inicio')
             ->get();
 

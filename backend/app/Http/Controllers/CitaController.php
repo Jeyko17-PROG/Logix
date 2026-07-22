@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AjusteAgenda;
 use App\Models\Cita;
 use App\Models\Servicio;
+use App\Models\User;
 use App\Services\AgendaService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -56,6 +57,24 @@ class CitaController extends Controller
         $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion, null, $data['bodega_id'] ?? null);
 
         return response()->json(['duracion_min' => $duracion, 'slots' => $slots]);
+    }
+
+    /**
+     * Personal del negocio (dueño + empleados activos) para asignar a una cita.
+     * Sin bodega_id devuelve a todos; con bodega_id, a los sin sede fija más los de esa sede
+     * (misma convención que el catálogo de servicios: sin sede asignada = disponible en todas).
+     */
+    public function personal(Request $request)
+    {
+        $bodegaId = $request->query('bodega_id');
+        $ownerId = $request->user()->workspaceOwnerId();
+
+        return User::query()
+            ->where(fn ($q) => $q->where('id', $ownerId)->orWhere('workspace_owner_id', $ownerId))
+            ->where('activo', true)
+            ->when($bodegaId, fn ($q) => $q->where(fn ($w) => $w->whereNull('bodega_id')->orWhere('bodega_id', $bodegaId)))
+            ->orderBy('name')
+            ->get(['id', 'name', 'bodega_id']);
     }
 
     public function store(Request $request)
