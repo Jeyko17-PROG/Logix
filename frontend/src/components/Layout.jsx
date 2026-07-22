@@ -137,6 +137,11 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [abierto, setAbierto] = useState(false)
+  // Sidebar colapsable en escritorio (más espacio para tablas de Inventario/Agenda). Se recuerda entre sesiones.
+  const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('logix_sidebar_collapsed') === '1')
+  useEffect(() => {
+    localStorage.setItem('logix_sidebar_collapsed', isCollapsed ? '1' : '0')
+  }, [isCollapsed])
 
   useEffect(() => {
     const onResize = () => {
@@ -203,6 +208,11 @@ export default function Layout() {
       {/* Barra superior */}
       <header className="fixed top-0 inset-x-0 z-50 bg-slate-950 border-b border-slate-800 px-4 py-3">
         <div className="flex items-center gap-3">
+          {/* Colapsar/expandir el sidebar en escritorio: más ancho para tablas de Inventario/Agenda. */}
+          <button onClick={() => setIsCollapsed(!isCollapsed)} aria-label={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+            className="hidden md:flex p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white text-lg leading-none">
+            ☰
+          </button>
           <img src="/logo.svg" alt="" className="h-7 w-7 object-contain"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
           <span className="font-bold text-lg">Logix</span>
@@ -241,8 +251,9 @@ export default function Layout() {
       {abierto && <div onClick={() => setAbierto(false)} className="fixed inset-0 z-30 bg-black/50 md:hidden" />}
 
       {/* Menú lateral deslizante (oculto por defecto, se abre con el botón ☰) */}
-      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-28 md:pt-16 px-3 pb-4 overflow-y-auto transition-transform duration-200 shadow-2xl
-        ${abierto ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:w-64 md:max-w-none`}>
+      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-28 md:pt-16 px-3 pb-4 overflow-y-auto transition-all duration-200 shadow-2xl
+        ${abierto ? 'translate-x-0' : '-translate-x-full'}
+        ${isCollapsed ? 'md:-translate-x-full md:w-0 md:px-0 md:border-0 md:overflow-hidden' : 'md:translate-x-0 md:w-64'} md:max-w-none`}>
         <div className="mb-3 flex items-center justify-between px-1 md:hidden">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Navegación</p>
           <button onClick={() => setAbierto(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Cerrar menú">✕</button>
@@ -267,9 +278,9 @@ export default function Layout() {
         </nav>
       </aside>
 
-      {/* Contenido: en escritorio deja espacio al sidebar fijo; en móvil baja bajo el header de dos filas */}
-      <main className="pt-28 md:pt-14 md:pl-64">
-        <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Contenido: en escritorio deja espacio al sidebar fijo (o lo reclama si está colapsado); en móvil baja bajo el header de dos filas */}
+      <main className={`pt-28 md:pt-14 transition-[padding] duration-200 ${isCollapsed ? 'md:pl-0' : 'md:pl-64'}`}>
+        <div className={`mx-auto px-4 py-8 transition-[max-width] duration-200 ${isCollapsed ? 'max-w-full' : 'max-w-6xl'}`}>
           <Outlet />
         </div>
       </main>

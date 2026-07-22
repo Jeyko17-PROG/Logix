@@ -98,7 +98,8 @@ export default function Facturacion() {
     try {
       const completa = await api(`/facturas/${f.id}`)
       setEditId(completa.id)
-      setCab({ cliente_id: String(completa.cliente_id ?? ''), fecha: completa.fecha, notas: completa.notas ?? '' })
+      // El backend serializa fecha como ISO ("2026-07-22T00:00:00.000000Z"); <input type="date"> exige "yyyy-mm-dd".
+      setCab({ cliente_id: String(completa.cliente_id ?? ''), fecha: (completa.fecha || '').slice(0, 10), notas: completa.notas ?? '' })
       setLineas((completa.detalles ?? []).map((d) => ({
         producto_id: d.producto_id ? String(d.producto_id) : '',
         descripcion: d.descripcion,

@@ -75,6 +75,11 @@ export default function Planes() {
 
   return (
     <div>
+      {/* Siempre visible: evita que esta pantalla se sienta un callejón sin salida. */}
+      <Link to="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
+        ← Volver al Dashboard
+      </Link>
+
       {/* Aviso de membresía vencida: pantalla de pasarela de pago */}
       {estadoPago === 'error' && (
         <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5">
