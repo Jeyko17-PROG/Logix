@@ -125,6 +125,20 @@ class PortalController extends Controller
     public function reservar(Request $request, ?string $slug = null)
     {
         $negocio = $this->negocioId($slug);
+
+        // Restricción por plan: bloquea nuevas reservas si el negocio ya alcanzó su límite de citas.
+        $duenoNegocio = User::find($negocio);
+        if ($duenoNegocio && ! $duenoNegocio->esSuperAdmin()) {
+            $limite = $duenoNegocio->limiteCitasEfectivo();
+            $usadas = $duenoNegocio->citasUsadas();
+            if ($usadas >= $limite) {
+                return response()->json([
+                    'message' => 'Este negocio alcanzó el límite de citas disponibles por ahora. Intenta más tarde o contacta directamente al negocio.',
+                    'limite_alcanzado' => true,
+                ], 403);
+            }
+        }
+
         $tipoNegocio = $this->tipoNegocioDe($negocio);
         $conVehiculo = $tipoNegocio === 'lavadero';
         $conVariosServicios = $tipoNegocio === 'spa';

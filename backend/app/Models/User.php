@@ -29,6 +29,7 @@ class User extends Authenticatable
         'modo_cobro',
         'membresia_vence_at',
         'limite_clientes',
+        'limite_citas',
         'foto_perfil_url',
         'telefono',
         'activo',
@@ -236,6 +237,33 @@ class User extends Authenticatable
             return Cliente::withoutGlobalScopes()->where('empresa_id', $empresaId)->count();
         }
         return Cliente::withoutGlobalScopes()->where('owner_id', $this->id)->count();
+    }
+
+    /**
+     * FACHADA — Límite efectivo de citas: el de la empresa (override o plan),
+     * con respaldo al override/plan propio del usuario si aún no tiene empresa.
+     */
+    public function limiteCitasEfectivo(): int
+    {
+        if ($this->esSuperAdmin()) {
+            return PHP_INT_MAX;
+        }
+        if ($empresa = $this->empresaDeCobro()) {
+            return $empresa->limiteCitasEfectivo();
+        }
+        if (! is_null($this->limite_citas)) {
+            return (int) $this->limite_citas;
+        }
+        return (int) ($this->plan?->limite_citas ?? 0);
+    }
+
+    /** Citas registradas por el negocio (empresa si ya la tiene, si no por owner_id). */
+    public function citasUsadas(): int
+    {
+        if ($empresaId = $this->empresaId()) {
+            return Cita::withoutGlobalScopes()->where('empresa_id', $empresaId)->count();
+        }
+        return Cita::withoutGlobalScopes()->where('owner_id', $this->id)->count();
     }
 
     /** Id del negocio principal (super-admin) para el portal público de reservas. */

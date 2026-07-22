@@ -11,6 +11,7 @@ class Plan extends Model
         'nombre',
         'precio_mensual',
         'limite_clientes',
+        'limite_citas',
         'incluye',
         'funcionalidades',
         'activo',
@@ -23,6 +24,7 @@ class Plan extends Model
         'activo' => 'boolean',
         'precio_mensual' => 'integer',
         'limite_clientes' => 'integer',
+        'limite_citas' => 'integer',
     ];
 
     public function usuarios(): HasMany

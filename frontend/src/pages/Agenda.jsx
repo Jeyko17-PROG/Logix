@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -242,6 +243,7 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
   const [buscando, setBuscando] = useState(false)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [limiteAlcanzado, setLimiteAlcanzado] = useState(false)
 
   // Servicios de esta cita (varios posibles, ej. Uñas + Pestañas); no aplica al flujo de lavadero.
   const [serviciosDisponibles, setServiciosDisponibles] = useState(servicios)
@@ -304,7 +306,7 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
       .map((l) => (l.personalizado
         ? { nombre_personalizado: l.nombre_personalizado.trim(), precio_unitario: Number(l.precio_unitario) || 0, duracion_min: Number(l.duracion_min) || 0 }
         : { servicio_id: l.servicio_id, precio_unitario: l.precio_unitario === '' ? undefined : Number(l.precio_unitario), duracion_min: l.duracion_min === '' ? undefined : Number(l.duracion_min) }))
-    setError(''); setGuardando(true)
+    setError(''); setLimiteAlcanzado(false); setGuardando(true)
     try {
       await api('/citas', {
         method: 'POST',
@@ -320,14 +322,22 @@ function NuevaCita({ clientes, servicios, planes, sucursales, esLavadero, fechaI
         },
       })
       onCreada()
-    } catch (err) { setError(err.message) } finally { setGuardando(false) }
+    } catch (err) {
+      setError(err.message)
+      if (err.status === 403) setLimiteAlcanzado(true)
+    } finally { setGuardando(false) }
   }
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
       <div onClick={(e) => e.stopPropagation()} className="bg-slate-800 rounded-2xl p-6 max-w-md w-full max-h-[85vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Nueva cita</h2>
-        {error && <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-red-300 text-sm mb-3">{error}</div>}
+        {error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-red-300 text-sm mb-3">
+            {error}
+            {limiteAlcanzado && <Link to="/planes" className="ml-2 underline text-blue-300 font-semibold">Actualizar plan →</Link>}
+          </div>
+        )}
         <div className="space-y-3">
           <select required value={cliente_id} onChange={(e) => setCliente(e.target.value)} className="input">
             <option value="">Cliente…</option>

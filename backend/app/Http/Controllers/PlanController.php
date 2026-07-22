@@ -38,6 +38,7 @@ class PlanController extends Controller
             'nombre' => ['required', 'string', 'max:100', 'unique:plans,nombre' . ($plan ? ",{$plan->id}" : '')],
             'precio_mensual' => ['required', 'integer', 'min:0'],
             'limite_clientes' => ['required', 'integer', 'min:1'],
+            'limite_citas' => ['required', 'integer', 'min:1'],
             'incluye' => ['nullable', 'array'],
             'incluye.*' => ['string'],
             // Funcionalidades activadas por el plan (claves del catálogo).

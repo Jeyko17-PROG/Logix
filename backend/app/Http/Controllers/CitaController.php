@@ -79,6 +79,21 @@ class CitaController extends Controller
 
     public function store(Request $request)
     {
+        // Restricción automática por plan: bloquea si se alcanzó el límite de citas.
+        $user = $request->user();
+        if (! $user->esSuperAdmin()) {
+            $limite = $user->limiteCitasEfectivo();
+            $usadas = $user->citasUsadas();
+            if ($usadas >= $limite) {
+                return response()->json([
+                    'message' => 'Ha alcanzado el límite de citas de su plan. Actualice su plan para seguir agendando.',
+                    'limite_alcanzado' => true,
+                    'usados' => $usadas,
+                    'limite' => $limite,
+                ], 403);
+            }
+        }
+
         $data = $this->validar($request);
         $servicios = $data['servicios'] ?? null;
         unset($data['servicios']);

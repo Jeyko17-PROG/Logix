@@ -36,6 +36,7 @@ class Empresa extends Model
         'estado',
         'activo',
         'limite_clientes',
+        'limite_citas',
         'reservas_slug',
     ];
 
@@ -106,6 +107,21 @@ class Empresa extends Model
     public function clientesUsados(): int
     {
         return Cliente::withoutGlobalScopes()->where('empresa_id', $this->id)->count();
+    }
+
+    /** Límite efectivo de citas: override manual o el del plan. */
+    public function limiteCitasEfectivo(): int
+    {
+        if (! is_null($this->limite_citas)) {
+            return (int) $this->limite_citas;
+        }
+        return (int) ($this->plan?->limite_citas ?? 0);
+    }
+
+    /** Citas registradas por la empresa (sin el scope global, para el panel admin). */
+    public function citasUsadas(): int
+    {
+        return Cita::withoutGlobalScopes()->where('empresa_id', $this->id)->count();
     }
 
     /** Genera (si falta) el slug público único del portal de reservas. */

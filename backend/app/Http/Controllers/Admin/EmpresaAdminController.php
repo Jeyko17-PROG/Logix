@@ -42,6 +42,9 @@ class EmpresaAdminController extends Controller
             'limite_clientes' => $e->limiteClientesEfectivo() ?: null,
             'limite_manual' => $e->limite_clientes,
             'clientes_usados' => $e->clientesUsados(),
+            'limite_citas' => $e->limiteCitasEfectivo() ?: null,
+            'limite_citas_manual' => $e->limite_citas,
+            'citas_usadas' => $e->citasUsadas(),
             'fecha_registro' => $e->created_at?->toIso8601String(),
         ];
     }
@@ -116,15 +119,24 @@ class EmpresaAdminController extends Controller
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
     }
 
-    /** Cambia el límite manual de clientes (null = usar el del plan). */
+    /** Cambia el límite manual de clientes y/o citas (null = usar el del plan). */
     public function cambiarLimite(Request $request, Empresa $empresa): JsonResponse
     {
-        $data = $request->validate(['limite_clientes' => ['nullable', 'integer', 'min:0']]);
+        $data = $request->validate([
+            'limite_clientes' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'limite_citas' => ['sometimes', 'nullable', 'integer', 'min:0'],
+        ]);
 
-        $empresa->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
-        $empresa->owner?->update(['limite_clientes' => $data['limite_clientes'] ?? null]); // espejo legado
-
-        Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_LIMITE', null, null, (string) ($data['limite_clientes'] ?? 'plan'));
+        if ($request->has('limite_clientes')) {
+            $empresa->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
+            $empresa->owner?->update(['limite_clientes' => $data['limite_clientes'] ?? null]); // espejo legado
+            Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_LIMITE', null, null, (string) ($data['limite_clientes'] ?? 'plan'));
+        }
+        if ($request->has('limite_citas')) {
+            $empresa->update(['limite_citas' => $data['limite_citas'] ?? null]);
+            $empresa->owner?->update(['limite_citas' => $data['limite_citas'] ?? null]); // espejo legado
+            Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_LIMITE_CITAS', null, null, (string) ($data['limite_citas'] ?? 'plan'));
+        }
 
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
     }
