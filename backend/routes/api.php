@@ -109,6 +109,7 @@ Route::prefix('publico/{slug}')->group(function () {
     Route::get('sucursales', [PortalController::class, 'sucursales']);
     Route::get('servicios', [PortalController::class, 'servicios']);
     Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
+    Route::get('profesionales', [PortalController::class, 'profesionales']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
     Route::post('reservar', [PortalController::class, 'reservar']);
     Route::get('mis-citas', [PortalController::class, 'misCitas']);
@@ -120,6 +121,7 @@ Route::prefix('publico')->group(function () {
     Route::get('sucursales', [PortalController::class, 'sucursales']);
     Route::get('servicios', [PortalController::class, 'servicios']);
     Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
+    Route::get('profesionales', [PortalController::class, 'profesionales']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
     Route::post('reservar', [PortalController::class, 'reservar']);
     Route::get('mis-citas', [PortalController::class, 'misCitas']);

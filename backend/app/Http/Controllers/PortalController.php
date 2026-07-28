@@ -54,7 +54,32 @@ class PortalController extends Controller
             'logo_url' => $empresa?->logo_url,
             'logo_emoji' => $empresa?->logo_emoji,
             'tipo_negocio' => $empresa?->tipoNegocio?->clave,
+            // Para el botón "Escribir al local" en la pantalla de confirmación.
+            'telefono' => $empresa?->telefono,
         ]);
+    }
+
+    /**
+     * Especialistas disponibles para elegir en el portal (barbería/spa):
+     * roster operativo del negocio (barbero/estilista/esteticien), sin
+     * necesidad de que tengan cuenta de acceso al sistema.
+     */
+    public function profesionales(?string $slug = null)
+    {
+        $negocio = $this->negocioId($slug);
+        $tipoNegocio = $this->tipoNegocioDe($negocio);
+
+        $tiposRelevantes = match ($tipoNegocio) {
+            'barberia' => ['barbero'],
+            'spa' => ['esteticien', 'barbero'],
+            default => ['barbero', 'esteticien'],
+        };
+
+        return \App\Models\OperablesEmployee::where('owner_id', $negocio)
+            ->where('activo', true)
+            ->whereIn('tipo_operario', $tiposRelevantes)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'apellido', 'tipo_operario']);
     }
 
     /** Sucursales activas del negocio (multisucursal); el portal las ofrece como primer paso. */
@@ -103,6 +128,8 @@ class PortalController extends Controller
             'servicio_id' => ['nullable', 'exists:servicios,id'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
+            // Especialista elegido (barbería/spa): la disponibilidad pasa a ser la suya.
+            'operables_employee_id' => ['nullable', \Illuminate\Validation\Rule::exists('operables_employees', 'id')->where('owner_id', $negocio)],
             // Spa: varios servicios en una misma reserva; el frontend suma sus
             // duraciones y la manda aquí directo en vez de un servicio_id único.
             'duracion_min' => ['nullable', 'integer', 'min:1'],
@@ -117,7 +144,10 @@ class PortalController extends Controller
             }
         }
 
-        $slots = $this->agenda->slotsDisponibles(Carbon::parse($data['fecha']), $duracion, $negocio, $data['bodega_id'] ?? null);
+        $slots = $this->agenda->slotsDisponibles(
+            Carbon::parse($data['fecha']), $duracion, $negocio,
+            $data['bodega_id'] ?? null, $data['operables_employee_id'] ?? null,
+        );
         return response()->json(['slots' => $slots]);
     }
 
@@ -145,8 +175,12 @@ class PortalController extends Controller
 
         $data = $request->validate([
             'nombre_completo' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email'],
+            // El correo es opcional (flujo ultra-simple de barbería/spa): se pide
+            // solo nombre y teléfono. Si el cliente lo da, recibe confirmación
+            // por correo y puede consultar sus citas después con ese correo.
+            'email' => ['nullable', 'email'],
             'telefono' => ['required', 'string', 'max:50'],
+            'nota' => ['nullable', 'string', 'max:255'],
             'servicio_id' => ['nullable', 'exists:servicios,id'],
             // Varios servicios en una misma reserva (solo Spa: ej. Uñas + Pestañas).
             'servicios' => ['nullable', 'array', 'min:1'],
@@ -155,6 +189,8 @@ class PortalController extends Controller
             'servicios.*.duracion_min' => ['nullable', 'integer', 'min:1'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
+            // Especialista elegido por el cliente (barbería/spa); null = cualquiera disponible.
+            'operables_employee_id' => ['nullable', \Illuminate\Validation\Rule::exists('operables_employees', 'id')->where('owner_id', $negocio)],
             'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
             'placa' => [$conVehiculo ? 'required' : 'nullable', 'string', 'max:20'],
             'inicio' => ['required', 'date'],
@@ -187,8 +223,9 @@ class PortalController extends Controller
         $inicio = Carbon::parse($data['inicio']);
         $fin = $inicio->copy()->addMinutes($duracion);
 
-        // Garantía anti doble-reserva (misma lógica que el panel admin; scoped por sucursal).
-        $this->agenda->asegurarDisponible($inicio, $fin, null, $negocio, $data['bodega_id'] ?? null);
+        // Garantía anti doble-reserva (misma lógica que el panel admin; scoped
+        // por sucursal y, si se eligió, por el especialista).
+        $this->agenda->asegurarDisponible($inicio, $fin, null, $negocio, $data['bodega_id'] ?? null, $data['operables_employee_id'] ?? null);
 
         // El portal es público (sin sesión), así que hay que fijar empresa_id a
         // mano: el dueño autenticado filtra su Agenda/Clientes por empresa_id,
@@ -200,11 +237,19 @@ class PortalController extends Controller
         }
 
         return DB::transaction(function () use ($data, $servicios, $inicio, $fin, $negocio, $empresaId) {
-            // Reutiliza el cliente del negocio por email, o lo crea como POTENCIAL.
-            $cliente = Cliente::firstOrCreate(
-                ['email' => $data['email'], 'owner_id' => $negocio],
-                ['nombre_completo' => $data['nombre_completo'], 'telefono' => $data['telefono'], 'estado' => 'POTENCIAL', 'empresa_id' => $empresaId]
-            );
+            // Reutiliza el cliente del negocio por email; si no dio correo
+            // (flujo simplificado), lo identifica por teléfono en su lugar.
+            $criterioBusqueda = ! empty($data['email'])
+                ? ['email' => $data['email'], 'owner_id' => $negocio]
+                : ['telefono' => $data['telefono'], 'owner_id' => $negocio];
+
+            $cliente = Cliente::firstOrCreate($criterioBusqueda, [
+                'nombre_completo' => $data['nombre_completo'],
+                'email' => $data['email'] ?? null,
+                'telefono' => $data['telefono'],
+                'estado' => 'POTENCIAL',
+                'empresa_id' => $empresaId,
+            ]);
             if ($empresaId && ! $cliente->empresa_id) {
                 $cliente->update(['empresa_id' => $empresaId]);
             }
@@ -216,8 +261,10 @@ class PortalController extends Controller
                 'servicio_id' => $data['servicio_id'] ?? null,
                 'plan_lavado_id' => $data['plan_lavado_id'] ?? null,
                 'bodega_id' => $data['bodega_id'] ?? null,
+                'operables_employee_id' => $data['operables_employee_id'] ?? null,
                 'tipo_vehiculo' => $data['tipo_vehiculo'] ?? null,
                 'placa' => $data['placa'] ?? null,
+                'observaciones' => $data['nota'] ?? null,
                 'inicio' => $inicio,
                 'fin' => $fin,
                 'estado' => 'PENDIENTE',
@@ -235,19 +282,25 @@ class PortalController extends Controller
                 }
             }
 
-            // Notificación interna SOLO para el dueño del negocio + correo al cliente.
+            // Notificación interna SOLO para el dueño del negocio + correo al
+            // cliente (solo si dejó su correo: el flujo simplificado no lo exige).
             $this->notificador->aUsuario($negocio, 'RESERVA',
                 'Nueva reserva desde el portal', "{$cliente->nombre_completo} · {$inicio->format('d/m/Y H:i')}");
-            $this->notificador->correo($cliente->email, 'Confirmación de tu reserva - Logix',
-                '¡Reserva confirmada!', [
-                    "Hola {$cliente->nombre_completo},",
-                    "Tu cita quedó agendada para el {$inicio->format('d/m/Y')} a las {$inicio->format('H:i')}.",
-                    'Si necesitas cancelar, ingresa al portal con tu correo.',
-                ], null, 'RESERVA');
+            if ($cliente->email) {
+                $this->notificador->correo($cliente->email, 'Confirmación de tu reserva - Logix',
+                    '¡Reserva confirmada!', [
+                        "Hola {$cliente->nombre_completo},",
+                        "Tu cita quedó agendada para el {$inicio->format('d/m/Y')} a las {$inicio->format('H:i')}.",
+                        'Si necesitas cancelar, ingresa al portal con tu correo.',
+                    ], null, 'RESERVA');
+            }
 
             return response()->json([
                 'mensaje' => 'Reserva confirmada.',
-                'cita' => $cita->load('servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre', 'detalleServicios.servicio:id,nombre,icono'),
+                'cita' => $cita->load(
+                    'servicio:id,nombre,icono', 'planLavado:id,nombre,icono', 'bodega:id,nombre',
+                    'detalleServicios.servicio:id,nombre,icono', 'operablesEmployee:id,nombre,apellido',
+                ),
             ], 201);
         });
     }

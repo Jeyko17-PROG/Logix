@@ -27,7 +27,7 @@ class AgendaService
      *
      * @return array<int, array{inicio:string, fin:string, disponible:bool}>
      */
-    public function slotsDisponibles(Carbon $fecha, int $duracionMin, ?int $ownerId = null, ?int $bodegaId = null): array
+    public function slotsDisponibles(Carbon $fecha, int $duracionMin, ?int $ownerId = null, ?int $bodegaId = null, ?int $operablesEmployeeId = null): array
     {
         $ownerId ??= Auth::id();
         $ajustes = AjusteAgenda::actual($ownerId);
@@ -42,7 +42,9 @@ class AgendaService
             $horarios = collect([new HorarioLaboral(['hora_inicio' => '08:00:00', 'hora_fin' => '18:00:00'])]);
         }
 
-        $citas = $this->citasDelDia($fecha, $ownerId, $bodegaId);
+        // Si el cliente eligió un especialista, el "ocupado" es SOLO de esa
+        // persona (dos barberos pueden atender a la vez en el mismo horario).
+        $citas = $this->citasDelDia($fecha, $ownerId, $bodegaId, $operablesEmployeeId);
         $bloqueos = $this->bloqueosDelDia($fecha, $ownerId, $bodegaId);
 
         $slots = [];
@@ -75,7 +77,7 @@ class AgendaService
      * Verifica que un rango sea reservable; lanza ValidationException si no.
      * Esta es la garantía contra la DOBLE RESERVA.
      */
-    public function asegurarDisponible(Carbon $inicio, Carbon $fin, ?int $ignorarCitaId = null, ?int $ownerId = null, ?int $bodegaId = null): void
+    public function asegurarDisponible(Carbon $inicio, Carbon $fin, ?int $ignorarCitaId = null, ?int $ownerId = null, ?int $bodegaId = null, ?int $operablesEmployeeId = null): void
     {
         $ownerId ??= Auth::id();
 
@@ -105,8 +107,9 @@ class AgendaService
             throw ValidationException::withMessages(['inicio' => ['Ese horario está bloqueado.']]);
         }
 
-        // ¿Choca con otra cita activa? (doble reserva; scoped por sucursal si aplica)
-        $citas = $this->citasDelDia($inicio, $ownerId, $bodegaId)->reject(fn ($c) => $c->id === $ignorarCitaId);
+        // ¿Choca con otra cita activa? (doble reserva; scoped por sucursal y,
+        // si se indica, por el especialista elegido)
+        $citas = $this->citasDelDia($inicio, $ownerId, $bodegaId, $operablesEmployeeId)->reject(fn ($c) => $c->id === $ignorarCitaId);
         if ($this->seSolapaConCitas($inicio, $fin, $citas)) {
             throw ValidationException::withMessages(['inicio' => ['Ya existe una cita en ese horario.']]);
         }
@@ -141,11 +144,14 @@ class AgendaService
         return $base->whereNull('bodega_id')->get();
     }
 
-    private function citasDelDia(Carbon $fecha, ?int $ownerId, ?int $bodegaId = null)
+    private function citasDelDia(Carbon $fecha, ?int $ownerId, ?int $bodegaId = null, ?int $operablesEmployeeId = null)
     {
         return Cita::withoutGlobalScope(OwnerScope::class)
             ->where('owner_id', $ownerId)
             ->when($bodegaId, fn ($q) => $q->where('bodega_id', $bodegaId))
+            // Con especialista elegido, el choque de horario es SOLO contra SUS
+            // propias citas (otro profesional puede atender en simultáneo).
+            ->when($operablesEmployeeId, fn ($q) => $q->where('operables_employee_id', $operablesEmployeeId))
             ->whereDate('inicio', $fecha->toDateString())
             ->whereIn('estado', Cita::ESTADOS_ACTIVOS)
             ->get(['id', 'inicio', 'fin']);

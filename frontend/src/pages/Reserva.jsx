@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import ReservaGuiada from './ReservaGuiada'
 
 const fmtHora = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 const fmtFecha = (iso) => new Date(iso).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
@@ -38,6 +39,9 @@ export default function Reserva() {
   }, [slug, base])
 
   const esLavadero = negocio?.tipo_negocio === 'lavadero'
+  // Barbería y Spa usan el flujo guiado ultra-simplificado (paso a paso con
+  // selección de especialista); el resto conserva el formulario clásico.
+  const esGuiado = ['barberia', 'spa'].includes(negocio?.tipo_negocio)
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 px-4 py-8">
@@ -68,7 +72,11 @@ export default function Reserva() {
               <button onClick={() => setTab('reservar')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'reservar' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Reservar</button>
               <button onClick={() => setTab('mis')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'mis' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Mis citas</button>
             </div>
-            {tab === 'reservar' ? <FormReserva base={base} esLavadero={esLavadero} /> : <MisCitas base={base} />}
+            {tab === 'reservar' ? (
+              esGuiado
+                ? <ReservaGuiada base={base} negocio={negocio} esSpa={negocio?.tipo_negocio === 'spa'} />
+                : <FormReserva base={base} esLavadero={esLavadero} />
+            ) : <MisCitas base={base} />}
           </>
         )}
       </div>
