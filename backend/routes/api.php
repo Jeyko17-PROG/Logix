@@ -295,6 +295,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     // Configuración de servicios y calendario (solo Administrador)
     Route::middleware('role:Administrador')->group(function () {
         Route::post('servicios', [ServicioController::class, 'store']);
+        Route::post('servicios/{servicio}/update', [ServicioController::class, 'update']); // multipart (imagen)
         Route::put('servicios/{servicio}', [ServicioController::class, 'update']);
         Route::delete('servicios/{servicio}', [ServicioController::class, 'destroy']);
         Route::post('planes-lavado', [PlanLavadoController::class, 'store']);

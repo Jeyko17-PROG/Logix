@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 
-const VACIO = { nombre: '', descripcion: '', categoria_id: '', imagen: '', icono: '', precio: '', duracion_min: 30, activo: true }
+const VACIO = { nombre: '', descripcion: '', categoria_id: '', icono: '', precio: '', duracion_min: 30, activo: true }
 
 export default function Servicios() {
   const [servicios, setServicios] = useState([])
   const [categorias, setCategorias] = useState([])
   const [form, setForm] = useState(VACIO)
+  const [imagenActual, setImagenActual] = useState(null) // URL ya guardada (al editar)
+  const [imagen, setImagen] = useState(null) // archivo nuevo elegido, o null
   const [editando, setEditando] = useState(null) // id del servicio en edición, o null para "nuevo"
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -22,18 +24,32 @@ export default function Servicios() {
   function editar(servicio) {
     setEditando(servicio.id)
     setForm({ ...VACIO, ...servicio, categoria_id: servicio.categoria_id ?? '', precio: String(servicio.precio) })
+    setImagenActual(servicio.imagen ?? null)
+    setImagen(null)
   }
 
   function cancelar() {
     setEditando(null)
     setForm(VACIO)
+    setImagenActual(null)
+    setImagen(null)
   }
 
   async function guardar(e) {
     e.preventDefault(); setError(''); setGuardando(true)
     try {
-      if (editando) await api(`/servicios/${editando}`, { method: 'PUT', body: form })
-      else await api('/servicios', { method: 'POST', body: form })
+      // multipart/form-data: la foto se sube directo a Cloudinary (no se
+      // pega un enlace) — evita el error de URL demasiado larga y permite
+      // elegirla desde la galería o la cámara del celular.
+      const fd = new FormData()
+      Object.entries(form).forEach(([k, v]) => {
+        if (k === 'activo') fd.append(k, v ? '1' : '0')
+        else if (v !== null && v !== '') fd.append(k, v)
+      })
+      if (imagen) fd.append('imagen', imagen)
+
+      if (editando) await api(`/servicios/${editando}/update`, { method: 'POST', body: fd, isForm: true })
+      else await api('/servicios', { method: 'POST', body: fd, isForm: true })
       cancelar()
       cargar()
     } catch (err) { setError(err.message) } finally { setGuardando(false) }
@@ -62,7 +78,17 @@ export default function Servicios() {
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
           <input placeholder="Emoji (ej. 💅, opcional)" value={form.icono ?? ''} onChange={set('icono')} className="input" maxLength={10} />
-          <input placeholder="URL de imagen (opcional)" value={form.imagen ?? ''} onChange={set('imagen')} className="input sm:col-span-2" />
+          <div className="sm:col-span-2 flex items-center gap-3">
+            {(imagen || imagenActual) && (
+              <img src={imagen ? URL.createObjectURL(imagen) : imagenActual} alt=""
+                className="h-14 w-14 rounded-lg object-cover border border-slate-700 shrink-0" />
+            )}
+            <label className="flex-1 text-sm text-slate-300">
+              Foto del servicio (opcional)
+              <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="input mt-1" />
+              <span className="block text-xs text-slate-500 mt-1">Elige desde la galería o toma una foto con la cámara de tu celular.</span>
+            </label>
+          </div>
           <input required type="number" min="0" step="0.01" placeholder="Precio" value={form.precio} onChange={set('precio')} className="input" />
           <input required type="number" min="5" placeholder="Duración (min)" value={form.duracion_min} onChange={set('duracion_min')} className="input" />
         </div>
