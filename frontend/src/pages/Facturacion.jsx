@@ -269,11 +269,12 @@ export default function Facturacion() {
                 <label className="block">
                   <span className="mb-1 block text-sm text-slate-300">Divisa</span>
                   <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="input">
-                    <option value="COP">Pesos (COP)</option>
+                    <option value="COP">Pesos Colombianos (COP)</option>
                     <option value="USD">USD (Dólares)</option>
+                    <option value="MXN">Pesos Mexicanos (MXN)</option>
                   </select>
                 </label>
-                {currency === 'USD' && (
+                {currency !== 'COP' && (
                   <label className="block">
                     <span className="mb-1 block text-sm text-slate-300">Tipo de cambio (opcional)</span>
                     <input type="number" step="0.000001" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="input" placeholder="Ej: 0.00027" />

@@ -49,11 +49,40 @@ class VerificarMembresia
             return $next($request);
         }
 
+        $this->alertarPruebaVencida($owner);
+
         return response()->json([
             'codigo' => 'MEMBRESIA_VENCIDA',
             'message' => 'Tu membresía venció. Renueva tu plan para seguir usando el POS.',
             'vencio_el' => $owner->membresia_vence_at?->toDateString(),
             'plan' => $owner->planEfectivo()?->nombre,
         ], 402);
+    }
+
+    /**
+     * Avisa una sola vez al super-admin cuando una prueba gratuita termina
+     * sin pago (empresa_id.prueba_alerta_enviada evita repetir el aviso en
+     * cada request bloqueado).
+     */
+    private function alertarPruebaVencida($owner): void
+    {
+        $empresa = $owner->empresaDeCobro();
+        if (! $empresa || $empresa->modo_cobro !== 'prueba' || $empresa->prueba_alerta_enviada) {
+            return;
+        }
+
+        $empresa->forceFill(['prueba_alerta_enviada' => true])->save();
+
+        $superAdmin = \App\Models\User::where('es_super_admin', true)->first();
+        if (! $superAdmin) {
+            return;
+        }
+
+        app(\App\Services\Notificador::class)->aUsuario(
+            $superAdmin->id,
+            'ADMIN',
+            'Prueba gratuita finalizada',
+            "\"{$empresa->nombre}\" (dueño: {$owner->name} · {$owner->email}) terminó su prueba gratuita de 15 días y aún no ha pagado."
+        );
     }
 }

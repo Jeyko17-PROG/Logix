@@ -33,6 +33,12 @@ class EmpresaAdminController extends Controller
             'email_facturacion' => $e->email_facturacion,
             'tipo_negocio' => $e->tipoNegocio?->only(['id', 'clave', 'nombre']),
             'dueno' => $e->owner?->only(['id', 'name', 'email']),
+            'dueno_estado' => $e->owner?->estado,
+            // Solo visible mientras la cuenta está pendiente de activación
+            // (el super-admin lo entrega manualmente al dueño).
+            'codigo_activacion' => $e->owner?->estado === 'PENDIENTE_ACTIVACION' ? $e->owner?->codigo_activacion : null,
+            'dueno_veces_login' => $e->owner?->veces_login,
+            'dueno_ultimo_acceso' => $e->owner?->ultimo_acceso?->toIso8601String(),
             'usuarios' => $e->usuarios()->count(),
             'plan' => $e->plan ? ['id' => $e->plan->id, 'nombre' => $e->plan->nombre] : null,
             'modo_cobro' => $e->modo_cobro,
@@ -101,6 +107,23 @@ class EmpresaAdminController extends Controller
         }
 
         Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_ESTADO', null, $anterior, $data['estado']);
+
+        return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
+    }
+
+    /**
+     * Genera un nuevo código de activación de 6 dígitos para el dueño de la
+     * empresa (p. ej. si agotó los 5 intentos o perdió el que tenía).
+     */
+    public function regenerarCodigoActivacion(Request $request, Empresa $empresa): JsonResponse
+    {
+        $owner = $empresa->owner;
+        abort_unless($owner && $owner->estado === 'PENDIENTE_ACTIVACION', 422, 'El dueño de esta empresa ya está activo.');
+
+        $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $owner->forceFill(['codigo_activacion' => $codigo, 'codigo_activacion_intentos' => 0])->save();
+
+        Auditoria::registrar($request->user()->id, $owner->id, 'EMPRESA', 'REGENERAR_CODIGO_ACTIVACION', null, null);
 
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
     }

@@ -31,6 +31,11 @@ class AuthController extends Controller
         // Plan por defecto: Gratuito.
         $planId = Plan::where('nombre', 'Gratuito')->value('id');
 
+        // Código de activación de 6 dígitos: solo lo ve el super-admin (panel de
+        // Empresas). Sin él, la cuenta queda bloqueada desde el registro — ni
+        // siquiera puede intentar iniciar sesión hasta que se active.
+        $codigoActivacion = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
         $user = User::create([
             'name' => $data['name'],
             'tipo_documento' => $data['tipo_documento'] ?? null,
@@ -40,11 +45,14 @@ class AuthController extends Controller
             'password' => $data['password'], // hasheado por el cast
             'rol_id' => $rolId,
             'plan_id' => $planId,
-            'activo' => true,
-            'estado' => 'ACTIVO',
+            'activo' => false,
+            'estado' => 'PENDIENTE_ACTIVACION',
+            'codigo_activacion' => $codigoActivacion,
         ]);
 
         // La empresa es el tenant real: dueña de los datos, el plan y la membresía.
+        // Arranca en modo 'prueba': el reloj de los 15 días gratis empieza a
+        // correr cuando el usuario activa la cuenta y puede usarla de verdad.
         $empresa = \App\Models\Empresa::create([
             'nombre' => $data['nombre_empresa'] ?? $data['name'],
             'tipo_documento' => $data['tipo_documento'] ?? null,
@@ -55,21 +63,78 @@ class AuthController extends Controller
                 ?? \App\Models\TipoNegocio::where('clave', 'otro')->value('id'),
             'owner_user_id' => $user->id,
             'plan_id' => $planId,
+            'modo_cobro' => 'prueba',
             'estado' => 'ACTIVO',
             'activo' => true,
         ]);
         $user->forceFill(['empresa_id' => $empresa->id, 'es_admin_empresa' => true])->save();
 
         $this->prepararEspacioDeTrabajo($user);
-        $this->notificarNuevoRegistro($user);
+        $this->notificarNuevoRegistro($user, $codigoActivacion);
         $this->darBienvenida($user);
+
+        // Sin token: la cuenta no puede usarse hasta que se active con el código.
+        return response()->json([
+            'pendiente_activacion' => true,
+            'email' => $user->email,
+            'message' => 'Tu cuenta fue creada. Un asesor de Logix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
+        ], 201);
+    }
+
+    /**
+     * Activa la cuenta con el código de 6 dígitos entregado por el
+     * super-admin. Al activarse arranca la prueba gratuita de 15 días
+     * (calendario) y se emite el token de sesión (queda logueado).
+     */
+    public function activar(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'codigo' => ['required', 'string', 'size:6'],
+        ]);
+
+        $user = User::where('email', $data['email'])->where('estado', 'PENDIENTE_ACTIVACION')->first();
+
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'email' => ['No hay una cuenta pendiente de activación con ese correo.'],
+            ]);
+        }
+
+        if ($user->codigo_activacion_intentos >= 5) {
+            throw ValidationException::withMessages([
+                'codigo' => ['Superaste el número de intentos permitidos. Contacta al administrador de Logix para que te genere un nuevo código.'],
+            ]);
+        }
+
+        if ($user->codigo_activacion !== $data['codigo']) {
+            $user->increment('codigo_activacion_intentos');
+            throw ValidationException::withMessages([
+                'codigo' => ['El código de activación no es correcto.'],
+            ]);
+        }
+
+        $user->forceFill([
+            'estado' => 'ACTIVO',
+            'activo' => true,
+            'codigo_activacion' => null,
+            'codigo_activacion_intentos' => 0,
+            'ultimo_acceso' => now(),
+            'veces_login' => 1,
+        ])->save();
+
+        // El reloj de los 15 días gratis arranca aquí, no en el registro.
+        $empresa = $user->empresaDeCobro();
+        if ($empresa && $empresa->modo_cobro === 'prueba' && ! $empresa->membresia_vence_at) {
+            $empresa->forceFill(['membresia_vence_at' => now()->addDays(15)])->save();
+        }
 
         $token = $user->createToken('logix')->plainTextToken;
 
         return response()->json([
             'user' => $user->load('rol', 'plan'),
             'token' => $token,
-        ], 201);
+        ]);
     }
 
     /** Provisiona la configuración inicial del nuevo inquilino (horarios y ajustes de agenda). */
@@ -155,7 +220,7 @@ class AuthController extends Controller
     /**
      * Avisa al Super Administrador (notificación interna + correo opcional) de un nuevo registro.
      */
-    private function notificarNuevoRegistro(User $user): void
+    private function notificarNuevoRegistro(User $user, string $codigoActivacion): void
     {
         $superAdmin = User::where('es_super_admin', true)->first();
         if (! $superAdmin) {
@@ -164,18 +229,18 @@ class AuthController extends Controller
 
         $cuando = now()->format('d/m/Y H:i');
         $plan = $user->plan?->nombre ?? 'Sin plan';
-        $mensaje = "Usuario: {$user->name}\nCorreo: {$user->email}\nFecha: {$cuando}\nPlan: {$plan}";
+        $mensaje = "Usuario: {$user->name}\nCorreo: {$user->email}\nFecha: {$cuando}\nPlan: {$plan}\n\nCódigo de activación: {$codigoActivacion}\n(la cuenta queda bloqueada hasta que se la entregues y la active en /activar)";
 
         $notificador = app(Notificador::class);
-        $notificador->aUsuario($superAdmin->id, 'ADMIN', 'Nuevo usuario registrado', $mensaje);
+        $notificador->aUsuario($superAdmin->id, 'ADMIN', 'Nuevo usuario registrado — pendiente de activación', $mensaje);
 
         // Correo opcional al super-admin (en dev queda en el log si MAIL_MAILER=log).
         try {
             $notificador->correo(
                 $superAdmin->email,
                 'Nuevo usuario registrado — Logix',
-                'Nuevo usuario registrado',
-                ["Nombre: {$user->name}", "Correo: {$user->email}", "Fecha: {$cuando}", "Plan: {$plan}"],
+                'Nuevo usuario registrado (pendiente de activación)',
+                ["Nombre: {$user->name}", "Correo: {$user->email}", "Fecha: {$cuando}", "Plan: {$plan}", "Código de activación: {$codigoActivacion}"],
             );
         } catch (\Throwable $e) {
             // No bloquear el registro si falla el envío de correo.
@@ -197,6 +262,12 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales no son correctas.'],
+            ]);
+        }
+
+        if ($user->estado === 'PENDIENTE_ACTIVACION') {
+            throw ValidationException::withMessages([
+                'email' => ['Tu cuenta está pendiente de activación. Solicita tu código de 6 dígitos al administrador de Logix.'],
             ]);
         }
 
@@ -228,7 +299,7 @@ class AuthController extends Controller
             }
         }
 
-        $user->forceFill(['ultimo_acceso' => now()])->save();
+        $user->forceFill(['ultimo_acceso' => now()])->increment('veces_login');
 
         $token = $user->createToken('logix')->plainTextToken;
 

@@ -70,13 +70,14 @@ export default function Reserva() {
           <>
             <div className="flex gap-2 mb-6">
               <button onClick={() => setTab('reservar')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'reservar' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Reservar</button>
+              <button onClick={() => setTab('catalogo')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'catalogo' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Catálogo</button>
               <button onClick={() => setTab('mis')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'mis' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Mis citas</button>
             </div>
             {tab === 'reservar' ? (
               esGuiado
                 ? <ReservaGuiada base={base} negocio={negocio} esSpa={negocio?.tipo_negocio === 'spa'} />
                 : <FormReserva base={base} esLavadero={esLavadero} />
-            ) : <MisCitas base={base} />}
+            ) : tab === 'catalogo' ? <CatalogoProductos base={base} /> : <MisCitas base={base} />}
           </>
         )}
       </div>
@@ -289,6 +290,55 @@ function FormReserva({ base, esLavadero }) {
       )}
       {slots.length > 0 && <button className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 py-2.5 font-semibold">Confirmar reserva</button>}
     </form>
+  )
+}
+
+// Vitrina pública de productos con foto, precio y disponibilidad (agotado/
+// disponible lo controla el negocio a mano en Productos, no es una reserva).
+function CatalogoProductos({ base }) {
+  const [productos, setProductos] = useState(null)
+
+  useEffect(() => {
+    api(`${base}/productos`).then(setProductos).catch(() => setProductos([]))
+  }, [base])
+
+  const categorias = (productos ?? []).reduce((acc, p) => {
+    const nombre = p.categoria?.nombre ?? 'Otros productos'
+    ;(acc[nombre] ??= []).push(p)
+    return acc
+  }, {})
+
+  if (productos === null) return <p className="text-slate-500 text-sm">Cargando catálogo…</p>
+  if (productos.length === 0) return <p className="text-slate-500 text-sm">Este negocio aún no publicó productos en su catálogo.</p>
+
+  return (
+    <div className="space-y-5">
+      {Object.entries(categorias).map(([nombre, items]) => (
+        <div key={nombre}>
+          <p className="text-sm font-semibold mb-2">{nombre}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {items.map((p) => (
+              <div key={p.id} className="rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+                <div className="relative h-24 w-full bg-slate-700 flex items-center justify-center text-2xl text-slate-500">
+                  📦
+                  {p.imagen_url && (
+                    <img src={p.imagen_url} alt="" className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                  )}
+                  {!p.disponible && (
+                    <span className="absolute top-1 right-1 rounded-full bg-red-600/90 px-2 py-0.5 text-[10px] font-semibold text-white">Agotado</span>
+                  )}
+                </div>
+                <div className="p-2.5">
+                  <p className="text-sm font-medium leading-tight">{p.nombre}</p>
+                  {p.precio_venta != null && <p className="text-xs text-slate-400 mt-0.5">${Number(p.precio_venta).toLocaleString()}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 

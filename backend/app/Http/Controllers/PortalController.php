@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Cita;
 use App\Models\Cliente;
+use App\Models\Producto;
 use App\Models\Servicio;
 use App\Models\User;
 use App\Services\AgendaService;
@@ -108,6 +109,23 @@ class PortalController extends Controller
             ->with('categoria:id,nombre')
             ->orderBy('nombre')
             ->get(['id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'icono', 'duracion_min', 'precio']);
+    }
+
+    /**
+     * Catálogo público de productos (fotos, precio y disponibilidad), agrupado
+     * por categoría. Aplica a cualquier tipo de negocio: es una vitrina, no
+     * requiere agendar cita. "disponible" es el interruptor manual del dueño
+     * (independiente del stock), pensado para negocios que no llevan
+     * inventario exacto por bodega en todo lo que exhiben.
+     */
+    public function productos(?string $slug = null)
+    {
+        return Producto::where('owner_id', $this->negocioId($slug))
+            ->where('activo', true)
+            ->where('is_service', false)
+            ->with('categoria:id,nombre')
+            ->orderBy('nombre')
+            ->get(['id', 'categoria_id', 'nombre', 'descripcion', 'imagen_url', 'precio_venta', 'disponible']);
     }
 
     /** Planes de lavado activos que el cliente puede reservar (Lavadero). */

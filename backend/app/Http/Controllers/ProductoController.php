@@ -142,6 +142,8 @@ class ProductoController extends Controller
             'precio_costo' => ['required', 'numeric', 'min:0'],
             'precio_venta' => ['required', 'numeric', 'min:0'],
             'activo' => ['boolean'],
+            // Catálogo público del portal: "agotado/disponible" manual, independiente del stock.
+            'disponible' => ['boolean'],
         ]);
     }
 }

@@ -33,6 +33,7 @@ class Empresa extends Model
         'plan_id',
         'modo_cobro',
         'membresia_vence_at',
+        'prueba_alerta_enviada',
         'estado',
         'activo',
         'limite_clientes',
@@ -43,6 +44,7 @@ class Empresa extends Model
     protected $casts = [
         'activo' => 'boolean',
         'membresia_vence_at' => 'datetime',
+        'prueba_alerta_enviada' => 'boolean',
     ];
 
     public function owner(): BelongsTo
@@ -71,10 +73,15 @@ class Empresa extends Model
         return $this->hasMany(EmpresaModulo::class, 'empresa_id');
     }
 
-    /** ¿La membresía mensual está vencida? (solo aplica en modo membresía con fecha registrada) */
+    /**
+     * ¿La membresía (o la prueba gratuita) está vencida? Ambos modos comparten
+     * el mismo campo membresia_vence_at: en 'prueba' se usa como fecha límite
+     * de los 15 días gratis; al pagar, renovarMembresia() cambia el modo a
+     * 'membresia' y la empresa queda igual que cualquier cliente pago.
+     */
     public function membresiaVencida(): bool
     {
-        return $this->modo_cobro === 'membresia'
+        return in_array($this->modo_cobro, ['membresia', 'prueba'], true)
             && $this->membresia_vence_at !== null
             && $this->membresia_vence_at->isPast();
     }

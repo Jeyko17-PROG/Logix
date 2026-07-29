@@ -6,15 +6,15 @@ import { api } from '../api/client'
 const VACIO = {
   name: '', tipo_documento: 'CC', numero_documento: '', telefono: '',
   email: '', password: '', password_confirmation: '',
-  nombre_empresa: '', tipo_negocio_id: '',
+  nombre_empresa: '', tipo_negocio_id: '', codigo: '',
 }
 
 export default function Login() {
-  const { login, register, forgotPassword } = useAuth()
+  const { login, register, activar, forgotPassword } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   // Modo inicial según el botón pulsado en la pantalla de bienvenida (?modo=registro).
-  const [modo, setModo] = useState(params.get('modo') === 'registro' ? 'registro' : 'login') // 'login' | 'registro' | 'recuperar'
+  const [modo, setModo] = useState(params.get('modo') === 'registro' ? 'registro' : 'login') // 'login' | 'registro' | 'recuperar' | 'activar'
   const [form, setForm] = useState(VACIO)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
@@ -41,7 +41,7 @@ export default function Login() {
         navigate('/')
       } else if (modo === 'registro') {
         if (form.password !== form.password_confirmation) throw { message: 'Las contraseñas no coinciden.' }
-        await register({
+        const data = await register({
           name: form.name,
           tipo_documento: form.tipo_documento,
           numero_documento: form.numero_documento,
@@ -52,6 +52,17 @@ export default function Login() {
           nombre_empresa: form.nombre_empresa || form.name,
           tipo_negocio_id: form.tipo_negocio_id,
         })
+        if (data.pendiente_activacion) {
+          // Cuenta bloqueada desde el registro: pasa a la pantalla de
+          // activación con el código de 6 dígitos que entrega el super-admin.
+          setModo('activar')
+          setForm((f) => ({ ...f, email: data.email, codigo: '' }))
+          setOk(data.message)
+        } else {
+          navigate('/')
+        }
+      } else if (modo === 'activar') {
+        await activar(form.email, form.codigo)
         navigate('/')
       } else if (modo === 'recuperar') {
         await forgotPassword(form.email)
@@ -85,9 +96,9 @@ export default function Login() {
           {/* Encabezado con los dos botones */}
           <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-6 pt-6 pb-4">
             <h1 className="text-white text-xl font-bold text-center mb-4">
-              {modo === 'recuperar' ? 'Recuperar contraseña' : 'Mi cuenta'}
+              {modo === 'recuperar' ? 'Recuperar contraseña' : modo === 'activar' ? 'Activar tu cuenta' : 'Mi cuenta'}
             </h1>
-            {modo !== 'recuperar' && (
+            {modo !== 'recuperar' && modo !== 'activar' && (
               <div className="flex bg-white/15 rounded-xl p-1">
                 <button onClick={() => cambiarModo('login')}
                   className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${modo === 'login' ? 'bg-white text-blue-700' : 'text-white'}`}>
@@ -140,26 +151,36 @@ export default function Login() {
 
             <Campo icono="✉️" type="email" placeholder="Correo electrónico" value={form.email} onChange={set('email')} required />
 
-            {modo !== 'recuperar' && (
+            {(modo === 'login' || modo === 'registro') && (
               <Campo icono="🔒" type="password" placeholder="Contraseña" value={form.password} onChange={set('password')} required />
             )}
             {modo === 'registro' && (
               <Campo icono="🔒" type="password" placeholder="Repite la contraseña" value={form.password_confirmation} onChange={set('password_confirmation')} required />
             )}
+            {modo === 'activar' && (
+              <>
+                <Campo icono="🔑" placeholder="Código de 6 dígitos" value={form.codigo}
+                  onChange={(e) => setForm({ ...form, codigo: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                  inputMode="numeric" maxLength={6} required />
+                <p className="text-xs text-slate-500">Ese código te lo entrega el administrador de Logix por WhatsApp o correo.</p>
+              </>
+            )}
 
             {modo === 'login' && (
-              <div className="text-right">
+              <div className="flex items-center justify-between text-xs">
+                <button type="button" onClick={() => cambiarModo('activar')}
+                  className="text-blue-600 hover:underline">¿Tienes un código de activación?</button>
                 <button type="button" onClick={() => cambiarModo('recuperar')}
-                  className="text-xs text-blue-600 hover:underline">¿Olvidaste tu contraseña?</button>
+                  className="text-blue-600 hover:underline">¿Olvidaste tu contraseña?</button>
               </div>
             )}
 
             <button type="submit" disabled={enviando}
               className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 hover:opacity-95 disabled:opacity-50 text-white font-semibold py-2.5 shadow-lg transition">
-              {enviando ? 'Procesando…' : (modo === 'login' ? 'Entrar' : modo === 'registro' ? 'Registrarme' : 'Enviar enlace')}
+              {enviando ? 'Procesando…' : (modo === 'login' ? 'Entrar' : modo === 'registro' ? 'Registrarme' : modo === 'activar' ? 'Activar cuenta' : 'Enviar enlace')}
             </button>
 
-            {modo === 'recuperar' && (
+            {(modo === 'recuperar' || modo === 'activar') && (
               <div className="text-center">
                 <button type="button" onClick={() => cambiarModo('login')}
                   className="text-xs text-blue-600 hover:underline">← Volver a iniciar sesión</button>

@@ -6,6 +6,7 @@ const ESTADO_COLOR = {
   ACTIVO: 'bg-emerald-500/15 text-emerald-400',
   SUSPENDIDO: 'bg-amber-500/15 text-amber-400',
   DESACTIVADO: 'bg-red-500/15 text-red-400',
+  PENDIENTE_ACTIVACION: 'bg-sky-500/15 text-sky-400',
 }
 
 /**
@@ -54,6 +55,11 @@ export default function Empresas() {
     accion(() => api(`/admin/empresas/${e.id}/limite`, { method: 'POST', body: { limite_clientes: v === '' ? null : Number(v) } }))
   }
 
+  const regenerarCodigo = (e) => {
+    if (!confirm(`¿Generar un nuevo código de activación para ${e.nombre}? El código anterior dejará de funcionar.`)) return
+    accion(() => api(`/admin/empresas/${e.id}/regenerar-codigo`, { method: 'POST' }))
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -78,6 +84,7 @@ export default function Empresas() {
                 <th className="text-left p-3">Plan</th>
                 <th className="text-left p-3">Membresía</th>
                 <th className="text-left p-3">Clientes</th>
+                <th className="text-left p-3">Actividad</th>
                 <th className="text-left p-3">Estado</th>
                 <th className="text-right p-3">Acciones</th>
               </tr>
@@ -100,7 +107,9 @@ export default function Empresas() {
                       <option value="" disabled>—</option>
                       {planes.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                     </select>
-                    <p className="text-xs text-slate-500 mt-1">{e.modo_cobro === 'prepago' ? '💰 pago por uso' : '📅 membresía'}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {e.modo_cobro === 'prepago' ? '💰 pago por uso' : e.modo_cobro === 'prueba' ? '🎁 prueba gratis (15 días)' : '📅 membresía'}
+                    </p>
                   </td>
                   <td className="p-3">
                     {e.membresia_vence_at
@@ -115,7 +124,21 @@ export default function Empresas() {
                     </span>
                     <button onClick={() => cambiarLimite(e)} className="ml-2 text-xs text-sky-400 hover:underline">editar</button>
                   </td>
-                  <td className="p-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[e.estado] ?? ''}`}>{e.estado}</span></td>
+                  <td className="p-3 text-xs text-slate-400">
+                    {e.dueno_veces_login ?? 0} inicio(s)
+                    {e.dueno_ultimo_acceso && <><br />último: {new Date(e.dueno_ultimo_acceso).toLocaleDateString('es-CO')}</>}
+                  </td>
+                  <td className="p-3">
+                    {e.dueno_estado === 'PENDIENTE_ACTIVACION' ? (
+                      <div>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR.PENDIENTE_ACTIVACION}`}>Pendiente de activación</span>
+                        <p className="mt-1 text-xs text-slate-300">Código: <span className="font-mono font-bold tracking-widest">{e.codigo_activacion}</span></p>
+                        <button onClick={() => regenerarCodigo(e)} className="mt-0.5 text-xs text-sky-400 hover:underline">Regenerar código</button>
+                      </div>
+                    ) : (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[e.estado] ?? ''}`}>{e.estado}</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1 justify-end">
                       <button onClick={() => navigate(`/funcionalidades?e=${e.id}`)}
@@ -129,7 +152,7 @@ export default function Empresas() {
                   </td>
                 </tr>
               ))}
-              {empresas.length === 0 && <tr><td colSpan="8" className="p-6 text-center text-slate-500">Sin empresas registradas.</td></tr>}
+              {empresas.length === 0 && <tr><td colSpan="9" className="p-6 text-center text-slate-500">Sin empresas registradas.</td></tr>}
             </tbody>
           </table>
         </div>

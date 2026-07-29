@@ -98,6 +98,7 @@ Route::get('/tipos-negocio', function () {
         ->get(['id', 'clave', 'nombre', 'descripcion']);
 });
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/activar', [AuthController::class, 'activar']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
@@ -108,6 +109,7 @@ Route::prefix('publico/{slug}')->group(function () {
     Route::get('negocio', [PortalController::class, 'negocio']);
     Route::get('sucursales', [PortalController::class, 'sucursales']);
     Route::get('servicios', [PortalController::class, 'servicios']);
+    Route::get('productos', [PortalController::class, 'productos']);
     Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
     Route::get('profesionales', [PortalController::class, 'profesionales']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
@@ -120,6 +122,7 @@ Route::prefix('publico/{slug}')->group(function () {
 Route::prefix('publico')->group(function () {
     Route::get('sucursales', [PortalController::class, 'sucursales']);
     Route::get('servicios', [PortalController::class, 'servicios']);
+    Route::get('productos', [PortalController::class, 'productos']);
     Route::get('planes-lavado', [PortalController::class, 'planesLavado']);
     Route::get('profesionales', [PortalController::class, 'profesionales']);
     Route::get('disponibilidad', [PortalController::class, 'disponibilidad']);
@@ -182,6 +185,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::post('empresas/{empresa}/estado', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarEstado']);
         Route::post('empresas/{empresa}/plan', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarPlan']);
         Route::post('empresas/{empresa}/limite', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarLimite']);
+        Route::post('empresas/{empresa}/regenerar-codigo', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'regenerarCodigoActivacion']);
         Route::get('empresas/{empresa}/modulos', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'modulos']);
         Route::put('empresas/{empresa}/modulos', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'guardarModulos']);
         Route::post('empresas/{empresa}/modulos/aplicar-plan', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'aplicarPlanModulos']);

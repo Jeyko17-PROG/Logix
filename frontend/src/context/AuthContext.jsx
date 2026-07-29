@@ -35,6 +35,17 @@ export function AuthProvider({ children }) {
 
   async function register(payload) {
     const data = await api('/register', { method: 'POST', body: payload })
+    // Cuenta bloqueada desde el registro: no llega token hasta activarla con
+    // el código de 6 dígitos que entrega el super-admin (ver activar()).
+    if (data.token) {
+      setToken(data.token)
+      setUser(data.user)
+    }
+    return data
+  }
+
+  async function activar(email, codigo) {
+    const data = await api('/activar', { method: 'POST', body: { email, codigo } })
     setToken(data.token)
     setUser(data.user)
     return data.user
@@ -59,7 +70,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, cargando, login, register, forgotPassword, resetPassword, logout }}>
+    <AuthContext.Provider value={{ user, setUser, cargando, login, register, activar, forgotPassword, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   )

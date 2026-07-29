@@ -30,6 +30,7 @@ class Producto extends Model
         'precio_venta',
         'imagen_url',
         'activo',
+        'disponible',
         'created_by',
     ];
 
@@ -37,6 +38,7 @@ class Producto extends Model
         'precio_costo' => 'decimal:2',
         'precio_venta' => 'decimal:2',
         'activo' => 'boolean',
+        'disponible' => 'boolean',
         'is_service' => 'boolean',
         'has_commission' => 'boolean',
         'commission_value' => 'decimal:2',

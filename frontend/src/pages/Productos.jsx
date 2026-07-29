@@ -4,7 +4,7 @@ import { aNumero } from '../utils/numero'
 
 const VACIO = {
   sku: '', codigo_barras: '', nombre: '', descripcion: '',
-  precio_costo: '', precio_venta: '', categoria_id: '', activo: true,
+  precio_costo: '', precio_venta: '', categoria_id: '', activo: true, disponible: true,
 }
 
 export default function Productos() {
@@ -39,7 +39,7 @@ export default function Productos() {
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
-        if (k === 'activo') fd.append(k, v ? '1' : '0')
+        if (k === 'activo' || k === 'disponible') fd.append(k, v ? '1' : '0')
         // Precios en formato colombiano: "400.000" debe llegar como 400000.
         else if (k === 'precio_costo' || k === 'precio_venta') fd.append(k, aNumero(v))
         else if (v !== null && v !== '') fd.append(k, v)
@@ -52,6 +52,22 @@ export default function Productos() {
     } catch (err) {
       setError(err.message + (err.errors ? ' ' + JSON.stringify(err.errors) : ''))
     }
+  }
+
+  /** Marca agotado/disponible sin abrir el formulario completo (catálogo público del portal). */
+  async function toggleDisponible(p) {
+    const fd = new FormData()
+    fd.append('sku', p.sku)
+    if (p.codigo_barras) fd.append('codigo_barras', p.codigo_barras)
+    fd.append('nombre', p.nombre)
+    if (p.categoria_id) fd.append('categoria_id', p.categoria_id)
+    if (p.descripcion) fd.append('descripcion', p.descripcion)
+    fd.append('precio_costo', aNumero(p.precio_costo))
+    fd.append('precio_venta', aNumero(p.precio_venta))
+    fd.append('activo', p.activo ? '1' : '0')
+    fd.append('disponible', p.disponible ? '0' : '1')
+    await api(`/productos/${p.id}/update`, { method: 'POST', body: fd, isForm: true })
+    cargar()
   }
 
   async function eliminar(id) {
@@ -88,6 +104,10 @@ export default function Productos() {
           <input type="text" inputMode="decimal" placeholder="Precio costo (ej: 250.000)" value={form.precio_costo} onChange={set('precio_costo')} className="input" required />
           <input type="text" inputMode="decimal" placeholder="Precio venta (ej: 400.000)" value={form.precio_venta} onChange={set('precio_venta')} className="input" required />
           <textarea placeholder="Descripción" value={form.descripcion ?? ''} onChange={set('descripcion')} className="input sm:col-span-2" />
+          <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={form.disponible} onChange={(e) => setForm({ ...form, disponible: e.target.checked })} />
+            Disponible en el catálogo público (desmarca si está agotado)
+          </label>
           <div className="sm:col-span-2 flex gap-2">
             <button className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Guardar</button>
             <button type="button" onClick={() => setAbierto(false)} className="rounded-lg bg-slate-700 px-4 py-2 text-sm">Cancelar</button>
@@ -98,7 +118,7 @@ export default function Productos() {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-300">
-            <tr><th className="p-3"></th><th className="text-left p-3">SKU</th><th className="text-left p-3">Nombre</th><th className="text-right p-3">Costo</th><th className="text-right p-3">Venta</th><th className="text-right p-3">Stock</th><th className="text-right p-3">Salidas</th><th className="text-right p-3">Valor inv.</th><th className="p-3"></th></tr>
+            <tr><th className="p-3"></th><th className="text-left p-3">SKU</th><th className="text-left p-3">Nombre</th><th className="text-right p-3">Costo</th><th className="text-right p-3">Venta</th><th className="text-right p-3">Stock</th><th className="text-right p-3">Salidas</th><th className="text-right p-3">Valor inv.</th><th className="text-center p-3">Catálogo</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
             {lista.map((p) => (
@@ -123,13 +143,19 @@ export default function Productos() {
                 <td className="p-3 text-right">{Number(p.stock_total ?? 0)}</td>
                 <td className="p-3 text-right text-slate-400">{Number(p.salidas ?? 0)}</td>
                 <td className="p-3 text-right text-slate-400">${Number(p.valor_inventario ?? 0).toLocaleString()}</td>
+                <td className="p-3 text-center">
+                  <button onClick={() => toggleDisponible(p)}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.disponible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                    {p.disponible ? 'Disponible' : 'Agotado'}
+                  </button>
+                </td>
                 <td className="p-3 text-right whitespace-nowrap">
                   <button onClick={() => editar(p)} className="text-emerald-400 hover:underline mr-3">Editar</button>
                   <button onClick={() => eliminar(p.id)} className="text-red-400 hover:underline">Eliminar</button>
                 </td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan="9" className="p-6 text-center text-slate-500">Sin productos aún.</td></tr>}
+            {lista.length === 0 && <tr><td colSpan="10" className="p-6 text-center text-slate-500">Sin productos aún.</td></tr>}
           </tbody>
         </table>
       </div>

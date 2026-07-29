@@ -59,7 +59,7 @@ class FacturaController extends Controller
             'lineas.*.impuesto_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // Firma digital: data URL (data:image/png;base64,...) dibujada o subida.
             'firma' => ['nullable', 'string'],
-            'currency' => ['nullable', 'in:COP,USD'],
+            'currency' => ['nullable', 'in:COP,USD,MXN'],
             'exchange_rate' => ['nullable', 'numeric', 'min:0'],
             // Medio de pago (para el cierre de caja desglosado por método).
             'metodo_pago' => ['nullable', 'in:EFECTIVO,TARJETA,TRANSFERENCIA,NEQUI,DAVIPLATA'],
@@ -179,7 +179,7 @@ class FacturaController extends Controller
             'lineas.*.cantidad' => ['required_with:lineas', 'numeric', 'gt:0'],
             'lineas.*.precio_unitario' => ['required_with:lineas', 'numeric', 'min:0'],
             'lineas.*.impuesto_porcentaje' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'currency' => ['nullable', 'in:COP,USD'],
+            'currency' => ['nullable', 'in:COP,USD,MXN'],
             'exchange_rate' => ['nullable', 'numeric', 'min:0'],
         ]);
 
