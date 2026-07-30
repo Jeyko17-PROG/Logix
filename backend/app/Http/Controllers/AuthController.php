@@ -114,20 +114,9 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->forceFill([
-            'estado' => 'ACTIVO',
-            'activo' => true,
-            'codigo_activacion' => null,
-            'codigo_activacion_intentos' => 0,
-            'ultimo_acceso' => now(),
-            'veces_login' => 1,
-        ])->save();
-
-        // El reloj de los 15 días gratis arranca aquí, no en el registro.
-        $empresa = $user->empresaDeCobro();
-        if ($empresa && $empresa->modo_cobro === 'prueba' && ! $empresa->membresia_vence_at) {
-            $empresa->forceFill(['membresia_vence_at' => now()->addDays(15)])->save();
-        }
+        // Activa la cuenta y arranca el reloj de los 15 días gratis (no en el registro).
+        $user->activarPendiente();
+        $user->forceFill(['ultimo_acceso' => now(), 'veces_login' => 1])->save();
 
         $token = $user->createToken('logix')->plainTextToken;
 

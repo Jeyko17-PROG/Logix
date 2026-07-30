@@ -98,8 +98,15 @@ class EmpresaAdminController extends Controller
         $anterior = $empresa->estado;
         $empresa->update(['estado' => $data['estado'], 'activo' => $data['estado'] === 'ACTIVO']);
 
-        // Sincroniza el estado del dueño y revoca sesiones si queda inactiva.
-        $empresa->owner?->update(['estado' => $data['estado'], 'activo' => $data['estado'] === 'ACTIVO']);
+        // Activar desde aquí una cuenta pendiente (sin pasar por el código)
+        // también debe arrancar la prueba gratis de su dueño; si no, la
+        // empresa se queda sin fecha de vencimiento y nunca se bloquea.
+        if ($empresa->owner?->estado === 'PENDIENTE_ACTIVACION' && $data['estado'] === 'ACTIVO') {
+            $empresa->owner->activarPendiente();
+        } else {
+            // Sincroniza el estado del dueño y revoca sesiones si queda inactiva.
+            $empresa->owner?->update(['estado' => $data['estado'], 'activo' => $data['estado'] === 'ACTIVO']);
+        }
         if ($data['estado'] !== 'ACTIVO') {
             foreach ($empresa->usuarios as $u) {
                 $u->tokens()->delete();

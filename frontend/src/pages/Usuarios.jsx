@@ -6,6 +6,7 @@ const ESTADO_COLOR = {
   ACTIVO: 'bg-emerald-500/15 text-emerald-400',
   SUSPENDIDO: 'bg-amber-500/15 text-amber-400',
   DESACTIVADO: 'bg-red-500/15 text-red-400',
+  PENDIENTE_ACTIVACION: 'bg-sky-500/15 text-sky-400',
 }
 
 export default function Usuarios() {
@@ -120,7 +121,14 @@ export default function Usuarios() {
                     <button onClick={() => cambiarLimite(u)} className="ml-2 text-xs text-sky-400 hover:underline">editar</button>
                   </td>
                   <td className="p-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[u.estado] ?? ''}`}>{u.estado}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[u.estado] ?? ''}`}>
+                      {u.estado === 'PENDIENTE_ACTIVACION' ? 'Pendiente de activación' : u.estado}
+                    </span>
+                    {u.codigo_activacion && (
+                      <p className="mt-1 text-xs text-slate-300">
+                        Código: <span className="font-mono font-bold tracking-widest">{u.codigo_activacion}</span>
+                      </p>
+                    )}
                   </td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1 justify-end">
@@ -166,7 +174,8 @@ function ModalVer({ usuario: u, onClose }) {
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Dato label="ID interno">#{u.id}</Dato>
-          <Dato label="Estado">{u.estado}</Dato>
+          <Dato label="Estado">{u.estado === 'PENDIENTE_ACTIVACION' ? 'Pendiente de activación' : u.estado}</Dato>
+          {u.codigo_activacion && <Dato label="Código de activación">{u.codigo_activacion}</Dato>}
           <Dato label="Tipo documento">{u.tipo_documento}</Dato>
           <Dato label="N° documento">{u.numero_documento}</Dato>
           <Dato label="Celular">{u.telefono}</Dato>

@@ -184,6 +184,29 @@ class User extends Authenticatable
         ])->save();
     }
 
+    /**
+     * Saca a la cuenta del estado "pendiente de activación" (por código
+     * correcto en /activar o porque el super-admin la activó a mano desde el
+     * panel) y arranca el reloj de los 15 días de prueba gratis si aún no
+     * había arrancado. Centralizado aquí para que ningún camino de activación
+     * se le olvide iniciar la prueba (dejaría la empresa sin fecha de
+     * vencimiento y nunca se bloquearía).
+     */
+    public function activarPendiente(): void
+    {
+        $this->forceFill([
+            'estado' => 'ACTIVO',
+            'activo' => true,
+            'codigo_activacion' => null,
+            'codigo_activacion_intentos' => 0,
+        ])->save();
+
+        $empresa = $this->empresaDeCobro();
+        if ($empresa && $empresa->modo_cobro === 'prueba' && ! $empresa->membresia_vence_at) {
+            $empresa->forceFill(['membresia_vence_at' => now()->addDays(15)])->save();
+        }
+    }
+
     /** Un empleado queda limitado a la bodega/local asignado. */
     public function estaLimitadoABodega(): bool
     {

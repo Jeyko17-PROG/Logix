@@ -50,6 +50,11 @@ class UsuarioAdminController extends Controller
             'bodega' => $u->bodega ? ['id' => $u->bodega->id, 'nombre' => $u->bodega->nombre] : null,
             'plan' => $u->plan ? ['id' => $u->plan->id, 'nombre' => $u->plan->nombre] : null,
             'estado' => $u->estado,
+            // Solo existe mientras la cuenta está pendiente de activación; el
+            // super-admin es el único que puede verlo (este panel está detrás
+            // del middleware 'superadmin') y siempre es aleatorio por registro,
+            // nunca un valor fijo.
+            'codigo_activacion' => $u->estado === 'PENDIENTE_ACTIVACION' ? $u->codigo_activacion : null,
             'modo_cobro' => $u->modo_cobro,
             'membresia_vence_at' => $u->membresia_vence_at?->toIso8601String(),
             'membresia_vencida' => $u->membresiaVencida(),
@@ -223,10 +228,18 @@ class UsuarioAdminController extends Controller
         ]);
 
         $anterior = $usuario->estado;
-        $usuario->update([
-            'estado' => $data['estado'],
-            'activo' => $data['estado'] === 'ACTIVO',
-        ]);
+
+        // Activar una cuenta pendiente desde aquí (sin pasar por el código)
+        // también debe arrancar la prueba gratis; si no, la empresa se queda
+        // sin fecha de vencimiento y nunca se bloquea.
+        if ($anterior === 'PENDIENTE_ACTIVACION' && $data['estado'] === 'ACTIVO') {
+            $usuario->activarPendiente();
+        } else {
+            $usuario->update([
+                'estado' => $data['estado'],
+                'activo' => $data['estado'] === 'ACTIVO',
+            ]);
+        }
 
         // Multiempresa: si el usuario es el dueño, el estado aplica a toda su empresa.
         if ($usuario->es_admin_empresa || $usuario->esPropietario()) {
