@@ -71,6 +71,9 @@ const MENU = [
       { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia' } },
       { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloTipo: 'lavadero' },
       { to: '/servicios', label: 'Servicios', icon: '💈', feat: 'agenda' },
+      // Mismo módulo que "Productos" en Inventario: el catálogo con fotos y
+      // disponible/agotado que el cliente ve al agendar su cita en el portal.
+      { to: '/productos', label: 'Catálogo', icon: '🛍️', feat: 'productos' },
       { to: '/restaurante', label: 'Mesas y Comandas', icon: '🍽️', feat: 'mesas' },
       { to: '/caja', label: 'Caja y Gastos', icon: '💵', feat: 'caja' },
     ],
