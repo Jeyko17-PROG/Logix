@@ -305,7 +305,7 @@ class PortalController extends Controller
             $this->notificador->aUsuario($negocio, 'RESERVA',
                 'Nueva reserva desde el portal', "{$cliente->nombre_completo} · {$inicio->format('d/m/Y H:i')}");
             if ($cliente->email) {
-                $this->notificador->correo($cliente->email, 'Confirmación de tu reserva - Logix',
+                $this->notificador->correo($cliente->email, 'Confirmación de tu reserva - Fénix',
                     '¡Reserva confirmada!', [
                         "Hola {$cliente->nombre_completo},",
                         "Tu cita quedó agendada para el {$inicio->format('d/m/Y')} a las {$inicio->format('H:i')}.",

@@ -1,5 +1,31 @@
 @import 'tailwindcss';
 
+/*
+ * Paleta de marca Fénix: redefine la escala "emerald" (usada como color
+ * primario/CTA en TODA la plataforma) por el degradado de fuego del logo
+ * (rojo-naranja -> ámbar) y afina "sky" hacia el azul-hielo del ala.
+ * Al ser variables del tema de Tailwind v4, cualquier clase existente
+ * (bg-emerald-600, text-emerald-400, ring-emerald-500...) hereda el
+ * nuevo color sin tener que tocar cada archivo uno por uno.
+ */
+@theme {
+  --color-emerald-50: #fff7ed;
+  --color-emerald-100: #ffedd5;
+  --color-emerald-200: #fed7aa;
+  --color-emerald-300: #fdba74;
+  --color-emerald-400: #fb923c;
+  --color-emerald-500: #f2660a;
+  --color-emerald-600: #e04a0a;
+  --color-emerald-700: #b8390c;
+  --color-emerald-800: #922d10;
+  --color-emerald-900: #78270f;
+  --color-emerald-950: #411005;
+
+  --color-sky-400: #4fc3f7;
+  --color-sky-500: #23a6e0;
+  --color-sky-600: #0d84bf;
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -22,6 +48,6 @@ body {
 }
 .input:focus {
   outline: none;
-  border-color: #10b981; /* emerald-500 */
+  border-color: var(--color-emerald-500);
 }
 .input::placeholder { color: #64748b; }

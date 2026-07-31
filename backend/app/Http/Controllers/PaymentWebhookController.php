@@ -218,13 +218,13 @@ class PaymentWebhookController extends Controller
 
             $this->notificador->correo(
                 $user->email,
-                "Recibo de pago #{$tx->id} - Logix",
+                "Recibo de pago #{$tx->id} - Fénix",
                 'Recibo de pago',
                 [
                     "Hola {$user->name},",
                     "Confirmamos tu pago por concepto de: {$concepto}.",
                     'Monto: $' . number_format($monto, 0, ',', '.') . ' COP.',
-                    'Adjuntamos el recibo en PDF. ¡Gracias por confiar en Logix!',
+                    'Adjuntamos el recibo en PDF. ¡Gracias por confiar en Fénix!',
                 ],
                 Storage::disk('public')->path($ruta),
                 'PAGO',

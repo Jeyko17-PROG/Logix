@@ -77,7 +77,7 @@ class AuthController extends Controller
         return response()->json([
             'pendiente_activacion' => true,
             'email' => $user->email,
-            'message' => 'Tu cuenta fue creada. Un asesor de Logix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
+            'message' => 'Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
         ], 201);
     }
 
@@ -103,7 +103,7 @@ class AuthController extends Controller
 
         if ($user->codigo_activacion_intentos >= 5) {
             throw ValidationException::withMessages([
-                'codigo' => ['Superaste el número de intentos permitidos. Contacta al administrador de Logix para que te genere un nuevo código.'],
+                'codigo' => ['Superaste el número de intentos permitidos. Contacta al administrador de Fénix para que te genere un nuevo código.'],
             ]);
         }
 
@@ -199,9 +199,9 @@ class AuthController extends Controller
     /** Notificación de bienvenida para el propio usuario (solo él la ve). */
     private function darBienvenida(User $user): void
     {
-        $mensaje = "Bienvenido a tu sistema de inventario, agenda y control Logix. "
+        $mensaje = "Bienvenido a tu sistema de inventario, agenda y control Fénix. "
             . "Tu cuenta ha sido creada correctamente y ya puedes gestionar clientes, inventario, "
-            . "productos, facturación, agenda de citas y reservas mediante QR. ¡Gracias por confiar en Logix!";
+            . "productos, facturación, agenda de citas y reservas mediante QR. ¡Gracias por confiar en Fénix!";
 
         app(Notificador::class)->aUsuario($user->id, 'BIENVENIDA', "Bienvenido(a) {$user->name}", $mensaje);
     }
@@ -227,7 +227,7 @@ class AuthController extends Controller
         try {
             $notificador->correo(
                 $superAdmin->email,
-                'Nuevo usuario registrado — Logix',
+                'Nuevo usuario registrado — Fénix',
                 'Nuevo usuario registrado (pendiente de activación)',
                 ["Nombre: {$user->name}", "Correo: {$user->email}", "Fecha: {$cuando}", "Plan: {$plan}", "Código de activación: {$codigoActivacion}"],
             );
@@ -256,7 +256,7 @@ class AuthController extends Controller
 
         if ($user->estado === 'PENDIENTE_ACTIVACION') {
             throw ValidationException::withMessages([
-                'email' => ['Tu cuenta está pendiente de activación. Solicita tu código de 6 dígitos al administrador de Logix.'],
+                'email' => ['Tu cuenta está pendiente de activación. Solicita tu código de 6 dígitos al administrador de Fénix.'],
             ]);
         }
 
@@ -278,7 +278,7 @@ class AuthController extends Controller
         if ($empresa && ! $user->esSuperAdmin()) {
             if ($empresa->estado === 'SUSPENDIDO') {
                 throw ValidationException::withMessages([
-                    'email' => ['La cuenta de tu empresa está suspendida. Contacta al administrador de Logix.'],
+                    'email' => ['La cuenta de tu empresa está suspendida. Contacta al administrador de Fénix.'],
                 ]);
             }
             if ($empresa->estado === 'DESACTIVADO' || ! $empresa->activo) {

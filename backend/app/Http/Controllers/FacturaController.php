@@ -370,7 +370,7 @@ class FacturaController extends Controller
 
         $enviado = $this->notificador->correo(
             $data['email'],
-            "Factura {$factura->numero} - Logix",
+            "Factura {$factura->numero} - Fénix",
             "Factura {$factura->numero}",
             [
                 "Hola {$factura->cliente->nombre_completo},",

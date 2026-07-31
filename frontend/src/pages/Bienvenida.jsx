@@ -21,18 +21,21 @@ export default function Bienvenida() {
   }, [user, cargando, navigate])
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-orange-950/25 to-slate-950 px-4 py-10">
       <div className="w-full max-w-md text-center">
         {/* Logo */}
         <img
-          src="/logo.svg"
-          alt="Logix"
-          className="h-24 w-24 mx-auto object-contain drop-shadow-2xl"
+          src="/logo-fenix.png"
+          alt="Fénix"
+          className="h-28 w-28 mx-auto object-contain drop-shadow-2xl"
           onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
 
         {/* Nombre y descripción */}
-        <h1 className="mt-5 text-4xl font-extrabold tracking-wide text-white">LOGIX</h1>
+        <h1 className="mt-5 text-4xl font-extrabold tracking-wide text-white">FÉNIX</h1>
+        <p className="mt-2 text-orange-400 text-xs font-semibold uppercase tracking-[0.2em]">
+          Velocidad y eficiencia en tu punto de venta
+        </p>
         <p className="mt-3 text-slate-300 text-base leading-relaxed">
           Sistema de Gestión de Clientes, Inventario, Facturación y Reservas.
         </p>
@@ -51,7 +54,7 @@ export default function Bienvenida() {
         <div className="mt-9 space-y-3">
           <button
             onClick={() => navigate('/login')}
-            className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 hover:opacity-95 text-white font-semibold py-3 shadow-lg transition"
+            className="w-full rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:opacity-95 text-white font-semibold py-3 shadow-lg shadow-orange-900/40 transition"
           >
             Iniciar Sesión
           </button>
@@ -63,7 +66,7 @@ export default function Bienvenida() {
           </button>
         </div>
 
-        <p className="mt-8 text-slate-500 text-xs">Logix · Plataforma de gestión</p>
+        <p className="mt-8 text-slate-500 text-xs">Fénix · Velocidad y eficiencia en tu punto de venta</p>
       </div>
     </div>
   )

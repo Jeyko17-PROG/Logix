@@ -216,9 +216,9 @@ export default function Layout() {
             className="hidden md:flex p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white text-lg leading-none">
             ☰
           </button>
-          <img src="/logo.svg" alt="" className="h-7 w-7 object-contain"
+          <img src="/logo-fenix.png" alt="" className="h-7 w-7 object-contain"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
-          <span className="font-bold text-lg">Logix</span>
+          <span className="font-bold text-lg">Fénix</span>
           <div className="ml-auto flex items-center gap-2">
             {/* Saldo de la billetera (modo prepago) o aviso de membresía vencida */}
             {saas?.modo_cobro === 'prepago' && !user?.es_super_admin && (

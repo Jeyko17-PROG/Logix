@@ -68,7 +68,7 @@ class ReciboService
 
             $this->notificador->correo(
                 $email,
-                "Factura {$factura->numero} - Logix",
+                "Factura {$factura->numero} - Fénix",
                 "Factura {$factura->numero}",
                 [
                     "Hola {$factura->cliente->nombre_completo},",

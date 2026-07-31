@@ -25,7 +25,7 @@ function PanelCuenta({ cuenta, slug }) {
     const canvas = ref.current?.querySelector('canvas')
     if (!canvas) return
     const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png'); a.download = 'qr-reservas-logix.png'; a.click()
+    a.href = canvas.toDataURL('image/png'); a.download = 'qr-reservas-fenix.png'; a.click()
   }
 
   function imprimirQR() {

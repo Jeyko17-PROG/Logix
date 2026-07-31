@@ -38,7 +38,7 @@ export default function QR() {
     if (!canvas) return
     const img = canvas.toDataURL('image/png')
     const w = window.open('', '_blank')
-    w.document.write(`<html><head><title>QR de reservas — Logix</title></head>
+    w.document.write(`<html><head><title>QR de reservas — Fénix</title></head>
       <body style="text-align:center;font-family:sans-serif;padding:40px">
       <h2>Reserva tu cita</h2>
       <img src="${img}" style="width:320px;height:320px" />

@@ -76,36 +76,39 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-orange-950/25 to-slate-950 px-4 py-8">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-6">
           <img
-            src="/logo.svg"
-            alt="Logix"
+            src="/logo-fenix.png"
+            alt="Fénix"
             className="h-20 w-20 object-contain drop-shadow-lg"
             onError={(e) => {
               e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'block'
             }}
           />
-          <span style={{ display: 'none' }} className="text-3xl font-extrabold text-white tracking-wide">LOGIX</span>
+          <span style={{ display: 'none' }} className="text-3xl font-extrabold text-white tracking-wide">FÉNIX</span>
+          <p className="mt-1 text-orange-400 text-[11px] font-semibold uppercase tracking-[0.2em]">
+            Velocidad y eficiencia en tu punto de venta
+          </p>
         </div>
 
         {/* Tarjeta */}
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Encabezado con los dos botones */}
-          <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-6 pt-6 pb-4">
+          <div className="bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 px-6 pt-6 pb-4">
             <h1 className="text-white text-xl font-bold text-center mb-4">
               {modo === 'recuperar' ? 'Recuperar contraseña' : modo === 'activar' ? 'Activar tu cuenta' : 'Mi cuenta'}
             </h1>
             {modo !== 'recuperar' && modo !== 'activar' && (
               <div className="flex bg-white/15 rounded-xl p-1">
                 <button onClick={() => cambiarModo('login')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${modo === 'login' ? 'bg-white text-blue-700' : 'text-white'}`}>
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${modo === 'login' ? 'bg-white text-orange-600' : 'text-white'}`}>
                   Iniciar sesión
                 </button>
                 <button onClick={() => cambiarModo('registro')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${modo === 'registro' ? 'bg-white text-blue-700' : 'text-white'}`}>
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${modo === 'registro' ? 'bg-white text-orange-600' : 'text-white'}`}>
                   Crear cuenta
                 </button>
               </div>
@@ -126,7 +129,7 @@ export default function Login() {
                 <Campo icono="👤" placeholder="Nombre completo" value={form.name} onChange={set('name')} required />
                 <div className="flex gap-2">
                   <select value={form.tipo_documento} onChange={set('tipo_documento')}
-                    className="border-b border-slate-200 focus:border-blue-500 text-slate-700 text-sm bg-transparent py-1.5 focus:outline-none">
+                    className="border-b border-slate-200 focus:border-orange-500 text-slate-700 text-sm bg-transparent py-1.5 focus:outline-none">
                     <option value="CC">CC</option>
                     <option value="CE">CE</option>
                     <option value="NIT">NIT</option>
@@ -138,7 +141,7 @@ export default function Login() {
                 </div>
                 <Campo icono="📱" placeholder="Celular" value={form.telefono} onChange={set('telefono')} />
                 <Campo icono="🏪" placeholder="Nombre de tu negocio" value={form.nombre_empresa} onChange={set('nombre_empresa')} />
-                <div className="flex items-center gap-2 border-b border-slate-200 focus-within:border-blue-500 transition pb-1">
+                <div className="flex items-center gap-2 border-b border-slate-200 focus-within:border-orange-500 transition pb-1">
                   <span className="text-slate-400 text-sm">🧰</span>
                   <select value={form.tipo_negocio_id} onChange={set('tipo_negocio_id')} required
                     className="w-full py-1.5 text-slate-800 bg-transparent focus:outline-none text-sm">
@@ -162,28 +165,28 @@ export default function Login() {
                 <Campo icono="🔑" placeholder="Código de 6 dígitos" value={form.codigo}
                   onChange={(e) => setForm({ ...form, codigo: e.target.value.replace(/\D/g, '').slice(0, 6) })}
                   inputMode="numeric" maxLength={6} required />
-                <p className="text-xs text-slate-500">Ese código te lo entrega el administrador de Logix por WhatsApp o correo.</p>
+                <p className="text-xs text-slate-500">Ese código te lo entrega el administrador de Fénix por WhatsApp o correo.</p>
               </>
             )}
 
             {modo === 'login' && (
               <div className="flex items-center justify-between text-xs">
                 <button type="button" onClick={() => cambiarModo('activar')}
-                  className="text-blue-600 hover:underline">¿Tienes un código de activación?</button>
+                  className="text-orange-600 hover:underline">¿Tienes un código de activación?</button>
                 <button type="button" onClick={() => cambiarModo('recuperar')}
-                  className="text-blue-600 hover:underline">¿Olvidaste tu contraseña?</button>
+                  className="text-orange-600 hover:underline">¿Olvidaste tu contraseña?</button>
               </div>
             )}
 
             <button type="submit" disabled={enviando}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-700 to-blue-500 hover:opacity-95 disabled:opacity-50 text-white font-semibold py-2.5 shadow-lg transition">
+              className="w-full rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-semibold py-2.5 shadow-lg transition">
               {enviando ? 'Procesando…' : (modo === 'login' ? 'Entrar' : modo === 'registro' ? 'Registrarme' : modo === 'activar' ? 'Activar cuenta' : 'Enviar enlace')}
             </button>
 
             {(modo === 'recuperar' || modo === 'activar') && (
               <div className="text-center">
                 <button type="button" onClick={() => cambiarModo('login')}
-                  className="text-xs text-blue-600 hover:underline">← Volver a iniciar sesión</button>
+                  className="text-xs text-orange-600 hover:underline">← Volver a iniciar sesión</button>
               </div>
             )}
           </form>
@@ -192,7 +195,7 @@ export default function Login() {
         <div className="text-center mt-5">
           <button type="button" onClick={() => navigate('/bienvenida')} className="text-slate-400 hover:text-white text-xs">← Volver al inicio</button>
         </div>
-        <p className="text-center text-slate-500 text-xs mt-3">Logix · Plataforma de gestión</p>
+        <p className="text-center text-slate-500 text-xs mt-3">Fénix · Velocidad y eficiencia en tu punto de venta</p>
       </div>
     </div>
   )
@@ -200,7 +203,7 @@ export default function Login() {
 
 function Campo({ icono, ...props }) {
   return (
-    <div className="flex items-center gap-2 border-b border-slate-200 focus-within:border-blue-500 transition pb-1">
+    <div className="flex items-center gap-2 border-b border-slate-200 focus-within:border-orange-500 transition pb-1">
       <span className="text-slate-400 text-sm">{icono}</span>
       <input {...props}
         className="w-full py-1.5 text-slate-800 placeholder-slate-400 focus:outline-none bg-transparent" />

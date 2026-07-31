@@ -33,7 +33,7 @@ class BrevoApiTransport extends AbstractTransport
         $payload = [
             'sender' => [
                 'email' => $from?->getAddress() ?? config('mail.from.address'),
-                'name' => $from?->getName() ?: config('mail.from.name', 'Logix'),
+                'name' => $from?->getName() ?: config('mail.from.name', 'Fénix'),
             ],
             'to' => array_map(fn ($a) => ['email' => $a->getAddress()], $email->getTo()),
             'subject' => (string) $email->getSubject(),

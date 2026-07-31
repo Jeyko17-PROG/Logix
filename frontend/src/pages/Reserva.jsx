@@ -47,7 +47,7 @@ export default function Reserva() {
     <div className="min-h-screen bg-slate-900 text-slate-100 px-4 py-8">
       <div className="max-w-md mx-auto">
         {negocio?.logo_url ? (
-          <img src={negocio.logo_url} alt={negocio.nombre || 'Logix'}
+          <img src={negocio.logo_url} alt={negocio.nombre || 'Fénix'}
             className="h-16 w-16 object-contain mx-auto mb-3 rounded-lg drop-shadow-lg"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
         ) : (negocio?.logo_emoji || ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio]) ? (
@@ -55,12 +55,12 @@ export default function Reserva() {
             {negocio.logo_emoji || ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]}
           </div>
         ) : (
-          <img src="/logo.svg" alt="Logix"
+          <img src="/logo-fenix.png" alt="Fénix"
             className="h-16 w-16 object-contain mx-auto mb-3 drop-shadow-lg"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
         )}
         <h1 className="text-2xl font-bold text-center">Reserva tu cita</h1>
-        <p className="text-slate-400 text-center text-sm mb-6">{negocio?.nombre || 'Logix'}</p>
+        <p className="text-slate-400 text-center text-sm mb-6">{negocio?.nombre || 'Fénix'}</p>
 
         {noExiste ? (
           <div className="rounded-xl bg-red-500/10 border border-red-500/40 p-4 text-center text-red-300">

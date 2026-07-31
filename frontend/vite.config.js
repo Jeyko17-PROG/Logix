@@ -26,13 +26,13 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'logo.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'logo-fenix.png'],
       manifest: {
-        name: 'Logix · Plataforma de gestión',
-        short_name: 'Logix',
+        name: 'Fénix · Velocidad y eficiencia en tu punto de venta',
+        short_name: 'Fénix',
         description: 'Sistema de Gestión de Clientes, Inventario, Facturación y Reservas.',
         lang: 'es',
-        theme_color: '#1d4ed8',
+        theme_color: '#e04a0a',
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',

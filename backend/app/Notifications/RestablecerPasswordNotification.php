@@ -20,9 +20,9 @@ class RestablecerPasswordNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Restablece tu contraseña — Logix')
+            ->subject('Restablece tu contraseña — Fénix')
             ->greeting('Hola ' . ($notifiable->name ?? '') . ',')
-            ->line('Recibimos una solicitud para restablecer la contraseña de tu cuenta Logix.')
+            ->line('Recibimos una solicitud para restablecer la contraseña de tu cuenta Fénix.')
             ->action('Restablecer contraseña', $this->url)
             ->line('Este enlace caduca en 60 minutos.')
             ->line('Si no solicitaste el cambio, puedes ignorar este correo.');
