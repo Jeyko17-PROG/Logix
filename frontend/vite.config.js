@@ -26,7 +26,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'logo-fenix.png'],
+      includeAssets: ['favicon.png', 'favicon-32.png', 'apple-touch-icon.png', 'logo-fenix.png'],
       manifest: {
         name: 'Fénix · Velocidad y eficiencia en tu punto de venta',
         short_name: 'Fénix',
