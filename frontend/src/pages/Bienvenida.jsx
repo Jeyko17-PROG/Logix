@@ -21,7 +21,7 @@ export default function Bienvenida() {
   }, [user, cargando, navigate])
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-orange-950/25 to-slate-950 px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-[#2a1206] to-slate-950 px-4 py-10">
       <div className="w-full max-w-md text-center">
         {/* Logo */}
         <img

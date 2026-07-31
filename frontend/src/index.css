@@ -35,6 +35,9 @@
 body {
   margin: 0;
   min-height: 100vh;
+  /* Fondo oscuro por defecto: si algún degradado usa transparencia
+     (ej. via-color/25), deja ver esto en vez del blanco del navegador. */
+  background-color: #020617; /* slate-950 */
 }
 
 /* Estilo compartido de inputs/selects en formularios */

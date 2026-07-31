@@ -32,7 +32,7 @@ export default function Restablecer() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-orange-950/25 to-slate-950 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-[#2a1206] to-slate-950 px-4 py-8">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
           <img src="/logo-fenix.png" alt="Fénix" className="h-16 w-16 object-contain drop-shadow-lg" />
