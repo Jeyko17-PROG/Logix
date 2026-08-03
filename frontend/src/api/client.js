@@ -54,6 +54,17 @@ export async function api(path, { method = 'GET', body, isForm = false } = {}) {
     if (res.status === 402 && data?.codigo === 'MEMBRESIA_VENCIDA' && !window.location.pathname.startsWith('/planes')) {
       window.location.href = '/planes?vencida=1'
     }
+    // Límite del plan alcanzado (ej. tope de clientes): en vez de dejar solo
+    // un mensaje de error en el formulario, se lleva sí o sí a Planes para
+    // que compre/actualice — igual de forzoso que la membresía vencida.
+    // OJO: PortalController (reserva pública, sin sesión) también puede
+    // devolver limite_alcanzado — ese visitante anónimo NO debe terminar en
+    // /planes (pantalla interna del dueño), por eso se excluyen rutas públicas.
+    if (res.status === 403 && data?.limite_alcanzado
+      && !rutasPublicas.some((r) => window.location.pathname.startsWith(r))
+      && !window.location.pathname.startsWith('/planes')) {
+      window.location.href = '/planes?limite=1'
+    }
     const message = data?.message || 'Ocurrió un error en la solicitud.'
     throw { status: res.status, message, codigo: data?.codigo, errors: data?.errors || {} }
   }

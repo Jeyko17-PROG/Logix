@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 
-const NEGOCIO_VACIO = { nombre_empresa: '', tipo_negocio_id: '', email: '', telefono: '', password: '' }
+const NEGOCIO_VACIO = { name: '', nombre_empresa: '', tipo_negocio_id: '', email: '', telefono: '', password: '' }
 
 const ESTADO_COLOR = {
   ACTIVO: 'bg-emerald-500/15 text-emerald-400',
@@ -65,7 +65,7 @@ export default function MisNegocios() {
   }
 
   function abrirCrear() {
-    setNuevoNegocio({ ...NEGOCIO_VACIO, telefono: user?.telefono ?? '' })
+    setNuevoNegocio({ ...NEGOCIO_VACIO, name: user?.name ?? '', telefono: user?.telefono ?? '' })
     setCreado(null); setError(''); setMostrarCrear(true)
   }
 
@@ -164,6 +164,8 @@ export default function MisNegocios() {
                   <button onClick={abrirCrear} className="rounded-lg bg-emerald-700 hover:bg-emerald-600 px-4 py-2 text-sm font-semibold">+ Crear otro negocio</button>
                 ) : (
                   <form onSubmit={crear} className="space-y-2">
+                    <input required placeholder="Tu nombre (responsable de este negocio)" value={nuevoNegocio.name}
+                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, name: e.target.value })} className="input" />
                     <input required placeholder="Nombre del negocio" value={nuevoNegocio.nombre_empresa}
                       onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, nombre_empresa: e.target.value })} className="input" />
                     <select required value={nuevoNegocio.tipo_negocio_id} onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, tipo_negocio_id: e.target.value })} className="input">

@@ -20,6 +20,7 @@ export default function Login() {
   const [ok, setOk] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [tiposNegocio, setTiposNegocio] = useState([])
+  const [mostrarBienvenida, setMostrarBienvenida] = useState(false)
 
   // Catálogo de tipos de negocio para el registro (define los módulos del POS).
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function Login() {
           setModo('activar')
           setForm((f) => ({ ...f, email: data.email, codigo: '' }))
           setOk(data.message)
+          setMostrarBienvenida(true)
         } else {
           navigate('/')
         }
@@ -208,6 +210,26 @@ export default function Login() {
         </div>
         <p className="text-center text-slate-500 text-xs mt-3">Fénix · Velocidad y eficiencia en tu punto de venta</p>
       </div>
+
+      {mostrarBienvenida && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={() => setMostrarBienvenida(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-orange-500/30 shadow-2xl p-8 text-center">
+            <img src="/logo-fenix.png" alt="Fénix"
+              className="h-24 w-24 object-contain mx-auto mb-4 drop-shadow-lg"
+              onError={(e) => { e.currentTarget.style.display = 'none' }} />
+            <h2 className="text-2xl font-extrabold text-white">¡Gracias por elegir a Fénix! 🔥</h2>
+            <p className="mt-3 text-sm text-slate-300">
+              Tu cuenta ya está creada. Solo falta un paso: un asesor de Fénix te va a compartir tu
+              código de activación de 6 dígitos para que puedas entrar.
+            </p>
+            <button onClick={() => setMostrarBienvenida(false)}
+              className="mt-6 w-full rounded-xl bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:opacity-95 text-white font-semibold py-2.5 shadow-lg transition">
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

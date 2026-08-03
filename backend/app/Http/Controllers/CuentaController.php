@@ -95,6 +95,10 @@ class CuentaController extends Controller
         $actual = $request->user();
 
         $data = $request->validate([
+            // Nombre del responsable/dueño de ESTE negocio (puede ser distinto
+            // al de la cuenta que lo crea, ej. un socio); si se deja vacío se
+            // usa el de quien está creándolo.
+            'name' => ['nullable', 'string', 'min:3', 'max:100', 'regex:/^[\pL\d\s.\'\-]+$/u'],
             'nombre_empresa' => ['required', 'string', 'min:3', 'max:100', 'regex:/^[\pL\d\s.\'\-&]+$/u'],
             'tipo_negocio_id' => ['required', 'exists:tipos_negocio,id'],
             'email' => ['required', 'email:rfc,dns', 'unique:users,email'],
@@ -106,7 +110,7 @@ class CuentaController extends Controller
         $passwordPlano = $data['password'] ?? Str::password(12);
 
         [$nuevo] = $this->auth->crearNegocio([
-            'name' => $actual->name,
+            'name' => $data['name'] ?? $actual->name,
             'tipo_documento' => $actual->tipo_documento,
             'numero_documento' => $actual->numero_documento,
             'telefono' => $data['telefono'] ?? $actual->telefono,

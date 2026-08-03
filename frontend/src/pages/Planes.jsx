@@ -20,6 +20,7 @@ export default function Planes() {
   const [creditos, setCreditos] = useState({})
   const [searchParams] = useSearchParams()
   const vencida = searchParams.get('vencida') === '1' || user?.facturacion_saas?.membresia_vencida
+  const limiteAlcanzado = searchParams.get('limite') === '1'
   const estadoPago = searchParams.get('status')
   const referenciaPago = searchParams.get('ref')
 
@@ -108,6 +109,16 @@ export default function Planes() {
               Venció el {new Date(user.facturacion_saas.membresia_vence_at).toLocaleDateString('es-CO')}
             </p>
           )}
+        </div>
+      )}
+
+      {limiteAlcanzado && !esSuper && (
+        <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5">
+          <h2 className="text-lg font-bold text-amber-300">🚧 Alcanzaste el límite de tu plan</h2>
+          <p className="text-sm text-amber-200/80 mt-1">
+            Ya usaste todo lo incluido en tu plan actual (clientes o citas). Para seguir
+            registrando, elige un plan con más capacidad abajo y paga con PSE, Nequi o tarjeta.
+          </p>
         </div>
       )}
 
