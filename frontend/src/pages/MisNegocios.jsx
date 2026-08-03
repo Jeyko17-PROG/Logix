@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../api/client'
+
+const NEGOCIO_VACIO = { nombre_empresa: '', tipo_negocio_id: '', email: '', telefono: '', password: '' }
 
 const ESTADO_COLOR = {
   ACTIVO: 'bg-emerald-500/15 text-emerald-400',
@@ -10,7 +13,7 @@ const ESTADO_COLOR = {
 }
 
 export default function MisNegocios() {
-  const { misNegocios, entrarNegocio, vincularNegocio, desvincularNegocio, logout, user } = useAuth()
+  const { misNegocios, entrarNegocio, vincularNegocio, crearNegocio, desvincularNegocio, logout, user } = useAuth()
   const navigate = useNavigate()
   const [negocios, setNegocios] = useState([])
   const [cargando, setCargando] = useState(true)
@@ -19,6 +22,13 @@ export default function MisNegocios() {
   const [entrando, setEntrando] = useState(null)
   const [vincular, setVincular] = useState({ email: '', password: '' })
   const [vinculando, setVinculando] = useState(false)
+  const [tiposNegocio, setTiposNegocio] = useState([])
+  const [mostrarCrear, setMostrarCrear] = useState(false)
+  const [nuevoNegocio, setNuevoNegocio] = useState(NEGOCIO_VACIO)
+  const [creando, setCreando] = useState(false)
+  const [creado, setCreado] = useState(null) // { email, password } tras crear, para mostrarlo una sola vez
+
+  useEffect(() => { api('/tipos-negocio').then(setTiposNegocio).catch(() => {}) }, [])
 
   async function cargar() {
     setCargando(true); setError('')
@@ -51,6 +61,25 @@ export default function MisNegocios() {
       setError(err.message || 'No se pudo vincular ese negocio.')
     } finally {
       setVinculando(false)
+    }
+  }
+
+  function abrirCrear() {
+    setNuevoNegocio({ ...NEGOCIO_VACIO, telefono: user?.telefono ?? '' })
+    setCreado(null); setError(''); setMostrarCrear(true)
+  }
+
+  async function crear(e) {
+    e.preventDefault(); setError(''); setCreando(true)
+    try {
+      const r = await crearNegocio({ ...nuevoNegocio, password: nuevoNegocio.password || undefined })
+      setCreado({ email: nuevoNegocio.email, password: r.password_temporal })
+      setMostrarCrear(false); setNuevoNegocio(NEGOCIO_VACIO)
+      cargar()
+    } catch (err) {
+      setError(err.message || 'No se pudo crear el negocio.')
+    } finally {
+      setCreando(false)
     }
   }
 
@@ -88,6 +117,15 @@ export default function MisNegocios() {
 
         {error && <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-300">{error}</div>}
 
+        {creado && (
+          <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-500/10 px-4 py-3 text-sm">
+            <p className="font-semibold text-emerald-300">Negocio creado: {creado.email}</p>
+            {creado.password && <p className="text-slate-300">Contraseña: <span className="font-mono">{creado.password}</span></p>}
+            <p className="text-slate-400 text-xs mt-1">Queda "Pendiente" hasta que un asesor de Fénix te dé el código de activación de 6 dígitos.</p>
+            <button onClick={() => setCreado(null)} className="mt-1 text-xs text-slate-400 hover:underline">Cerrar</button>
+          </div>
+        )}
+
         {cargando ? (
           <p className="text-slate-500">Cargando…</p>
         ) : tab === 'negocios' ? (
@@ -118,19 +156,48 @@ export default function MisNegocios() {
               ))}
             </div>
 
-            <form onSubmit={vincularOtro} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-              <h2 className="text-sm font-semibold text-slate-300 mb-2">Vincular otro negocio tuyo</h2>
-              <p className="text-xs text-slate-500 mb-3">Si registraste otro negocio con un correo distinto, confírmalo aquí para verlo junto a este.</p>
-              <div className="flex flex-wrap gap-2">
-                <input type="email" required placeholder="Correo del otro negocio" value={vincular.email}
-                  onChange={(e) => setVincular({ ...vincular, email: e.target.value })} className="input flex-1 min-w-[180px]" />
-                <input type="password" required placeholder="Contraseña de esa cuenta" value={vincular.password}
-                  onChange={(e) => setVincular({ ...vincular, password: e.target.value })} className="input flex-1 min-w-[180px]" />
-                <button disabled={vinculando} className="rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
-                  {vinculando ? 'Vinculando…' : 'Vincular'}
-                </button>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <h2 className="text-sm font-semibold text-slate-300 mb-2">Crear otro negocio</h2>
+                <p className="text-xs text-slate-500 mb-3">Registra un negocio nuevo con tus mismos datos personales, sin llenar todo el formulario de nuevo.</p>
+                {!mostrarCrear ? (
+                  <button onClick={abrirCrear} className="rounded-lg bg-emerald-700 hover:bg-emerald-600 px-4 py-2 text-sm font-semibold">+ Crear otro negocio</button>
+                ) : (
+                  <form onSubmit={crear} className="space-y-2">
+                    <input required placeholder="Nombre del negocio" value={nuevoNegocio.nombre_empresa}
+                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, nombre_empresa: e.target.value })} className="input" />
+                    <select required value={nuevoNegocio.tipo_negocio_id} onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, tipo_negocio_id: e.target.value })} className="input">
+                      <option value="">Tipo de negocio…</option>
+                      {tiposNegocio.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                    </select>
+                    <input type="email" required placeholder="Correo del nuevo negocio" value={nuevoNegocio.email}
+                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, email: e.target.value })} className="input" />
+                    <input type="password" placeholder="Contraseña (opcional, se genera una)" value={nuevoNegocio.password}
+                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, password: e.target.value })} className="input" />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setMostrarCrear(false)} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
+                      <button disabled={creando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold flex-1">
+                        {creando ? 'Creando…' : 'Crear negocio'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
-            </form>
+
+              <form onSubmit={vincularOtro} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <h2 className="text-sm font-semibold text-slate-300 mb-2">Vincular otro negocio tuyo</h2>
+                <p className="text-xs text-slate-500 mb-3">Si ya registraste otro negocio con un correo distinto, confírmalo aquí para verlo junto a este.</p>
+                <div className="space-y-2">
+                  <input type="email" required placeholder="Correo del otro negocio" value={vincular.email}
+                    onChange={(e) => setVincular({ ...vincular, email: e.target.value })} className="input" />
+                  <input type="password" required placeholder="Contraseña de esa cuenta" value={vincular.password}
+                    onChange={(e) => setVincular({ ...vincular, password: e.target.value })} className="input" />
+                  <button disabled={vinculando} className="w-full rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
+                    {vinculando ? 'Vinculando…' : 'Vincular'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </>
         ) : (
           <div className="rounded-xl border border-slate-800 divide-y divide-slate-800">

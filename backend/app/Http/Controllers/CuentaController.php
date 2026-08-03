@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -18,6 +19,8 @@ use Illuminate\Validation\ValidationException;
  */
 class CuentaController extends Controller
 {
+    public function __construct(private AuthController $auth) {}
+
     /** Serializa una cuenta/negocio para el selector "Mis negocios". */
     private function serializar(User $u, User $actual): array
     {
@@ -77,6 +80,50 @@ class CuentaController extends Controller
         NegocioVinculado::firstOrCreate(['user_id' => $actual->id, 'vinculado_user_id' => $otro->id]);
 
         return response()->json(['message' => "Vinculado con {$otro->name}.", 'negocios' => $this->misNegocios($request)->getData()]);
+    }
+
+    /**
+     * "Mis negocios" → "Crear otro negocio": el dueño ya logueado registra un
+     * negocio adicional sin volver a llenar el formulario público completo
+     * (reutiliza su nombre/documento/teléfono). Igual que cualquier registro,
+     * la cuenta nace en PENDIENTE_ACTIVACION — solo el super-admin puede
+     * activarla con el código de 6 dígitos (mismo control que hoy, sin
+     * atajos); apenas se activa queda vinculada y visible en "Mis negocios".
+     */
+    public function nuevoNegocio(Request $request): JsonResponse
+    {
+        $actual = $request->user();
+
+        $data = $request->validate([
+            'nombre_empresa' => ['required', 'string', 'min:3', 'max:100', 'regex:/^[\pL\d\s.\'\-&]+$/u'],
+            'tipo_negocio_id' => ['required', 'exists:tipos_negocio,id'],
+            'email' => ['required', 'email:rfc,dns', 'unique:users,email'],
+            // Opcional: si no la escribe, se genera una temporal (igual que al crear un empleado).
+            'password' => ['nullable', 'string', 'min:8'],
+            'telefono' => ['nullable', 'string', 'regex:/^[0-9+\s\-]{7,20}$/'],
+        ]);
+
+        $passwordPlano = $data['password'] ?? Str::password(12);
+
+        [$nuevo] = $this->auth->crearNegocio([
+            'name' => $actual->name,
+            'tipo_documento' => $actual->tipo_documento,
+            'numero_documento' => $actual->numero_documento,
+            'telefono' => $data['telefono'] ?? $actual->telefono,
+            'email' => $data['email'],
+            'password' => $passwordPlano,
+            'nombre_empresa' => $data['nombre_empresa'],
+            'tipo_negocio_id' => $data['tipo_negocio_id'],
+        ]);
+
+        // Vínculo directo: quien lo crea ya demostró ser el dueño (sesión activa).
+        NegocioVinculado::firstOrCreate(['user_id' => $actual->id, 'vinculado_user_id' => $nuevo->id]);
+
+        return response()->json([
+            'message' => 'Negocio creado. Pendiente de activación: un asesor de Fénix te compartirá el código de 6 dígitos.',
+            'password_temporal' => $data['password'] ? null : $passwordPlano,
+            'negocios' => $this->misNegocios($request)->getData(),
+        ], 201);
     }
 
     /** Deja de alternar hacia esa cuenta (no la elimina, solo quita el acceso directo). */

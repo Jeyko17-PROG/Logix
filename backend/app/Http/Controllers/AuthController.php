@@ -23,8 +23,35 @@ class AuthController extends Controller
      */
     public function register(RegistroEmpresaRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        [$user, $vinculados] = $this->crearNegocio($request->validated());
 
+        // Sin token: la cuenta no puede usarse hasta que se active con el código.
+        return response()->json([
+            'pendiente_activacion' => true,
+            'email' => $user->email,
+            'message' => $vinculados > 0
+                ? "Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar. Como ya tenías otro negocio registrado con el mismo documento, al entrar podrás elegir cuál usar desde \"Mis negocios\"."
+                : 'Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
+        ], 201);
+    }
+
+    /**
+     * Crea la cuenta (usuario dueño + empresa) de un negocio nuevo, pendiente
+     * de activación por el super-admin. Compartido por el registro público
+     * (`register`) y por "Mis negocios" → "Crear otro negocio"
+     * (`CuentaController::nuevoNegocio`), que reutiliza esto para que un
+     * dueño ya logueado pueda sumar otro negocio sin pasar por el formulario
+     * público de nuevo.
+     *
+     * $data espera las mismas llaves que RegistroEmpresaRequest: name,
+     * tipo_documento, numero_documento, telefono, email, password,
+     * nombre_empresa, tipo_negocio_id.
+     *
+     * @return array{0: User, 1: int} el usuario creado y cuántos negocios
+     *   existentes se le vincularon automáticamente (mismo documento).
+     */
+    public function crearNegocio(array $data): array
+    {
         // Todo usuario nuevo es "Usuario": propietario de su propio espacio aislado.
         $rolId = Role::where('nombre', 'Usuario')->value('id')
             ?? Role::where('nombre', 'Administrador')->value('id');
@@ -75,14 +102,7 @@ class AuthController extends Controller
         $this->darBienvenida($user);
         $vinculados = $this->vincularNegociosDelMismoDueno($user);
 
-        // Sin token: la cuenta no puede usarse hasta que se active con el código.
-        return response()->json([
-            'pendiente_activacion' => true,
-            'email' => $user->email,
-            'message' => $vinculados > 0
-                ? "Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar. Como ya tenías otro negocio registrado con el mismo documento, al entrar podrás elegir cuál usar desde \"Mis negocios\"."
-                : 'Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
-        ], 201);
+        return [$user, $vinculados];
     }
 
     /**

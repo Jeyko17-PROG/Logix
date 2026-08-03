@@ -162,6 +162,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
 
     // "Mis negocios": alternar entre varias cuentas/negocios de la misma persona
     Route::get('/cuenta/mis-negocios', [CuentaController::class, 'misNegocios']);
+    Route::post('/cuenta/nuevo-negocio', [CuentaController::class, 'nuevoNegocio']);
     Route::post('/cuenta/vincular-negocio', [CuentaController::class, 'vincular']);
     Route::delete('/cuenta/negocios/{negocio}', [CuentaController::class, 'desvincular']);
     Route::post('/cuenta/negocios/{negocio}/entrar', [CuentaController::class, 'entrar']);

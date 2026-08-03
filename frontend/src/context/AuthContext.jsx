@@ -68,6 +68,11 @@ export function AuthProvider({ children }) {
     return api('/cuenta/vincular-negocio', { method: 'POST', body: { email, password } })
   }
 
+  // Crea un negocio adicional para el mismo dueño (reutiliza sus datos personales).
+  async function crearNegocio(payload) {
+    return api('/cuenta/nuevo-negocio', { method: 'POST', body: payload })
+  }
+
   async function desvincularNegocio(negocioId) {
     return api(`/cuenta/negocios/${negocioId}`, { method: 'DELETE' })
   }
@@ -91,7 +96,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, cargando, login, register, activar, forgotPassword, resetPassword, logout, misNegocios, vincularNegocio, desvincularNegocio, entrarNegocio }}>
+    <AuthContext.Provider value={{ user, setUser, cargando, login, register, activar, forgotPassword, resetPassword, logout, misNegocios, vincularNegocio, crearNegocio, desvincularNegocio, entrarNegocio }}>
       {children}
     </AuthContext.Provider>
   )
