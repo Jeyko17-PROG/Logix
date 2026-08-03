@@ -95,6 +95,12 @@ export default function Empresas() {
                   <td className="p-3">
                     <p className="font-medium">{e.nombre}</p>
                     <p className="text-xs text-slate-500">{e.usuarios} usuario(s){e.numero_documento ? ` · ${e.tipo_documento} ${e.numero_documento}` : ''}</p>
+                    {e.negocios_vinculados > 1 && (
+                      <p className="text-xs text-violet-400 mt-0.5" title="El plan y el consumo se comparten entre estos negocios vinculados">
+                        🔗 Comparte plan con {e.negocios_vinculados - 1} negocio(s) más
+                        {e.empresa_gobernante && <> · plan de "{e.empresa_gobernante}"</>}
+                      </p>
+                    )}
                   </td>
                   <td className="p-3 text-slate-400">{e.tipo_negocio?.nombre ?? '—'}</td>
                   <td className="p-3">

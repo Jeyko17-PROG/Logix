@@ -74,61 +74,110 @@ class Empresa extends Model
     }
 
     /**
+     * IDs de todas las empresas del mismo "grupo de facturación": esta +
+     * las de los negocios que su dueño tenga vinculados en "Mis negocios".
+     * Un negocio sin vínculos es un grupo de 1 (su propio id) — comportamiento
+     * de siempre, sin cambios para la enorme mayoría de las cuentas.
+     */
+    public function grupoEmpresaIds(): array
+    {
+        return $this->owner ? $this->owner->grupoEmpresaIds() : [$this->id];
+    }
+
+    /**
+     * La empresa que "gobierna" el plan/membresía de todo el grupo: la más
+     * antigua (decisión de negocio — el plan del negocio más antiguo cubre
+     * a los que se vinculen después). Sin vínculos, es ella misma.
+     */
+    public function empresaGobernante(): self
+    {
+        $ids = $this->grupoEmpresaIds();
+        if (count($ids) <= 1) {
+            return $this;
+        }
+        return static::withTrashed()->whereIn('id', $ids)->orderBy('created_at')->first() ?? $this;
+    }
+
+    /**
      * ¿La membresía (o la prueba gratuita) está vencida? Ambos modos comparten
      * el mismo campo membresia_vence_at: en 'prueba' se usa como fecha límite
      * de los 15 días gratis; al pagar, renovarMembresia() cambia el modo a
      * 'membresia' y la empresa queda igual que cualquier cliente pago.
+     * Se evalúa sobre la empresa gobernante: un solo plan cubre a todo el
+     * grupo de negocios vinculados, así que basta con que ESE pago esté al día.
      */
     public function membresiaVencida(): bool
     {
-        return in_array($this->modo_cobro, ['membresia', 'prueba'], true)
-            && $this->membresia_vence_at !== null
-            && $this->membresia_vence_at->isPast();
+        $g = $this->empresaGobernante();
+        return in_array($g->modo_cobro, ['membresia', 'prueba'], true)
+            && $g->membresia_vence_at !== null
+            && $g->membresia_vence_at->isPast();
     }
 
-    /** Renueva la membresía N meses (desde hoy o desde el vencimiento futuro) y reactiva la empresa. */
+    /**
+     * Renueva la membresía N meses. Siempre actualiza la empresa GOBERNANTE
+     * del grupo (la que realmente sostiene el plan pagado), aunque se haya
+     * llamado sobre otro negocio vinculado — así el pago beneficia a todos.
+     */
     public function renovarMembresia(int $meses = 1): void
     {
-        $base = ($this->membresia_vence_at && $this->membresia_vence_at->isFuture())
-            ? $this->membresia_vence_at
+        $g = $this->empresaGobernante();
+        $base = ($g->membresia_vence_at && $g->membresia_vence_at->isFuture())
+            ? $g->membresia_vence_at
             : now();
 
-        $this->forceFill([
+        $g->forceFill([
             'membresia_vence_at' => $base->copy()->addMonths($meses),
             'modo_cobro' => 'membresia',
             'estado' => 'ACTIVO',
             'activo' => true,
         ])->save();
+
+        if ($g->isNot($this)) {
+            $this->setRawAttributes($g->getAttributes()); // refleja el cambio también en $this
+        }
     }
 
-    /** Límite efectivo de clientes: override manual o el del plan. */
+    /** Plan real que aplica: el de la empresa gobernante del grupo (o el propio, sin vínculos). */
+    public function planEfectivo(): ?Plan
+    {
+        return $this->empresaGobernante()->plan;
+    }
+
+    /** Límite efectivo de clientes: override manual o el del plan, de la empresa gobernante del grupo. */
     public function limiteClientesEfectivo(): int
     {
-        if (! is_null($this->limite_clientes)) {
-            return (int) $this->limite_clientes;
+        $g = $this->empresaGobernante();
+        if (! is_null($g->limite_clientes)) {
+            return (int) $g->limite_clientes;
         }
-        return (int) ($this->plan?->limite_clientes ?? 0);
+        return (int) ($g->plan?->limite_clientes ?? 0);
     }
 
-    /** Clientes registrados por la empresa (sin el scope global, para el panel admin). */
+    /**
+     * Clientes registrados por TODO el grupo de negocios vinculados (no solo
+     * esta empresa): el cupo del plan se comparte, así que el consumo
+     * también se cuenta junto. Sin vínculos, es el mismo conteo de siempre.
+     */
     public function clientesUsados(): int
     {
-        return Cliente::withoutGlobalScopes()->where('empresa_id', $this->id)->count();
+        return Cliente::withoutGlobalScopes()->whereIn('empresa_id', $this->grupoEmpresaIds())->count();
     }
 
-    /** Límite efectivo de citas: override manual o el del plan. */
+    /** Límite efectivo de citas: override manual o el del plan, de la empresa gobernante del grupo. */
     public function limiteCitasEfectivo(): int
     {
-        if (! is_null($this->limite_citas)) {
-            return (int) $this->limite_citas;
+        $g = $this->empresaGobernante();
+        if (! is_null($g->limite_citas)) {
+            return (int) $g->limite_citas;
         }
-        return (int) ($this->plan?->limite_citas ?? 0);
+        return (int) ($g->plan?->limite_citas ?? 0);
     }
 
-    /** Citas registradas por la empresa (sin el scope global, para el panel admin). */
+    /** Citas registradas por TODO el grupo de negocios vinculados (mismo criterio que clientesUsados()). */
     public function citasUsadas(): int
     {
-        return Cita::withoutGlobalScopes()->where('empresa_id', $this->id)->count();
+        return Cita::withoutGlobalScopes()->whereIn('empresa_id', $this->grupoEmpresaIds())->count();
     }
 
     /** Genera (si falta) el slug público único del portal de reservas. */

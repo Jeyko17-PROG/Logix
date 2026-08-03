@@ -24,6 +24,12 @@ class EmpresaAdminController extends Controller
     /** Serializa una empresa con su dueño, plan y consumo. */
     private function serializar(Empresa $e): array
     {
+        // Si tiene negocios vinculados ("Mis negocios"), el plan/membresía real
+        // es el de la empresa GOBERNANTE del grupo (la más antigua) — un solo
+        // plan cubre a todas; el consumo (clientes/citas) se suma entre todas.
+        $gobernante = $e->empresaGobernante();
+        $grupoIds = $e->grupoEmpresaIds();
+
         return [
             'id' => $e->id,
             'nombre' => $e->nombre,
@@ -41,18 +47,21 @@ class EmpresaAdminController extends Controller
             'dueno_veces_login' => $e->owner?->veces_login,
             'dueno_ultimo_acceso' => $e->owner?->ultimo_acceso?->toIso8601String(),
             'usuarios' => $e->usuarios()->count(),
-            'plan' => $e->plan ? ['id' => $e->plan->id, 'nombre' => $e->plan->nombre] : null,
-            'modo_cobro' => $e->modo_cobro,
-            'membresia_vence_at' => $e->membresia_vence_at?->toIso8601String(),
+            'plan' => $gobernante->plan ? ['id' => $gobernante->plan->id, 'nombre' => $gobernante->plan->nombre] : null,
+            'modo_cobro' => $gobernante->modo_cobro,
+            'membresia_vence_at' => $gobernante->membresia_vence_at?->toIso8601String(),
             'membresia_vencida' => $e->membresiaVencida(),
             'estado' => $e->estado,
             'limite_clientes' => $e->limiteClientesEfectivo() ?: null,
-            'limite_manual' => $e->limite_clientes,
+            'limite_manual' => $gobernante->limite_clientes,
             'clientes_usados' => $e->clientesUsados(),
             'limite_citas' => $e->limiteCitasEfectivo() ?: null,
-            'limite_citas_manual' => $e->limite_citas,
+            'limite_citas_manual' => $gobernante->limite_citas,
             'citas_usadas' => $e->citasUsadas(),
             'fecha_registro' => $e->created_at?->toIso8601String(),
+            // Grupo de "Mis negocios": 1 = sin vínculos (comportamiento de siempre).
+            'negocios_vinculados' => count($grupoIds),
+            'empresa_gobernante' => $gobernante->id !== $e->id ? $gobernante->nombre : null,
         ];
     }
 
@@ -157,37 +166,48 @@ class EmpresaAdminController extends Controller
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
     }
 
-    /** Cambia el plan de la empresa. */
+    /**
+     * Cambia el plan de la empresa. Si pertenece a un grupo de negocios
+     * vinculados ("Mis negocios"), el plan se guarda en la empresa
+     * GOBERNANTE del grupo (aunque se haya hecho clic en otra fila), porque
+     * es la que de verdad sostiene el plan compartido de todo el grupo.
+     */
     public function cambiarPlan(Request $request, Empresa $empresa): JsonResponse
     {
         $data = $request->validate(['plan_id' => ['required', 'exists:plans,id']]);
+        $gobernante = $empresa->empresaGobernante();
 
-        $anterior = $empresa->plan?->nombre;
-        $empresa->update(['plan_id' => $data['plan_id']]);
-        $empresa->owner?->update(['plan_id' => $data['plan_id']]); // espejo legado
+        $anterior = $gobernante->plan?->nombre;
+        $gobernante->update(['plan_id' => $data['plan_id']]);
+        $gobernante->owner?->update(['plan_id' => $data['plan_id']]); // espejo legado
 
-        Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_PLAN', null, $anterior, $empresa->fresh('plan')->plan?->nombre);
+        Auditoria::registrar($request->user()->id, $gobernante->owner_user_id, 'EMPRESA_PLAN', null, $anterior, $gobernante->fresh('plan')->plan?->nombre);
 
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
     }
 
-    /** Cambia el límite manual de clientes y/o citas (null = usar el del plan). */
+    /**
+     * Cambia el límite manual de clientes y/o citas (null = usar el del
+     * plan). Igual que cambiarPlan(), se aplica sobre la empresa gobernante
+     * del grupo para que el ajuste cubra a todos los negocios vinculados.
+     */
     public function cambiarLimite(Request $request, Empresa $empresa): JsonResponse
     {
         $data = $request->validate([
             'limite_clientes' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'limite_citas' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ]);
+        $gobernante = $empresa->empresaGobernante();
 
         if ($request->has('limite_clientes')) {
-            $empresa->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
-            $empresa->owner?->update(['limite_clientes' => $data['limite_clientes'] ?? null]); // espejo legado
-            Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_LIMITE', null, null, (string) ($data['limite_clientes'] ?? 'plan'));
+            $gobernante->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
+            $gobernante->owner?->update(['limite_clientes' => $data['limite_clientes'] ?? null]); // espejo legado
+            Auditoria::registrar($request->user()->id, $gobernante->owner_user_id, 'EMPRESA_LIMITE', null, null, (string) ($data['limite_clientes'] ?? 'plan'));
         }
         if ($request->has('limite_citas')) {
-            $empresa->update(['limite_citas' => $data['limite_citas'] ?? null]);
-            $empresa->owner?->update(['limite_citas' => $data['limite_citas'] ?? null]); // espejo legado
-            Auditoria::registrar($request->user()->id, $empresa->owner_user_id, 'EMPRESA_LIMITE_CITAS', null, null, (string) ($data['limite_citas'] ?? 'plan'));
+            $gobernante->update(['limite_citas' => $data['limite_citas'] ?? null]);
+            $gobernante->owner?->update(['limite_citas' => $data['limite_citas'] ?? null]); // espejo legado
+            Auditoria::registrar($request->user()->id, $gobernante->owner_user_id, 'EMPRESA_LIMITE_CITAS', null, null, (string) ($data['limite_citas'] ?? 'plan'));
         }
 
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));

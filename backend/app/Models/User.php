@@ -105,6 +105,25 @@ class User extends Authenticatable
         return $this->workspaceOwner?->empresa_id ? (int) $this->workspaceOwner->empresa_id : null;
     }
 
+    /**
+     * IDs de las empresas del "grupo de facturación" de este usuario: la
+     * suya propia + las de los negocios que tenga vinculados ("Mis
+     * negocios"). El plan se comparte entre todo el grupo (decisión de
+     * negocio), pero el aislamiento de DATOS (empresaId/OwnerScope) no
+     * cambia: cada negocio sigue siendo dueño exclusivo de sus propios
+     * clientes, citas, productos, etc.
+     */
+    public function grupoEmpresaIds(): array
+    {
+        $ids = collect([$this->empresaId()])->filter();
+        $vinculadosIds = $this->negociosVinculadosIds();
+        if ($vinculadosIds->isNotEmpty()) {
+            $otras = static::whereIn('id', $vinculadosIds)->pluck('empresa_id')->filter();
+            $ids = $ids->merge($otras);
+        }
+        return $ids->unique()->values()->all();
+    }
+
     /** Rol Mecánico/Técnico: solo ve sus órdenes asignadas, sin acceso a facturación ni precios. */
     public function esMecanico(): bool
     {
@@ -132,11 +151,17 @@ class User extends Authenticatable
         return $this;
     }
 
-    /** Empresa responsable del cobro (la del usuario, resuelta también para empleados). */
+    /**
+     * Empresa responsable del cobro (la del usuario, resuelta también para
+     * empleados). Si tiene negocios vinculados ("Mis negocios"), devuelve la
+     * empresa GOBERNANTE del grupo (la más antigua) — un solo plan cubre a
+     * todos los negocios vinculados de la misma persona.
+     */
     public function empresaDeCobro(): ?Empresa
     {
         $id = $this->empresaId();
-        return $id ? Empresa::withTrashed()->find($id) : null;
+        $empresa = $id ? Empresa::withTrashed()->find($id) : null;
+        return $empresa?->empresaGobernante() ?? $empresa;
     }
 
     /**
@@ -256,11 +281,14 @@ class User extends Authenticatable
         return $this->empresaDeCobro()?->plan ?? $this->plan;
     }
 
-    /** Cantidad de clientes registrados en la empresa del usuario. */
+    /**
+     * Cantidad de clientes registrados en la empresa del usuario (o en todo
+     * su grupo de negocios vinculados, si tiene — ver Empresa::clientesUsados()).
+     */
     public function clientesUsados(): int
     {
-        if ($empresaId = $this->empresaId()) {
-            return Cliente::withoutGlobalScopes()->where('empresa_id', $empresaId)->count();
+        if ($empresa = $this->empresaDeCobro()) {
+            return $empresa->clientesUsados();
         }
         return Cliente::withoutGlobalScopes()->where('owner_id', $this->id)->count();
     }
@@ -283,11 +311,11 @@ class User extends Authenticatable
         return (int) ($this->plan?->limite_citas ?? 0);
     }
 
-    /** Citas registradas por el negocio (empresa si ya la tiene, si no por owner_id). */
+    /** Citas registradas por el negocio (empresa si ya la tiene, si no por owner_id), o por todo el grupo vinculado. */
     public function citasUsadas(): int
     {
-        if ($empresaId = $this->empresaId()) {
-            return Cita::withoutGlobalScopes()->where('empresa_id', $empresaId)->count();
+        if ($empresa = $this->empresaDeCobro()) {
+            return $empresa->citasUsadas();
         }
         return Cita::withoutGlobalScopes()->where('owner_id', $this->id)->count();
     }
