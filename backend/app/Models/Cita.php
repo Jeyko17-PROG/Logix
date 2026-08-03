@@ -21,6 +21,8 @@ class Cita extends Model
         'cliente_id', 'servicio_id', 'empleado_id', 'operables_employee_id', 'bodega_id',
         'tipo_vehiculo', 'placa', 'plan_lavado_id',
         'inicio', 'fin', 'estado', 'observaciones', 'origen', 'created_by',
+        // Foto de referencia elegida por el cliente al reservar (ej. corte de cabello deseado).
+        'imagen_referencia_url',
     ];
 
     protected $casts = [

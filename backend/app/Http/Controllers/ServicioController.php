@@ -16,7 +16,7 @@ class ServicioController extends Controller
     {
         $bodegaId = $request->query('bodega_id');
 
-        return Servicio::with('categoria:id,nombre')
+        return Servicio::with('categoria:id,nombre', 'galeria')
             ->when($bodegaId, fn ($q) => $q->where(
                 fn ($w) => $w->whereDoesntHave('bodegas')->orWhereHas('bodegas', fn ($b) => $b->where('bodegas.id', $bodegaId))
             ))

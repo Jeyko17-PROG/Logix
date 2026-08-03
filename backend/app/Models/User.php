@@ -292,6 +292,18 @@ class User extends Authenticatable
         return Cita::withoutGlobalScopes()->where('owner_id', $this->id)->count();
     }
 
+    /**
+     * IDs de las otras cuentas (otros negocios) vinculadas a esta, en
+     * cualquiera de los dos sentidos ("Mis negocios": una misma persona con
+     * varios negocios/cuentas que puede alternar sin volver a iniciar sesión).
+     */
+    public function negociosVinculadosIds(): \Illuminate\Support\Collection
+    {
+        $comoOrigen = NegocioVinculado::where('user_id', $this->id)->pluck('vinculado_user_id');
+        $comoDestino = NegocioVinculado::where('vinculado_user_id', $this->id)->pluck('user_id');
+        return $comoOrigen->merge($comoDestino)->unique()->values();
+    }
+
     /** Id del negocio principal (super-admin) para el portal público de reservas. */
     public static function negocioPrincipalId(): ?int
     {

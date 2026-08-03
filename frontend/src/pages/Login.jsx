@@ -10,7 +10,7 @@ const VACIO = {
 }
 
 export default function Login() {
-  const { login, register, activar, forgotPassword } = useAuth()
+  const { login, register, activar, forgotPassword, misNegocios } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   // Modo inicial según el botón pulsado en la pantalla de bienvenida (?modo=registro).
@@ -32,13 +32,24 @@ export default function Login() {
     setModo(m); setError(''); setOk('')
   }
 
+  // Si la cuenta tiene 2+ negocios vinculados, deja elegir cuál usar antes
+  // de entrar al panel; si solo tiene uno, va directo al Dashboard como siempre.
+  async function irSegunNegocios() {
+    try {
+      const negocios = await misNegocios()
+      navigate(negocios.length > 1 ? '/mis-negocios' : '/')
+    } catch {
+      navigate('/')
+    }
+  }
+
   async function submit(e) {
     e.preventDefault()
     setError(''); setOk(''); setEnviando(true)
     try {
       if (modo === 'login') {
         await login(form.email, form.password)
-        navigate('/')
+        await irSegunNegocios()
       } else if (modo === 'registro') {
         if (form.password !== form.password_confirmation) throw { message: 'Las contraseñas no coinciden.' }
         const data = await register({
@@ -63,7 +74,7 @@ export default function Login() {
         }
       } else if (modo === 'activar') {
         await activar(form.email, form.codigo)
-        navigate('/')
+        await irSegunNegocios()
       } else if (modo === 'recuperar') {
         await forgotPassword(form.email)
         setOk('Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.')

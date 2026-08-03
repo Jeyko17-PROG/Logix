@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Producto extends Model
@@ -22,6 +23,7 @@ class Producto extends Model
         'codigo_barras',
         'nombre',
         'descripcion',
+        'unidad_medida',
         'is_service',
         'has_commission',
         'commission_type',
@@ -77,6 +79,12 @@ class Producto extends Model
     public function serviceOrderDetails(): HasMany
     {
         return $this->hasMany(ServiceOrderDetail::class, 'producto_id');
+    }
+
+    /** Galería de fotos adicionales del producto (aparte de imagen_url, la principal). */
+    public function galeria(): MorphMany
+    {
+        return $this->morphMany(GaleriaImagen::class, 'imageable')->orderBy('orden');
     }
 
     /**

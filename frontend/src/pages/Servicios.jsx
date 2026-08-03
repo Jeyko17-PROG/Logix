@@ -12,6 +12,8 @@ export default function Servicios() {
   const [editando, setEditando] = useState(null) // id del servicio en edición, o null para "nuevo"
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [galeria, setGaleria] = useState([]) // fotos de referencia del servicio en edición (ej. cortes de una barbería)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
 
   async function cargar() {
     try {
@@ -26,6 +28,7 @@ export default function Servicios() {
     setForm({ ...VACIO, ...servicio, categoria_id: servicio.categoria_id ?? '', precio: String(servicio.precio) })
     setImagenActual(servicio.imagen ?? null)
     setImagen(null)
+    setGaleria(servicio.galeria ?? [])
   }
 
   function cancelar() {
@@ -33,6 +36,33 @@ export default function Servicios() {
     setForm(VACIO)
     setImagenActual(null)
     setImagen(null)
+    setGaleria([])
+  }
+
+  // Fotos de referencia (varias por servicio, ej. distintos cortes de una barbería
+  // que el cliente puede elegir al agendar su cita). Se suben una por una y solo
+  // cuando el servicio ya existe (necesitan su id).
+  async function agregarFotoGaleria(file) {
+    if (!file || !editando) return
+    setSubiendoFoto(true); setError('')
+    try {
+      const fd = new FormData()
+      fd.append('imagen', file)
+      const item = await api(`/servicios/${editando}/galeria`, { method: 'POST', body: fd, isForm: true })
+      setGaleria((g) => [...g, item])
+    } catch (err) {
+      setError(err.message || 'No se pudo subir la foto.')
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
+  async function quitarFotoGaleria(imagenId) {
+    if (!editando) return
+    try {
+      await api(`/servicios/${editando}/galeria/${imagenId}`, { method: 'DELETE' })
+      setGaleria((g) => g.filter((f) => f.id !== imagenId))
+    } catch (err) { alert(err.message || 'No se pudo quitar la foto.') }
   }
 
   async function guardar(e) {
@@ -93,6 +123,27 @@ export default function Servicios() {
           <input required type="number" min="5" placeholder="Duración (min)" value={form.duracion_min} onChange={set('duracion_min')} className="input" />
         </div>
         <textarea placeholder="Descripción (opcional)" value={form.descripcion ?? ''} onChange={set('descripcion')} className="input" rows={2} />
+
+        {editando && (
+          <div>
+            <p className="text-sm text-slate-300 mb-1">Galería de referencias (ej. cortes de este servicio)</p>
+            <p className="text-xs text-slate-500 mb-2">El cliente podrá elegir una de estas fotos al agendar su cita.</p>
+            <div className="flex flex-wrap gap-2">
+              {galeria.map((f) => (
+                <div key={f.id} className="relative group">
+                  <img src={f.url} alt="" className="h-16 w-16 rounded-lg object-cover border border-slate-700" />
+                  <button type="button" onClick={() => quitarFotoGaleria(f.id)}
+                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs leading-5">✕</button>
+                </div>
+              ))}
+              <label className="h-16 w-16 rounded-lg border border-dashed border-slate-600 flex items-center justify-center text-slate-500 hover:text-slate-300 hover:border-slate-500 cursor-pointer text-xs text-center">
+                {subiendoFoto ? '…' : '+ Foto'}
+                <input type="file" accept="image/*" className="hidden" disabled={subiendoFoto}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarFotoGaleria(f); e.target.value = '' }} />
+              </label>
+            </div>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.activo} onChange={set('activo')} /> Activo</label>
         <div className="flex gap-2">
           <button disabled={guardando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">

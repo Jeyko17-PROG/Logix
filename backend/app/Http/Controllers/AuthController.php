@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\RegistroEmpresaRequest;
+use App\Models\NegocioVinculado;
 use App\Models\Plan;
 use App\Models\Role;
 use App\Models\User;
@@ -72,13 +73,43 @@ class AuthController extends Controller
         $this->prepararEspacioDeTrabajo($user);
         $this->notificarNuevoRegistro($user, $codigoActivacion);
         $this->darBienvenida($user);
+        $vinculados = $this->vincularNegociosDelMismoDueno($user);
 
         // Sin token: la cuenta no puede usarse hasta que se active con el código.
         return response()->json([
             'pendiente_activacion' => true,
             'email' => $user->email,
-            'message' => 'Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
+            'message' => $vinculados > 0
+                ? "Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar. Como ya tenías otro negocio registrado con el mismo documento, al entrar podrás elegir cuál usar desde \"Mis negocios\"."
+                : 'Tu cuenta fue creada. Un asesor de Fénix te compartirá tu código de activación de 6 dígitos para poder ingresar.',
         ], 201);
+    }
+
+    /**
+     * Si la persona ya tiene otro(s) negocio(s) registrados con el mismo
+     * documento de identidad, los vincula automáticamente a la cuenta nueva
+     * para que aparezcan juntos en "Mis negocios" al iniciar sesión. Es una
+     * comodidad, no una verificación de identidad fuerte: solo aplica cuando
+     * el registro trae número de documento (nunca por coincidencia de nombre
+     * o teléfono) y no toca el aislamiento de datos de ningún negocio.
+     */
+    private function vincularNegociosDelMismoDueno(User $nuevo): int
+    {
+        if (empty($nuevo->numero_documento)) {
+            return 0;
+        }
+
+        $otros = User::where('numero_documento', $nuevo->numero_documento)
+            ->where('tipo_documento', $nuevo->tipo_documento)
+            ->where('id', '!=', $nuevo->id)
+            ->where('workspace_owner_id', null) // solo dueños de negocio, no empleados
+            ->get();
+
+        foreach ($otros as $otro) {
+            NegocioVinculado::firstOrCreate(['user_id' => $nuevo->id, 'vinculado_user_id' => $otro->id]);
+        }
+
+        return $otros->count();
     }
 
     /**

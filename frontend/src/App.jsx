@@ -24,6 +24,7 @@ import Notas from './pages/Notas'
 import Calculadora from './pages/Calculadora'
 import Reportes from './pages/Reportes'
 import Notificaciones from './pages/Notificaciones'
+import Equipo from './pages/Equipo'
 import Usuarios from './pages/Usuarios'
 import Empresas from './pages/Empresas'
 import Licencias from './pages/Licencias'
@@ -31,6 +32,7 @@ import Planes from './pages/Planes'
 import ControlFuncionalidades from './pages/ControlFuncionalidades'
 import Auditoria from './pages/Auditoria'
 import Restablecer from './pages/Restablecer'
+import MisNegocios from './pages/MisNegocios'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import SoloSuperAdmin from './components/SoloSuperAdmin'
@@ -44,6 +46,9 @@ function App() {
       {/* Portal público de reservas (sin login) — destino del QR. Cada usuario tiene su slug. */}
       <Route path="/reservar" element={<Reserva />} />
       <Route path="/reservar/:slug" element={<Reserva />} />
+
+      {/* Selector "Mis negocios": pantalla completa, sin el menú lateral */}
+      <Route path="/mis-negocios" element={<ProtectedRoute><MisNegocios /></ProtectedRoute>} />
 
       {/* Rutas protegidas: requieren sesión */}
       <Route
@@ -77,6 +82,7 @@ function App() {
         <Route path="/notas" element={<Notas />} />
         <Route path="/calculadora" element={<Calculadora />} />
         <Route path="/notificaciones" element={<Notificaciones />} />
+        <Route path="/equipo" element={<Equipo />} />
         <Route path="/planes" element={<Planes />} />
 
         {/* Solo Super Administrador */}

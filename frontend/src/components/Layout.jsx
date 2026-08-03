@@ -114,6 +114,8 @@ const MENU = [
     grupo: 'Cuenta',
     items: [
       { to: '/perfil', label: 'Mi Perfil', icon: '🙍' },
+      { to: '/mis-negocios', label: 'Mis Negocios', icon: '🏪', soloDueno: true },
+      { to: '/equipo', label: 'Mi Equipo', icon: '🧑‍🤝‍🧑', soloDueno: true },
       { to: '/planes', label: 'Planes', icon: '💳' },
       { to: '/configuracion', label: 'Configuración', icon: '⚙️' },
     ],
@@ -182,6 +184,8 @@ export default function Layout() {
   const esMecanico = user?.rol?.nombre === 'Mecanico'
   const esLavadorRol = user?.rol?.nombre === 'Lavador'
   const esOperarioRol = esMecanico || esLavadorRol
+  // Dueño del negocio: quien puede gestionar el equipo (crear empleados y asignarles rol).
+  const esDueno = !!user?.es_admin_empresa || ['Administrador', 'Usuario'].includes(user?.rol?.nombre)
   // "Taller / Órdenes" cambia de nombre según el tipo de negocio (misma ruta /taller).
   const LABEL_POR_TIPO = {
     lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
@@ -197,7 +201,7 @@ export default function Layout() {
           // Negocios lavadero/barbería: el módulo relevante es el propio, independiente de 'servicios' (talleres).
           const feat = (tipoNegocio && m.featPorTipo?.[tipoNegocio]) ? m.featPorTipo[tipoNegocio] : m.feat
           const permitidoPorTipo = !m.soloTipo || (Array.isArray(m.soloTipo) ? m.soloTipo.includes(tipoNegocio) : m.soloTipo === tipoNegocio)
-          return (!feat || visible(feat)) && (!esOperarioRol || RUTAS_MECANICO.includes(m.to)) && permitidoPorTipo
+          return (!feat || visible(feat)) && (!esOperarioRol || RUTAS_MECANICO.includes(m.to)) && permitidoPorTipo && (!m.soloDueno || esDueno)
         })
         .map((m) => (m.to === '/taller' && LABEL_POR_TIPO[tipoNegocio] ? { ...m, ...LABEL_POR_TIPO[tipoNegocio] } : m)),
     }))

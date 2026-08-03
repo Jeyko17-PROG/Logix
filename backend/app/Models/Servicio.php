@@ -6,6 +6,7 @@ use App\Models\Concerns\PerteneceAUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Servicio extends Model
@@ -31,5 +32,11 @@ class Servicio extends Model
     public function bodegas(): BelongsToMany
     {
         return $this->belongsToMany(Bodega::class, 'bodega_servicio');
+    }
+
+    /** Galería de fotos de referencia (ej. cortes de cabello en una barbería). */
+    public function galeria(): MorphMany
+    {
+        return $this->morphMany(GaleriaImagen::class, 'imageable')->orderBy('orden');
     }
 }

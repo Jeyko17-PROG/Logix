@@ -31,6 +31,14 @@ export default function Facturacion() {
   const [editId, setEditId] = useState(null) // null = factura nueva; id = editando una existente
   const scanRef = useRef(null)
 
+  // --- Historial de pagos/abonos ---
+  const [pagosDe, setPagosDe] = useState(null) // factura sobre la que se ve/registra el historial de pagos
+  const [pagos, setPagos] = useState([])
+  const [cargandoPagos, setCargandoPagos] = useState(false)
+  const [nuevoPago, setNuevoPago] = useState({ monto: '', metodo_pago: 'EFECTIVO', nota: '' })
+  const [errorPago, setErrorPago] = useState('')
+  const [guardandoPago, setGuardandoPago] = useState(false)
+
   // Solo se puede editar mientras no esté pagada/anulada (el backend ya lo bloquea igual).
   const esEditable = (f) => !['PAGADA', 'ANULADA'].includes(f.estado)
 
@@ -209,6 +217,32 @@ export default function Facturacion() {
   async function enviarWhatsApp(f) {
     const r = await api(`/facturas/${f.id}/whatsapp`, { method: 'POST' })
     window.open(r.whatsapp_url, '_blank', 'noopener,noreferrer')
+  }
+
+  // Se puede seguir abonando mientras la factura no esté pagada del todo ni anulada.
+  const admitePagos = (f) => !['PAGADA', 'ANULADA'].includes(f.estado) && Number(f.saldo_pendiente ?? f.total) > 0
+
+  async function verPagos(f) {
+    setErrorPago(''); setNuevoPago({ monto: '', metodo_pago: 'EFECTIVO', nota: '' })
+    setPagosDe(f); setCargandoPagos(true)
+    try { setPagos(await api(`/facturas/${f.id}/pagos`)) }
+    catch (err) { setErrorPago(err.message) }
+    finally { setCargandoPagos(false) }
+  }
+
+  async function registrarPago(e) {
+    e.preventDefault(); setErrorPago(''); setGuardandoPago(true)
+    try {
+      await api(`/facturas/${pagosDe.id}/pagos`, { method: 'POST', body: {
+        monto: aNumero(nuevoPago.monto),
+        metodo_pago: nuevoPago.metodo_pago,
+        nota: nuevoPago.nota || null,
+      } })
+      setNuevoPago({ monto: '', metodo_pago: 'EFECTIVO', nota: '' })
+      await verPagos(pagosDe)
+      await cargar()
+    } catch (err) { setErrorPago(err.message) }
+    finally { setGuardandoPago(false) }
   }
 
   return (
@@ -393,10 +427,16 @@ export default function Facturacion() {
                 <td className="p-3 font-mono">{f.numero}</td>
                 <td className="p-3">{f.cliente?.nombre_completo}</td>
                 <td className="p-3 text-slate-400">{f.fecha}</td>
-                <td className="p-3 text-right">{money(f.total)}</td>
+                <td className="p-3 text-right">
+                  {money(f.total)}
+                  {admitePagos(f) && Number(f.monto_pagado) > 0 && (
+                    <div className="text-xs text-amber-400">Saldo: {money(f.saldo_pendiente)}</div>
+                  )}
+                </td>
                 <td className="p-3"><span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[f.estado]}`}>{f.estado}</span></td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {esEditable(f) && <button onClick={() => editar(f)} className="text-amber-400 hover:underline mr-3">Editar</button>}
+                  <button onClick={() => verPagos(f)} className="text-violet-400 hover:underline mr-3">Pagos</button>
                   <button onClick={() => generarPdf(f)} className="text-sky-400 hover:underline mr-3">PDF</button>
                   <button onClick={() => enviarWhatsApp(f)} className="text-lime-400 hover:underline mr-3">WhatsApp</button>
                   <button onClick={() => enviar(f)} className="text-emerald-400 hover:underline">Enviar</button>
@@ -407,6 +447,64 @@ export default function Facturacion() {
           </tbody>
         </table>
       </div>
+
+      {/* Historial de pagos / abonos de una factura */}
+      {pagosDe && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPagosDe(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold">Pagos · {pagosDe.numero}</h2>
+                <p className="text-xs text-slate-400">
+                  Total {money(pagosDe.total)} · Abonado {money(pagosDe.monto_pagado)} · Saldo{' '}
+                  <span className={Number(pagosDe.saldo_pendiente) > 0 ? 'text-amber-400 font-semibold' : 'text-emerald-400 font-semibold'}>
+                    {money(pagosDe.saldo_pendiente)}
+                  </span>
+                </p>
+              </div>
+              <button onClick={() => setPagosDe(null)} className="text-slate-500 hover:text-slate-300">✕</button>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto px-5 py-3 space-y-2">
+              {cargandoPagos ? (
+                <p className="text-sm text-slate-500">Cargando…</p>
+              ) : pagos.length === 0 ? (
+                <p className="text-sm text-slate-500">Aún no hay abonos registrados.</p>
+              ) : (
+                pagos.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium">{money(p.monto)} <span className="text-xs text-slate-400">· {p.metodo_pago || 'Sin especificar'}</span></p>
+                      <p className="text-xs text-slate-500">{new Date(p.fecha).toLocaleDateString('es-CO')} · {p.usuario?.name || '—'}{p.nota ? ` · ${p.nota}` : ''}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {admitePagos(pagosDe) && (
+              <form onSubmit={registrarPago} className="border-t border-slate-800 px-5 py-4 space-y-3">
+                {errorPago && <p className="text-sm text-red-300">{errorPago}</p>}
+                <div className="grid grid-cols-2 gap-2">
+                  <input required type="text" inputMode="decimal" placeholder="Monto del abono" value={nuevoPago.monto}
+                    onChange={(e) => setNuevoPago({ ...nuevoPago, monto: e.target.value })} className="input" />
+                  <select value={nuevoPago.metodo_pago} onChange={(e) => setNuevoPago({ ...nuevoPago, metodo_pago: e.target.value })} className="input">
+                    <option value="EFECTIVO">Efectivo</option>
+                    <option value="TARJETA">Tarjeta</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
+                    <option value="NEQUI">Nequi</option>
+                    <option value="DAVIPLATA">Daviplata</option>
+                  </select>
+                </div>
+                <input type="text" placeholder="Nota (opcional)" value={nuevoPago.nota} onChange={(e) => setNuevoPago({ ...nuevoPago, nota: e.target.value })} className="input" />
+                <button disabled={guardandoPago} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold disabled:opacity-50">
+                  {guardandoPago ? 'Guardando…' : 'Registrar abono'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

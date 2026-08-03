@@ -24,6 +24,13 @@ class InventarioController extends Controller
         if ($bodega = $request->query('bodega_id')) {
             $q->where('bodega_id', $bodega);
         }
+        if ($buscar = $request->query('buscar')) {
+            $q->whereHas('producto', function ($sub) use ($buscar) {
+                $sub->where('nombre', 'like', "%{$buscar}%")
+                    ->orWhere('sku', 'like', "%{$buscar}%")
+                    ->orWhere('codigo_barras', 'like', "%{$buscar}%");
+            });
+        }
         return $q->orderByDesc('cantidad')->paginate(30);
     }
 
@@ -46,6 +53,13 @@ class InventarioController extends Controller
         }
         if ($producto = $request->query('producto_id')) {
             $q->where('producto_id', $producto);
+        }
+        if ($buscar = $request->query('buscar')) {
+            $q->whereHas('producto', function ($sub) use ($buscar) {
+                $sub->where('nombre', 'like', "%{$buscar}%")
+                    ->orWhere('sku', 'like', "%{$buscar}%")
+                    ->orWhere('codigo_barras', 'like', "%{$buscar}%");
+            });
         }
         return $q->latest()->paginate(30);
     }

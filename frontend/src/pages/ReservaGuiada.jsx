@@ -47,6 +47,7 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
   const [slots, setSlots] = useState(null)
   const [horaSel, setHoraSel] = useState(null)
   const [form, setForm] = useState({ nombre_completo: '', telefono: '', email: '', nota: '' })
+  const [imagenRefSel, setImagenRefSel] = useState(null) // url de la foto de referencia elegida (ej. corte deseado)
   const [confirmada, setConfirmada] = useState(null)
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(false)
@@ -88,6 +89,7 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
         email: form.email || null,
         nota: form.nota || null,
         operables_employee_id: profesionalSel?.id || null,
+        imagen_referencia_url: imagenRefSel || null,
         inicio: horaSel,
       }
       if (esSpa && serviciosSel.length > 1) {
@@ -121,6 +123,12 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
           <p className="text-sm text-slate-400">Fecha y hora</p>
           <p className="font-semibold capitalize">{fmtFecha(confirmada.inicio)} · {fmtHora(confirmada.inicio)}</p>
           {totalPrecio > 0 && <p className="text-emerald-400 font-bold mt-2">{COP(totalPrecio)}</p>}
+          {confirmada.imagen_referencia_url && (
+            <div className="mt-3">
+              <p className="text-sm text-slate-400 mb-1">Tu foto de referencia</p>
+              <img src={confirmada.imagen_referencia_url} alt="" className="h-20 w-20 rounded-lg object-cover" />
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-2 mt-4">
           <a href={`data:text/calendar;charset=utf8,${ics}`} download="cita.ics"
@@ -133,6 +141,7 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
         <button onClick={() => {
           setConfirmada(null); setPaso(0); setServiciosSel([]); setProfesionalSel(undefined)
           setSlots(null); setHoraSel(null); setForm({ nombre_completo: '', telefono: '', email: '', nota: '' })
+          setImagenRefSel(null)
         }} className="mt-4 text-sm text-slate-400 hover:text-white">Hacer otra reserva</button>
       </div>
     )
@@ -239,6 +248,22 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
           <div className="rounded-lg border border-slate-700 bg-slate-800/40 px-3 py-2 text-sm text-slate-300">
             {serviciosSel.map((s) => s.nombre).join(' + ')} · {profesionalSel ? `${profesionalSel.nombre} ${profesionalSel.apellido}` : 'Cualquier profesional'} · {horaSel && `${fmtFecha(horaSel)} ${fmtHora(horaSel)}`}
           </div>
+
+          {/* Foto de referencia (ej. el corte de cabello que le gustó): solo aplica
+              cuando hay un único servicio y ese servicio tiene fotos en su galería. */}
+          {!esSpa && serviciosSel[0]?.galeria?.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-1">📸 ¿Viste algo que te gustó? Elige una referencia (opcional)</p>
+              <div className="flex flex-wrap gap-2">
+                {serviciosSel[0].galeria.map((f) => (
+                  <button type="button" key={f.id} onClick={() => setImagenRefSel(imagenRefSel === f.url ? null : f.url)}
+                    className={`rounded-lg overflow-hidden border-2 transition ${imagenRefSel === f.url ? 'border-emerald-500' : 'border-transparent'}`}>
+                    <img src={f.url} alt="" className="h-16 w-16 object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <input required placeholder="Tu nombre completo" value={form.nombre_completo}
             onChange={(e) => setForm({ ...form, nombre_completo: e.target.value })} className="input" />

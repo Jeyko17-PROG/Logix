@@ -380,6 +380,89 @@ class UsuarioAdminController extends Controller
         return response()->json(['message' => "Usuario {$email} y toda su información fueron eliminados permanentemente."]);
     }
 
+    // ===== Equipo del negocio (para el dueño/Administrador, no super-admin) =====
+
+    /** Catálogo de roles con sus permisos: para elegir rol al crear/editar un empleado. */
+    public function roles(): JsonResponse
+    {
+        return response()->json(
+            Role::with('permisos:id,clave,descripcion')
+                ->orderBy('nombre')
+                ->get(['id', 'nombre', 'descripcion'])
+        );
+    }
+
+    /** Equipo del workspace del usuario autenticado (él mismo + los empleados que creó). */
+    public function miEquipo(Request $request): JsonResponse
+    {
+        $ownerId = $request->user()->workspaceOwnerId();
+
+        $usuarios = User::with('rol:id,nombre', 'bodega:id,nombre')
+            ->where(function ($q) use ($ownerId) {
+                $q->where('id', $ownerId)->orWhere('workspace_owner_id', $ownerId);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'telefono', 'rol_id', 'bodega_id', 'estado', 'created_at']);
+
+        return response()->json($usuarios->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'telefono' => $u->telefono,
+            'rol' => $u->rol?->nombre,
+            'rol_id' => $u->rol_id,
+            'bodega' => $u->bodega?->nombre,
+            'estado' => $u->estado,
+            'es_propietario' => $u->id === $ownerId,
+            'fecha_registro' => $u->created_at?->toIso8601String(),
+        ]));
+    }
+
+    /** El dueño/Administrador cambia el rol o la bodega de un empleado de SU equipo (no a sí mismo). */
+    public function actualizarEquipo(Request $request, User $usuario): JsonResponse
+    {
+        $ownerId = $request->user()->workspaceOwnerId();
+        abort_unless($usuario->workspaceOwnerId() === $ownerId, 403, 'Ese usuario no pertenece a tu equipo.');
+        abort_if($usuario->id === $ownerId, 422, 'No puedes cambiar tu propio rol.');
+
+        $data = $request->validate([
+            'rol_id' => ['required', 'exists:roles,id'],
+            'bodega_id' => ['nullable', 'exists:bodegas,id'],
+        ]);
+
+        if (! empty($data['bodega_id'])) {
+            $bodega = Bodega::where('id', $data['bodega_id'])->firstOrFail();
+            abort_unless((int) $bodega->owner_id === $ownerId, 403, 'La bodega no pertenece a tu negocio.');
+        }
+
+        $rolAnterior = $usuario->rol?->nombre;
+        $usuario->update(['rol_id' => $data['rol_id'], 'bodega_id' => $data['bodega_id'] ?? $usuario->bodega_id]);
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'EQUIPO_ROL', null, $rolAnterior, $usuario->fresh('rol')->rol?->nombre);
+
+        return response()->json(['message' => 'Rol actualizado.']);
+    }
+
+    /** El dueño/Administrador activa/suspende/desactiva a un empleado de SU equipo. */
+    public function estadoEquipo(Request $request, User $usuario): JsonResponse
+    {
+        $ownerId = $request->user()->workspaceOwnerId();
+        abort_unless($usuario->workspaceOwnerId() === $ownerId, 403, 'Ese usuario no pertenece a tu equipo.');
+        abort_if($usuario->id === $ownerId, 422, 'No puedes cambiar tu propio estado.');
+
+        $data = $request->validate(['estado' => ['required', 'in:ACTIVO,SUSPENDIDO,DESACTIVADO']]);
+
+        $anterior = $usuario->estado;
+        $usuario->update(['estado' => $data['estado'], 'activo' => $data['estado'] === 'ACTIVO']);
+        if ($data['estado'] !== 'ACTIVO') {
+            $usuario->tokens()->delete();
+        }
+
+        Auditoria::registrar($request->user()->id, $usuario->id, 'EQUIPO_ESTADO', null, $anterior, $data['estado']);
+
+        return response()->json(['message' => 'Estado actualizado.']);
+    }
+
     // ===== Control de Funcionalidades (por usuario) =====
 
     /** Matriz de funcionalidades de un usuario: catálogo + estado efectivo + override. */

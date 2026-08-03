@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Archivo;
+use App\Models\Categoria;
 use App\Models\Producto;
 use App\Services\CloudinaryUploader;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ProductoController extends Controller
 {
@@ -50,6 +52,13 @@ class ProductoController extends Controller
         $data['owner_id'] = $user->workspaceOwnerId();
         $data['empresa_id'] = $user->empresaId();
 
+        // SKU automático si el usuario lo dejó en blanco: se arma con la
+        // categoría (o "PRD") + la unidad de medida, para que sea legible y
+        // no un simple correlativo ciego.
+        if (empty($data['sku'])) {
+            $data['sku'] = $this->generarSku($data);
+        }
+
         // El producto necesita existir primero: la imagen se sube bajo un public_id
         // basado en su id, para que futuras resubidas reemplacen la misma imagen.
         $producto = Producto::create($data);
@@ -63,7 +72,7 @@ class ProductoController extends Controller
 
     public function show(Producto $producto)
     {
-        return $producto->load(['categoria:id,nombre', 'stocks.bodega:id,nombre', 'proveedores'])
+        return $producto->load(['categoria:id,nombre', 'stocks.bodega:id,nombre', 'proveedores', 'galeria'])
             ->loadSum('movimientosSalida as salidas_sum', 'cantidad');
     }
 
@@ -73,6 +82,12 @@ class ProductoController extends Controller
         $data = $this->validar($request, $producto->id);
         $data['owner_id'] = $producto->owner_id ?? $user->workspaceOwnerId();
         $data['empresa_id'] = $producto->empresa_id ?? $user->empresaId();
+
+        // La columna sku no admite null: si lo dejaron vacío al editar, se
+        // conserva el que ya tenía (no se autogenera de nuevo ni se borra).
+        if (empty($data['sku'])) {
+            unset($data['sku']);
+        }
 
         // overwrite:true en Cloudinary ya reemplaza la imagen anterior en el mismo public_id,
         // no hace falta borrarla aparte.
@@ -126,12 +141,40 @@ class ProductoController extends Controller
         return $url;
     }
 
+    /**
+     * Arma un SKU legible: 3 letras de la categoría (o "PRD" si no tiene) +
+     * la unidad de medida + un correlativo con padding, ej. "ROP-UND-00042".
+     * Reintenta el correlativo hasta encontrar uno libre (colisiones raras,
+     * pero posibles si se borraron productos intermedios).
+     */
+    private function generarSku(array $data): string
+    {
+        $prefijo = 'PRD';
+        if (! empty($data['categoria_id'])) {
+            $nombreCategoria = Categoria::withoutGlobalScopes()->find($data['categoria_id'])?->nombre;
+            if ($nombreCategoria) {
+                $prefijo = Str::upper(Str::substr(Str::ascii($nombreCategoria), 0, 3));
+            }
+        }
+        $unidad = Str::upper($data['unidad_medida'] ?? 'UND');
+
+        $intento = Producto::withTrashed()->withoutGlobalScopes()->count() + 1;
+        do {
+            $sku = "{$prefijo}-{$unidad}-" . str_pad((string) $intento, 5, '0', STR_PAD_LEFT);
+            $intento++;
+        } while (Producto::withTrashed()->withoutGlobalScopes()->where('sku', $sku)->exists());
+
+        return $sku;
+    }
+
     private function validar(Request $request, ?int $id = null): array
     {
         $unique = $id ? ",{$id}" : '';
         return $request->validate([
             'categoria_id' => ['nullable', 'exists:categorias,id'],
-            'sku' => ['required', 'string', 'max:100', "unique:productos,sku{$unique}"],
+            // Nulo/vacío = se autogenera al guardar (ver generarSku()).
+            'sku' => ['nullable', 'string', 'max:100', "unique:productos,sku{$unique}"],
+            'unidad_medida' => ['nullable', 'string', 'max:20'],
             'codigo_barras' => ['nullable', 'string', 'max:100', "unique:productos,codigo_barras{$unique}"],
             'nombre' => ['required', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],

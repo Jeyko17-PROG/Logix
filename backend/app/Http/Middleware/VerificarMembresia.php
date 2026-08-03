@@ -29,6 +29,7 @@ class VerificarMembresia
         'api/mis-funcionalidades',
         'api/notificaciones',
         'api/admin', // panel del super-admin (gestiona las licencias)
+        'api/cuenta', // "Mis negocios": debe poder alternar aunque este negocio tenga la membresía vencida
     ];
 
     public function handle(Request $request, Closure $next): Response

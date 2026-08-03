@@ -3,9 +3,11 @@ import { api } from '../api/client'
 import { aNumero } from '../utils/numero'
 
 const VACIO = {
-  sku: '', codigo_barras: '', nombre: '', descripcion: '',
+  sku: '', codigo_barras: '', nombre: '', descripcion: '', unidad_medida: 'UND',
   precio_costo: '', precio_venta: '', categoria_id: '', activo: true, disponible: true,
 }
+
+const UNIDADES_MEDIDA = ['UND', 'KG', 'LT', 'MT', 'CAJA', 'PAR', 'DOCENA', 'PAQUETE']
 
 export default function Productos() {
   const [lista, setLista] = useState([])
@@ -16,6 +18,8 @@ export default function Productos() {
   const [error, setError] = useState('')
   const [abierto, setAbierto] = useState(false)
   const [valorTotalInventario, setValorTotalInventario] = useState(0)
+  const [galeria, setGaleria] = useState([]) // fotos adicionales del producto en edición
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
 
   async function cargar() {
     const data = await api('/productos')
@@ -27,10 +31,34 @@ export default function Productos() {
     api('/categorias').then(setCategorias)
   }, [])
 
-  function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setAbierto(true) }
-  function editar(p) {
+  function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setGaleria([]); setAbierto(true) }
+  async function editar(p) {
     setForm({ ...VACIO, ...p, categoria_id: p.categoria_id ?? '' })
-    setImagen(null); setEditId(p.id); setError(''); setAbierto(true)
+    setImagen(null); setEditId(p.id); setError(''); setAbierto(true); setGaleria([])
+    try { setGaleria((await api(`/productos/${p.id}`)).galeria ?? []) } catch { /* no bloquea la edición */ }
+  }
+
+  async function agregarFotoGaleria(file) {
+    if (!file || !editId) return
+    setSubiendoFoto(true); setError('')
+    try {
+      const fd = new FormData()
+      fd.append('imagen', file)
+      const item = await api(`/productos/${editId}/galeria`, { method: 'POST', body: fd, isForm: true })
+      setGaleria((g) => [...g, item])
+    } catch (err) {
+      setError(err.message || 'No se pudo subir la foto.')
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
+  async function quitarFotoGaleria(imagenId) {
+    if (!editId) return
+    try {
+      await api(`/productos/${editId}/galeria/${imagenId}`, { method: 'DELETE' })
+      setGaleria((g) => g.filter((f) => f.id !== imagenId))
+    } catch (err) { alert(err.message || 'No se pudo quitar la foto.') }
   }
 
   async function guardar(e) {
@@ -93,17 +121,39 @@ export default function Productos() {
       {abierto && (
         <form onSubmit={guardar} className="mb-6 rounded-xl border border-slate-800 bg-slate-800/50 p-5 grid sm:grid-cols-2 gap-3">
           {error && <div className="sm:col-span-2 text-red-300 text-sm">{error}</div>}
-          <input required placeholder="SKU" value={form.sku} onChange={set('sku')} className="input" />
+          <input placeholder="SKU (vacío = se genera automático)" value={form.sku} onChange={set('sku')} className="input" />
           <input placeholder="Código de barras" value={form.codigo_barras ?? ''} onChange={set('codigo_barras')} className="input" />
           <input required placeholder="Nombre" value={form.nombre} onChange={set('nombre')} className="input sm:col-span-2" />
           <select value={form.categoria_id} onChange={set('categoria_id')} className="input">
             <option value="">Sin categoría</option>
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
+          <select value={form.unidad_medida} onChange={set('unidad_medida')} className="input" title="Unidad de medida (se usa también para armar el SKU automático)">
+            {UNIDADES_MEDIDA.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
           <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="input" />
           <input type="text" inputMode="decimal" placeholder="Precio costo (ej: 250.000)" value={form.precio_costo} onChange={set('precio_costo')} className="input" required />
           <input type="text" inputMode="decimal" placeholder="Precio venta (ej: 400.000)" value={form.precio_venta} onChange={set('precio_venta')} className="input" required />
           <textarea placeholder="Descripción" value={form.descripcion ?? ''} onChange={set('descripcion')} className="input sm:col-span-2" />
+          {editId && (
+            <div className="sm:col-span-2">
+              <p className="text-sm text-slate-300 mb-1">Fotos adicionales del producto</p>
+              <div className="flex flex-wrap gap-2">
+                {galeria.map((f) => (
+                  <div key={f.id} className="relative group">
+                    <img src={f.url} alt="" className="h-16 w-16 rounded-lg object-cover border border-slate-700" />
+                    <button type="button" onClick={() => quitarFotoGaleria(f.id)}
+                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs leading-5">✕</button>
+                  </div>
+                ))}
+                <label className="h-16 w-16 rounded-lg border border-dashed border-slate-600 flex items-center justify-center text-slate-500 hover:text-slate-300 hover:border-slate-500 cursor-pointer text-xs text-center">
+                  {subiendoFoto ? '…' : '+ Foto'}
+                  <input type="file" accept="image/*" className="hidden" disabled={subiendoFoto}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarFotoGaleria(f); e.target.value = '' }} />
+                </label>
+              </div>
+            </div>
+          )}
           <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-300">
             <input type="checkbox" checked={form.disponible} onChange={(e) => setForm({ ...form, disponible: e.target.checked })} />
             Disponible en el catálogo público (desmarca si está agotado)

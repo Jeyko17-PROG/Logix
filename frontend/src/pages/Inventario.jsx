@@ -12,9 +12,11 @@ export default function Inventario() {
   const [mov, setMov] = useState(MOV_VACIO)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
+  const [buscar, setBuscar] = useState('')
 
-  async function cargar() {
-    const [s, a] = await Promise.all([api('/inventario/stock'), api('/inventario/alertas')])
+  async function cargar(termino = buscar) {
+    const qs = termino ? `?buscar=${encodeURIComponent(termino)}` : ''
+    const [s, a] = await Promise.all([api(`/inventario/stock${qs}`), api('/inventario/alertas')])
     setStock(s.data ?? s)
     setAlertas(a)
   }
@@ -23,6 +25,14 @@ export default function Inventario() {
     api('/productos').then((d) => setProductos(d.data ?? d))
     api('/bodegas').then(setBodegas)
   }, [])
+
+  // Vuelve a consultar el stock cada vez que cambia el texto de búsqueda
+  // (con un pequeño debounce para no disparar una petición por tecla).
+  useEffect(() => {
+    const t = setTimeout(() => cargar(buscar), 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buscar])
 
   async function registrar(e) {
     e.preventDefault()
@@ -94,7 +104,7 @@ export default function Inventario() {
           <h2 className="font-semibold text-amber-300 mb-2">⚠️ Reabastecimiento ({alertas.length})</h2>
           <ul className="text-sm text-amber-200 space-y-1">
             {alertas.map((a) => (
-              <li key={a.id}>{a.producto?.nombre} en {a.bodega?.nombre}: {Number(a.cantidad)} (mín. {Number(a.stock_minimo)})</li>
+              <li key={a.id}>{a.producto?.nombre} en {a.bodega?.nombre}: {Number(a.cantidad).toLocaleString('es-CO')} (mín. {Number(a.stock_minimo).toLocaleString('es-CO')})</li>
             ))}
           </ul>
         </div>
@@ -137,7 +147,16 @@ export default function Inventario() {
 
       {/* Stock por bodega */}
       <div>
-        <h2 className="font-semibold mb-3">Stock por bodega</h2>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="font-semibold">Stock por bodega</h2>
+          <input
+            type="text"
+            placeholder="Buscar por producto, SKU o código de barras…"
+            value={buscar}
+            onChange={(e) => setBuscar(e.target.value)}
+            className="input w-64 max-w-full"
+          />
+        </div>
         <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="w-full text-sm">
             <thead className="bg-slate-800 text-slate-300">
@@ -158,8 +177,8 @@ export default function Inventario() {
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${BADGE[n.tono]}`}>{n.label}</span>
                       </div>
                     </td>
-                    <td className={`p-3 text-right font-semibold ${n.tono === 'red' ? 'text-red-300' : n.tono === 'amber' ? 'text-amber-300' : ''}`}>{Number(s.cantidad)}</td>
-                    <td className="p-3 text-right text-slate-400">{Number(s.stock_minimo)}</td>
+                    <td className={`p-3 text-right font-semibold ${n.tono === 'red' ? 'text-red-300' : n.tono === 'amber' ? 'text-amber-300' : ''}`}>{Number(s.cantidad).toLocaleString('es-CO')}</td>
+                    <td className="p-3 text-right text-slate-400">{Number(s.stock_minimo).toLocaleString('es-CO')}</td>
                     <td className="p-3 text-right text-slate-400">${Number(s.costo_promedio).toLocaleString()}</td>
                   </tr>
                 )

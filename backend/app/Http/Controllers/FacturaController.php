@@ -27,7 +27,8 @@ class FacturaController extends Controller
     public function index(Request $request)
     {
         $this->bloquearMecanico($request);
-        $q = Factura::with('cliente:id,nombre_completo,email,telefono');
+        $q = Factura::with('cliente:id,nombre_completo,email,telefono')
+            ->withSum('pagos as pagos_sum_monto', 'monto');
         if ($request->user()?->estaLimitadoABodega()) {
             $q->where('bodega_id', $request->user()->bodega_id);
         }
@@ -40,7 +41,64 @@ class FacturaController extends Controller
     public function show(Factura $factura)
     {
         $this->bloquearMecanico(request());
-        return $factura->load(['cliente', 'detalles']);
+        return $factura->load(['cliente', 'detalles', 'pagos.usuario:id,name']);
+    }
+
+    /**
+     * Historial de abonos/pagos hechos sobre una factura.
+     */
+    public function pagos(Factura $factura)
+    {
+        $this->bloquearMecanico(request());
+        return $factura->pagos()->with('usuario:id,name')->get();
+    }
+
+    /**
+     * Registra un abono/pago parcial contra una factura. Cuando la suma de
+     * los pagos cubre el total, la factura pasa automáticamente a PAGADA.
+     */
+    public function registrarPago(Request $request, Factura $factura)
+    {
+        $this->bloquearMecanico($request);
+
+        if ($factura->estado === 'ANULADA') {
+            throw ValidationException::withMessages(['estado' => ['No se pueden registrar pagos sobre una factura anulada.']]);
+        }
+
+        $data = $request->validate([
+            'monto' => ['required', 'numeric', 'gt:0'],
+            'metodo_pago' => ['nullable', 'in:EFECTIVO,TARJETA,TRANSFERENCIA,NEQUI,DAVIPLATA'],
+            'fecha' => ['nullable', 'date'],
+            'nota' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $saldoActual = $factura->saldo_pendiente;
+        if ($data['monto'] > $saldoActual + 0.01) {
+            throw ValidationException::withMessages(['monto' => ["El abono (\${$data['monto']}) supera el saldo pendiente (\${$saldoActual})."]]);
+        }
+
+        $pago = DB::transaction(function () use ($data, $factura, $request) {
+            $pago = $factura->pagos()->create([
+                'monto' => $data['monto'],
+                'metodo_pago' => $data['metodo_pago'] ?? null,
+                'fecha' => $data['fecha'] ?? now()->toDateString(),
+                'nota' => $data['nota'] ?? null,
+                'created_by' => $request->user()->id,
+            ]);
+
+            if ($factura->fresh()->saldo_pendiente <= 0.01 && $factura->estado === 'EMITIDA') {
+                $factura->update(['estado' => 'PAGADA']);
+            }
+
+            return $pago;
+        });
+
+        $this->notificador->aUsuario($factura->owner_id, 'FACTURA_PAGO',
+            "Abono registrado en factura {$factura->numero}", "Monto: \${$pago->monto} · Saldo pendiente: \${$factura->fresh()->saldo_pendiente}");
+
+        Auditoria::registrar($request->user()->id, null, 'FACTURA_PAGO', 'REGISTRAR', null, $factura->numero, $factura->bodega_id);
+
+        return response()->json($pago->load('usuario:id,name'), 201);
     }
 
     public function store(Request $request)

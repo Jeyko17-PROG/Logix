@@ -8,6 +8,8 @@ use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\CitaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConfiguracionAgendaController;
+use App\Http\Controllers\CuentaController;
+use App\Http\Controllers\GaleriaController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\ExtraccionController;
 use App\Http\Controllers\FacturaController;
@@ -158,6 +160,12 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     // Funcionalidades del usuario autenticado (el frontend oculta/restringe módulos)
     Route::get('/mis-funcionalidades', [FeatureController::class, 'mias']);
 
+    // "Mis negocios": alternar entre varias cuentas/negocios de la misma persona
+    Route::get('/cuenta/mis-negocios', [CuentaController::class, 'misNegocios']);
+    Route::post('/cuenta/vincular-negocio', [CuentaController::class, 'vincular']);
+    Route::delete('/cuenta/negocios/{negocio}', [CuentaController::class, 'desvincular']);
+    Route::post('/cuenta/negocios/{negocio}/entrar', [CuentaController::class, 'entrar']);
+
     // ===== Panel del Super Administrador (solo super-admin) =====
     Route::middleware('superadmin')->prefix('admin')->group(function () {
         // Usuarios registrados
@@ -230,8 +238,12 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
 
     // Equipo del negocio: el Administrador/Usuario dueño puede crear empleados por establecimiento.
     Route::middleware('role:Administrador,Usuario')->prefix('equipo')->group(function () {
+        Route::get('roles', [UsuarioAdminController::class, 'roles']);
+        Route::get('usuarios', [UsuarioAdminController::class, 'miEquipo']);
         Route::post('usuarios', [UsuarioAdminController::class, 'crearEmpleado']);
         Route::post('usuarios/quick', [UsuarioAdminController::class, 'crearEmpleadoRapido']);
+        Route::put('usuarios/{usuario}', [UsuarioAdminController::class, 'actualizarEquipo']);
+        Route::post('usuarios/{usuario}/estado', [UsuarioAdminController::class, 'estadoEquipo']);
         Route::get('auditorias', [UsuarioAdminController::class, 'auditorias']);
     });
 
@@ -269,6 +281,8 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::put('bodegas/{bodega}/servicios', [BodegaController::class, 'sincronizarServicios']);
         Route::post('productos/{producto}/update', [ProductoController::class, 'update'])->middleware('feature:productos'); // multipart (imagen)
         Route::apiResource('productos', ProductoController::class)->only(['store', 'update', 'destroy'])->middleware('feature:productos');
+        Route::post('productos/{producto}/galeria', [GaleriaController::class, 'subirProducto'])->middleware('feature:productos');
+        Route::delete('productos/{producto}/galeria/{imagen}', [GaleriaController::class, 'eliminarProducto'])->middleware('feature:productos');
 
         Route::post('inventario/movimientos', [InventarioController::class, 'registrarMovimiento'])->middleware('feature:inventario');
         Route::post('inventario/minimo', [InventarioController::class, 'definirMinimo'])->middleware('feature:inventario');
@@ -302,6 +316,8 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::post('servicios/{servicio}/update', [ServicioController::class, 'update']); // multipart (imagen)
         Route::put('servicios/{servicio}', [ServicioController::class, 'update']);
         Route::delete('servicios/{servicio}', [ServicioController::class, 'destroy']);
+        Route::post('servicios/{servicio}/galeria', [GaleriaController::class, 'subirServicio']);
+        Route::delete('servicios/{servicio}/galeria/{imagen}', [GaleriaController::class, 'eliminarServicio']);
         Route::post('planes-lavado', [PlanLavadoController::class, 'store']);
         Route::put('planes-lavado/{planLavado}', [PlanLavadoController::class, 'update']);
         Route::delete('planes-lavado/{planLavado}', [PlanLavadoController::class, 'destroy']);
@@ -346,6 +362,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::get('facturas', [FacturaController::class, 'index']);
         Route::get('facturas/{factura}/pdf', [FacturaController::class, 'verPdf'])->middleware('feature:pdf');
         Route::get('facturas/{factura}', [FacturaController::class, 'show']);
+        Route::get('facturas/{factura}/pagos', [FacturaController::class, 'pagos']);
         Route::middleware('role:Administrador,Ventas/Compras')->group(function () {
             Route::post('facturas', [FacturaController::class, 'store']);
             Route::put('facturas/{factura}', [FacturaController::class, 'update']);
@@ -353,6 +370,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
             Route::post('facturas/{factura}/pdf', [FacturaController::class, 'generarPdf'])->middleware('feature:pdf');
             Route::post('facturas/{factura}/enviar', [FacturaController::class, 'enviar'])->middleware('feature:correos');
             Route::post('facturas/{factura}/whatsapp', [FacturaController::class, 'whatsapp'])->middleware('feature:pdf');
+            Route::post('facturas/{factura}/pagos', [FacturaController::class, 'registrarPago']);
         });
     });
 

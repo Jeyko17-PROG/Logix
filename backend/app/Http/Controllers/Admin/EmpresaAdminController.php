@@ -9,6 +9,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaModulo;
 use App\Models\Modulo;
 use App\Models\TipoNegocio;
+use App\Services\Notificador;
 use App\Support\Funcionalidades;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -131,6 +132,27 @@ class EmpresaAdminController extends Controller
         $owner->forceFill(['codigo_activacion' => $codigo, 'codigo_activacion_intentos' => 0])->save();
 
         Auditoria::registrar($request->user()->id, $owner->id, 'EMPRESA', 'REGENERAR_CODIGO_ACTIVACION', null, null);
+
+        // El código nuevo también queda visible en el panel, pero antes se
+        // perdía si el super-admin cerraba la pantalla sin copiarlo: ahora
+        // también le llega por notificación interna y correo, igual que en
+        // el registro inicial, para poder entregárselo al dueño de la empresa.
+        $superAdmin = $request->user();
+        if ($superAdmin) {
+            $notificador = app(Notificador::class);
+            $mensaje = "Empresa: {$empresa->nombre}\nDueño: {$owner->name}\nCorreo: {$owner->email}\n\nNuevo código de activación: {$codigo}";
+            $notificador->aUsuario($superAdmin->id, 'ADMIN', 'Código de activación regenerado', $mensaje);
+            try {
+                $notificador->correo(
+                    $superAdmin->email,
+                    'Código de activación regenerado — Fénix',
+                    'Código de activación regenerado',
+                    ["Empresa: {$empresa->nombre}", "Dueño: {$owner->name}", "Correo: {$owner->email}", "Nuevo código de activación: {$codigo}"],
+                );
+            } catch (\Throwable $e) {
+                // No bloquear la regeneración si falla el envío de correo.
+            }
+        }
 
         return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
     }

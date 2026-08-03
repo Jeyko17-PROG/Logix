@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\OrdenCompra;
 use App\Services\KardexService;
+use App\Services\Notificador;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class OrdenCompraController extends Controller
 {
-    public function __construct(private KardexService $kardex) {}
+    public function __construct(private KardexService $kardex, private Notificador $notificador) {}
 
     public function index()
     {
@@ -66,7 +67,9 @@ class OrdenCompraController extends Controller
             throw ValidationException::withMessages(['estado' => ['La orden ya fue recibida.']]);
         }
 
-        DB::transaction(function () use ($orden) {
+        $alertas = [];
+
+        DB::transaction(function () use ($orden, &$alertas) {
             foreach ($orden->detalles as $detalle) {
                 $this->kardex->entrada(
                     $detalle->producto_id,
@@ -77,9 +80,35 @@ class OrdenCompraController extends Controller
                     'COMPRA',
                     ['tipo' => OrdenCompra::class, 'id' => $orden->id],
                 );
+
+                // Si el precio pagado en esta compra supera el precio de venta
+                // vigente del producto, la empresa estaría vendiendo con pérdida
+                // a menos que actualice el precio: se avisa al dueño del negocio.
+                $producto = $detalle->producto()->first(['id', 'nombre', 'precio_venta']);
+                if ($producto && $producto->precio_venta > 0 && (float) $detalle->precio_unitario > (float) $producto->precio_venta) {
+                    $alertas[] = [
+                        'producto' => $producto->nombre,
+                        'precio_compra' => (float) $detalle->precio_unitario,
+                        'precio_venta' => (float) $producto->precio_venta,
+                    ];
+                }
             }
             $orden->update(['estado' => 'RECIBIDA']);
         });
+
+        if ($alertas) {
+            $lineas = array_map(
+                fn ($a) => "{$a['producto']}: comprado a \${$a['precio_compra']}, pero se vende a \${$a['precio_venta']} (pérdida de \$" . number_format($a['precio_compra'] - $a['precio_venta'], 2) . ' por unidad)',
+                $alertas
+            );
+            $mensaje = "Orden de compra #{$orden->id}:\n" . implode("\n", $lineas);
+            $this->notificador->aUsuario(
+                $orden->owner_id,
+                'COMPRA_MAS_CARA',
+                'Compraste más caro de lo que vendes',
+                $mensaje,
+            );
+        }
 
         return $orden->fresh()->load('detalles.producto:id,sku,nombre');
     }

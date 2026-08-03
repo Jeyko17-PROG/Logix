@@ -59,6 +59,27 @@ export function AuthProvider({ children }) {
     return api('/reset-password', { method: 'POST', body: payload })
   }
 
+  // "Mis negocios": la misma persona con varias cuentas/negocios vinculados.
+  async function misNegocios() {
+    return api('/cuenta/mis-negocios')
+  }
+
+  async function vincularNegocio(email, password) {
+    return api('/cuenta/vincular-negocio', { method: 'POST', body: { email, password } })
+  }
+
+  async function desvincularNegocio(negocioId) {
+    return api(`/cuenta/negocios/${negocioId}`, { method: 'DELETE' })
+  }
+
+  // Cambia la sesión activa a otro negocio vinculado (sin pedir contraseña de nuevo).
+  async function entrarNegocio(negocioId) {
+    const data = await api(`/cuenta/negocios/${negocioId}/entrar`, { method: 'POST', body: {} })
+    setToken(data.token)
+    setUser(data.user)
+    return data.user
+  }
+
   async function logout() {
     try {
       await api('/logout', { method: 'POST' })
@@ -70,7 +91,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, cargando, login, register, activar, forgotPassword, resetPassword, logout }}>
+    <AuthContext.Provider value={{ user, setUser, cargando, login, register, activar, forgotPassword, resetPassword, logout, misNegocios, vincularNegocio, desvincularNegocio, entrarNegocio }}>
       {children}
     </AuthContext.Provider>
   )

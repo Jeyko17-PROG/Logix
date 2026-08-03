@@ -131,15 +131,21 @@ export default function Agenda() {
                 <span className="font-mono text-xs text-slate-500 leading-tight">{fmtHora(c.fin)}</span>
               </div>
               <div className="flex flex-1 items-center justify-between p-3 gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {iconoServicio(c) && <span className="text-lg leading-none">{iconoServicio(c)}</span>}
-                    <span className="font-semibold text-white text-base truncate">{c.cliente?.nombre_completo}</span>
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-400">
-                    {(c.plan_lavado?.nombre ?? c.servicio?.nombre) && <span>{c.plan_lavado?.nombre ?? c.servicio?.nombre}</span>}
-                    {c.tipo_vehiculo && <span>{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
-                    {c.bodega && <span className="text-slate-500 text-xs">📍 {c.bodega.nombre}</span>}
+                <div className="min-w-0 flex items-center gap-2">
+                  {c.imagen_referencia_url && (
+                    <img src={c.imagen_referencia_url} alt="Referencia elegida por el cliente" title="Referencia elegida por el cliente"
+                      className="h-10 w-10 rounded-lg object-cover border border-slate-700 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {iconoServicio(c) && <span className="text-lg leading-none">{iconoServicio(c)}</span>}
+                      <span className="font-semibold text-white text-base truncate">{c.cliente?.nombre_completo}</span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-400">
+                      {(c.plan_lavado?.nombre ?? c.servicio?.nombre) && <span>{c.plan_lavado?.nombre ?? c.servicio?.nombre}</span>}
+                      {c.tipo_vehiculo && <span>{iconoVehiculo(c.tipo_vehiculo)} {c.placa}</span>}
+                      {c.bodega && <span className="text-slate-500 text-xs">📍 {c.bodega.nombre}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

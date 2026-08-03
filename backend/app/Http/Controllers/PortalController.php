@@ -106,7 +106,7 @@ class PortalController extends Controller
             ->when($bodegaId, fn ($q) => $q->where(
                 fn ($w) => $w->whereDoesntHave('bodegas')->orWhereHas('bodegas', fn ($b) => $b->where('bodegas.id', $bodegaId))
             ))
-            ->with('categoria:id,nombre')
+            ->with(['categoria:id,nombre', 'galeria:id,imageable_type,imageable_id,url,orden'])
             ->orderBy('nombre')
             ->get(['id', 'categoria_id', 'nombre', 'descripcion', 'imagen', 'icono', 'duracion_min', 'precio']);
     }
@@ -212,6 +212,23 @@ class PortalController extends Controller
             'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
             'placa' => [$conVehiculo ? 'required' : 'nullable', 'string', 'max:20'],
             'inicio' => ['required', 'date'],
+            // Foto de referencia que el cliente eligió de la galería del servicio
+            // (ej. el corte de cabello que le gustó); debe ser una imagen real de
+            // ESE servicio, no cualquier URL, para evitar que se cuele contenido ajeno.
+            'imagen_referencia_url' => [
+                'nullable', 'string', 'max:2048',
+                function ($attribute, $value, $fail) use ($negocio) {
+                    $servicioId = request('servicio_id');
+                    $existe = \App\Models\GaleriaImagen::where('owner_id', $negocio)
+                        ->where('imageable_type', Servicio::class)
+                        ->when($servicioId, fn ($q) => $q->where('imageable_id', $servicioId))
+                        ->where('url', $value)
+                        ->exists();
+                    if (! $existe) {
+                        $fail('La imagen de referencia no es válida para este servicio.');
+                    }
+                },
+            ],
         ]);
 
         // El campo "servicios" (varios por reserva) solo aplica a negocios Spa;
@@ -283,6 +300,7 @@ class PortalController extends Controller
                 'tipo_vehiculo' => $data['tipo_vehiculo'] ?? null,
                 'placa' => $data['placa'] ?? null,
                 'observaciones' => $data['nota'] ?? null,
+                'imagen_referencia_url' => $data['imagen_referencia_url'] ?? null,
                 'inicio' => $inicio,
                 'fin' => $fin,
                 'estado' => 'PENDIENTE',
