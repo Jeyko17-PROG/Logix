@@ -83,7 +83,7 @@ export default function Taller() {
             {t.label}
           </button>
         ))}
-        {!esOperario && <BuscadorHistorial />}
+        {!esOperario && <BuscadorHistorial mostrarVehiculos={cfg.mostrarVehiculos} />}
       </div>
 
       {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} esBarberia={esBarberia} iconoOperario={cfg.iconoOperario} />}
@@ -93,8 +93,8 @@ export default function Taller() {
   )
 }
 
-/* ============ Fidelización: historial por placa o cédula ============ */
-function BuscadorHistorial() {
+/* ============ Fidelización: historial por placa o cédula (o solo cédula si el negocio no maneja vehículos) ============ */
+function BuscadorHistorial({ mostrarVehiculos }) {
   const [q, setQ] = useState('')
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
@@ -110,7 +110,7 @@ function BuscadorHistorial() {
   return (
     <>
       <form onSubmit={buscar} className="ml-auto flex gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Historial: placa o cédula…"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={mostrarVehiculos ? 'Historial: placa o cédula…' : 'Historial: cédula…'}
           className="input !mt-0 w-48 sm:w-56" />
         <button className="rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-2 text-sm">🔎</button>
       </form>
