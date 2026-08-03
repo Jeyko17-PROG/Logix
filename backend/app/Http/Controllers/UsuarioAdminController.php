@@ -268,8 +268,9 @@ class UsuarioAdminController extends Controller
 
         $anterior = $usuario->plan?->nombre;
         $usuario->update(['plan_id' => $data['plan_id']]);
-        // Multiempresa: el plan efectivo vive en la empresa.
-        $usuario->empresaDeCobro()?->update(['plan_id' => $data['plan_id']]);
+        // Multiempresa: el plan vive en la empresa GOBERNANTE del grupo (si
+        // tiene negocios vinculados, un solo plan cubre a todos).
+        $usuario->empresaDeCobro()?->empresaGobernante()?->update(['plan_id' => $data['plan_id']]);
         $usuario->load('plan');
 
         Auditoria::registrar($request->user()->id, $usuario->id, 'PLAN', null, $anterior, $usuario->plan?->nombre);
@@ -293,8 +294,8 @@ class UsuarioAdminController extends Controller
 
         $anterior = $usuario->limite_clientes;
         $usuario->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
-        // Multiempresa: el límite vive en la empresa.
-        $usuario->empresaDeCobro()?->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
+        // Multiempresa: el límite vive en la empresa GOBERNANTE del grupo.
+        $usuario->empresaDeCobro()?->empresaGobernante()?->update(['limite_clientes' => $data['limite_clientes'] ?? null]);
 
         Auditoria::registrar($request->user()->id, $usuario->id, 'LIMITE', null, (string) $anterior, (string) ($data['limite_clientes'] ?? 'plan'));
 

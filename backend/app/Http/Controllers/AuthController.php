@@ -356,28 +356,36 @@ class AuthController extends Controller
     {
         $user = $request->user()->load('rol.permisos', 'plan', 'bodega', 'workspaceOwner');
 
-        // Estado de cobro SaaS de la EMPRESA (compartido por todo el equipo):
-        // el frontend usa esto para mostrar la pasarela de pago cuando la membresía vence.
-        $empresa = $user->empresaDeCobro();
+        // Identidad del negocio (nombre, tipo, logo, estado operativo): SIEMPRE
+        // la propia empresa, nunca la de otro negocio vinculado. El plan y la
+        // membresía sí se comparten entre negocios vinculados ("Mis negocios"),
+        // así que esos se leen de la empresa GOBERNANTE del grupo.
+        $empresaPropia = $user->empresaDeCobro();
+        $empresaGobernante = $empresaPropia?->empresaGobernante();
         $owner = $user->billingOwner();
         $creditos = app(\App\Services\CreditService::class)->saldos($user);
 
         $user->setAttribute('facturacion_saas', [
-            'modo_cobro' => $empresa->modo_cobro ?? $owner->modo_cobro,
-            'membresia_vence_at' => ($empresa->membresia_vence_at ?? $owner->membresia_vence_at)?->toIso8601String(),
+            'modo_cobro' => $empresaGobernante->modo_cobro ?? $owner->modo_cobro,
+            'membresia_vence_at' => ($empresaGobernante->membresia_vence_at ?? $owner->membresia_vence_at)?->toIso8601String(),
             'membresia_vencida' => $user->membresiaVencida(),
             'creditos_facturacion' => (int) ($creditos['facturacion'] ?? 0),
         ]);
 
-        if ($empresa) {
+        if ($empresaPropia) {
             $user->setAttribute('empresa_info', [
-                'id' => $empresa->id,
-                'nombre' => $empresa->nombre,
-                'tipo_negocio' => $empresa->tipoNegocio?->only(['id', 'clave', 'nombre']),
-                'plan' => $empresa->plan?->only(['id', 'nombre']),
-                'estado' => $empresa->estado,
-                'logo_url' => $empresa->logo_url,
-                'logo_emoji' => $empresa->logo_emoji,
+                'id' => $empresaPropia->id,
+                'nombre' => $empresaPropia->nombre,
+                'tipo_negocio' => $empresaPropia->tipoNegocio?->only(['id', 'clave', 'nombre']),
+                'plan' => $empresaGobernante?->plan?->only(['id', 'nombre']),
+                'estado' => $empresaPropia->estado,
+                'logo_url' => $empresaPropia->logo_url,
+                'logo_emoji' => $empresaPropia->logo_emoji,
+                'politicas' => $empresaPropia->politicas,
+                'instagram_url' => $empresaPropia->instagram_url,
+                'tiktok_url' => $empresaPropia->tiktok_url,
+                'facebook_url' => $empresaPropia->facebook_url,
+                'whatsapp_url' => $empresaPropia->whatsapp_url,
                 'es_admin_empresa' => (bool) $user->es_admin_empresa,
             ]);
         }

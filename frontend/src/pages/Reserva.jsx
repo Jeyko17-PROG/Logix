@@ -10,7 +10,7 @@ const fmtFecha = (iso) => new Date(iso).toLocaleString('es', { dateStyle: 'mediu
 const iconoVehiculo = (tipo) => (tipo === 'moto' ? '🏍️' : tipo === 'carro' ? '🚗' : '')
 
 // Ícono por defecto según el rubro del negocio, mientras no suba su propio logo.
-const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈', spa: '💆' }
+const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈', spa: '💆', tatuajes: '🎨' }
 
 // Ícono decorativo por categoría de servicio (spa/estética), por palabra clave; genérico si no calza ninguna.
 function iconoCategoria(nombre) {
@@ -39,9 +39,9 @@ export default function Reserva() {
   }, [slug, base])
 
   const esLavadero = negocio?.tipo_negocio === 'lavadero'
-  // Barbería y Spa usan el flujo guiado ultra-simplificado (paso a paso con
-  // selección de especialista); el resto conserva el formulario clásico.
-  const esGuiado = ['barberia', 'spa'].includes(negocio?.tipo_negocio)
+  // Barbería, Spa y Tatuajes usan el flujo guiado ultra-simplificado (paso a
+  // paso con selección de especialista); el resto conserva el formulario clásico.
+  const esGuiado = ['barberia', 'spa', 'tatuajes'].includes(negocio?.tipo_negocio)
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 px-4 py-8">
@@ -60,7 +60,29 @@ export default function Reserva() {
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
         )}
         <h1 className="text-2xl font-bold text-center">Reserva tu cita</h1>
-        <p className="text-slate-400 text-center text-sm mb-6">{negocio?.nombre || 'Fénix'}</p>
+        <p className="text-slate-400 text-center text-sm">{negocio?.nombre || 'Fénix'}</p>
+
+        {/* Redes sociales del negocio (visibles apenas se abre el QR/enlace) */}
+        {negocio?.redes && Object.values(negocio.redes).some(Boolean) && (
+          <div className="flex items-center justify-center gap-3 mt-2 mb-4">
+            {negocio.redes.instagram && (
+              <a href={negocio.redes.instagram} target="_blank" rel="noreferrer"
+                className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-lg" title="Instagram">📷</a>
+            )}
+            {negocio.redes.tiktok && (
+              <a href={negocio.redes.tiktok} target="_blank" rel="noreferrer"
+                className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-lg" title="TikTok">🎵</a>
+            )}
+            {negocio.redes.facebook && (
+              <a href={negocio.redes.facebook} target="_blank" rel="noreferrer"
+                className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-lg" title="Facebook">👍</a>
+            )}
+            {negocio.redes.whatsapp && (
+              <a href={negocio.redes.whatsapp} target="_blank" rel="noreferrer"
+                className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-lg" title="WhatsApp">💬</a>
+            )}
+          </div>
+        )}
 
         {noExiste ? (
           <div className="rounded-xl bg-red-500/10 border border-red-500/40 p-4 text-center text-red-300">
@@ -68,6 +90,12 @@ export default function Reserva() {
           </div>
         ) : (
           <>
+            {negocio?.politicas && (
+              <details className="mb-4 rounded-lg border border-slate-800 bg-slate-800/30 px-3 py-2 text-xs text-slate-400">
+                <summary className="cursor-pointer text-slate-300 font-medium">📋 Requisitos y políticas</summary>
+                <p className="mt-2 whitespace-pre-line">{negocio.politicas}</p>
+              </details>
+            )}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setTab('reservar')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'reservar' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Reservar</button>
               <button onClick={() => setTab('catalogo')} className={`flex-1 py-2 rounded-lg text-sm ${tab === 'catalogo' ? 'bg-emerald-600' : 'bg-slate-800'}`}>Catálogo</button>
@@ -75,7 +103,7 @@ export default function Reserva() {
             </div>
             {tab === 'reservar' ? (
               esGuiado
-                ? <ReservaGuiada base={base} negocio={negocio} esSpa={negocio?.tipo_negocio === 'spa'} />
+                ? <ReservaGuiada base={base} negocio={negocio} esSpa={negocio?.tipo_negocio === 'spa'} esTatuaje={negocio?.tipo_negocio === 'tatuajes'} />
                 : <FormReserva base={base} esLavadero={esLavadero} />
             ) : tab === 'catalogo' ? <CatalogoProductos base={base} /> : <MisCitas base={base} />}
           </>

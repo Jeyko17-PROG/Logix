@@ -13,7 +13,7 @@ class OperablesEmployeeController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = OperablesEmployee::with(['commissionLiquidations']);
+        $query = OperablesEmployee::with(['commissionLiquidations', 'galeria']);
         
         if ($buscar = $request->query('buscar')) {
             $query->where(function ($w) use ($buscar) {
@@ -81,6 +81,7 @@ class OperablesEmployeeController extends Controller
                 ['valor' => 'mecanico', 'etiqueta' => 'Mecánico'],
                 ['valor' => 'lavador', 'etiqueta' => 'Lavador'],
                 ['valor' => 'barbero', 'etiqueta' => 'Barbero / Estilista'],
+                ['valor' => 'tatuador', 'etiqueta' => 'Tatuador'],
                 ['valor' => 'electricista', 'etiqueta' => 'Electricista'],
                 ['valor' => 'esteticien', 'etiqueta' => 'Esteticien'],
                 ['valor' => 'tecnico', 'etiqueta' => 'Técnico'],
@@ -102,7 +103,9 @@ class OperablesEmployeeController extends Controller
             'email' => ['nullable', 'email', "unique:operables_employees,email{$unique}"],
             'telefono' => ['nullable', 'string', 'max:20'],
             'ci_cedula' => ['required', 'string', 'max:50', "unique:operables_employees,ci_cedula{$unique}"],
-            'tipo_operario' => ['required', 'in:mecanico,lavador,barbero,electricista,esteticien,tecnico,asesor,otro'],
+            'tipo_operario' => ['required', 'in:mecanico,lavador,barbero,tatuador,electricista,esteticien,tecnico,asesor,otro'],
+            // Especialidad del artista (solo aplica a tatuadores, ej. "Línea fina", "Realismo"); texto libre.
+            'especialidad' => ['nullable', 'string', 'max:100'],
             'comision_default' => ['nullable', 'numeric', 'min:0'],
             'tipo_comision_default' => ['nullable', 'in:percentage,fixed'],
             'activo' => ['boolean'],

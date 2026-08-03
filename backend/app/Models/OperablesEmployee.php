@@ -6,6 +6,7 @@ use App\Models\Concerns\PerteneceAUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class OperablesEmployee extends Model
@@ -23,6 +24,7 @@ class OperablesEmployee extends Model
         'telefono',
         'ci_cedula',
         'tipo_operario',
+        'especialidad',
         'comision_default',
         'tipo_comision_default',
         'activo',
@@ -52,6 +54,12 @@ class OperablesEmployee extends Model
     public function commissionLiquidations(): HasMany
     {
         return $this->hasMany(CommissionLiquidation::class, 'operables_employee_id');
+    }
+
+    /** Portafolio de fotos del artista (ej. trabajos previos de un tatuador). */
+    public function galeria(): MorphMany
+    {
+        return $this->morphMany(GaleriaImagen::class, 'imageable')->orderBy('orden');
     }
 
     /**

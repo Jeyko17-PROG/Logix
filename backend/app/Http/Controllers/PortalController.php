@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Archivo;
 use App\Models\Cita;
 use App\Models\Cliente;
 use App\Models\Producto;
 use App\Models\Servicio;
 use App\Models\User;
 use App\Services\AgendaService;
+use App\Services\CloudinaryUploader;
 use App\Services\Notificador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -25,7 +29,40 @@ use Illuminate\Validation\ValidationException;
  */
 class PortalController extends Controller
 {
-    public function __construct(private AgendaService $agenda, private Notificador $notificador) {}
+    public function __construct(
+        private AgendaService $agenda,
+        private Notificador $notificador,
+        private CloudinaryUploader $cloudinary,
+    ) {}
+
+    /**
+     * Sube la foto de referencia que el cliente adjuntó al reservar (ej. la
+     * idea de tatuaje que quiere) a Cloudinary. Si falla, no bloquea la
+     * reserva — solo se queda sin la foto (igual criterio que las imágenes
+     * de productos/servicios).
+     */
+    private function subirReferenciaCliente(Request $request, int $negocio): ?string
+    {
+        $file = $request->file('imagen_referencia');
+        $publicId = "logix/citas/referencias_cliente/{$negocio}/" . Str::random(12);
+
+        try {
+            $resultado = $this->cloudinary->subir($file->getRealPath(), $publicId);
+        } catch (\Throwable $e) {
+            Log::error('Cloudinary: fallo al subir referencia del cliente', ['negocio' => $negocio, 'error' => $e->getMessage()]);
+            return null;
+        }
+
+        Archivo::create([
+            'nombre_original' => $file->getClientOriginalName(),
+            'ruta' => $resultado['public_id'],
+            'url' => $resultado['secure_url'],
+            'tipo_mime' => $file->getClientMimeType(),
+            'tamano_bytes' => $file->getSize(),
+        ]);
+
+        return $resultado['secure_url'];
+    }
 
     /**
      * Resuelve el id del usuario dueño del portal a partir del slug público.
@@ -57,6 +94,14 @@ class PortalController extends Controller
             'tipo_negocio' => $empresa?->tipoNegocio?->clave,
             // Para el botón "Escribir al local" en la pantalla de confirmación.
             'telefono' => $empresa?->telefono,
+            'direccion' => $empresa?->direccion,
+            'politicas' => $empresa?->politicas,
+            'redes' => [
+                'instagram' => $empresa?->instagram_url,
+                'tiktok' => $empresa?->tiktok_url,
+                'facebook' => $empresa?->facebook_url,
+                'whatsapp' => $empresa?->whatsapp_url,
+            ],
         ]);
     }
 
@@ -73,14 +118,16 @@ class PortalController extends Controller
         $tiposRelevantes = match ($tipoNegocio) {
             'barberia' => ['barbero'],
             'spa' => ['esteticien', 'barbero'],
-            default => ['barbero', 'esteticien'],
+            'tatuajes' => ['tatuador'],
+            default => ['barbero', 'esteticien', 'tatuador'],
         };
 
         return \App\Models\OperablesEmployee::where('owner_id', $negocio)
             ->where('activo', true)
             ->whereIn('tipo_operario', $tiposRelevantes)
+            ->with('galeria:id,imageable_type,imageable_id,url,orden')
             ->orderBy('nombre')
-            ->get(['id', 'nombre', 'apellido', 'tipo_operario']);
+            ->get(['id', 'nombre', 'apellido', 'tipo_operario', 'especialidad']);
     }
 
     /** Sucursales activas del negocio (multisucursal); el portal las ofrece como primer paso. */
@@ -190,6 +237,7 @@ class PortalController extends Controller
         $tipoNegocio = $this->tipoNegocioDe($negocio);
         $conVehiculo = $tipoNegocio === 'lavadero';
         $conVariosServicios = $tipoNegocio === 'spa';
+        $conTatuaje = $tipoNegocio === 'tatuajes';
 
         $data = $request->validate([
             'nombre_completo' => ['required', 'string', 'max:255'],
@@ -207,14 +255,20 @@ class PortalController extends Controller
             'servicios.*.duracion_min' => ['nullable', 'integer', 'min:1'],
             'plan_lavado_id' => ['nullable', 'exists:planes_lavado,id'],
             'bodega_id' => ['nullable', \Illuminate\Validation\Rule::exists('bodegas', 'id')->where('owner_id', $negocio)],
-            // Especialista elegido por el cliente (barbería/spa); null = cualquiera disponible.
+            // Especialista elegido por el cliente (barbería/spa/tatuajes); null = cualquiera disponible.
             'operables_employee_id' => ['nullable', \Illuminate\Validation\Rule::exists('operables_employees', 'id')->where('owner_id', $negocio)],
             'tipo_vehiculo' => [$conVehiculo ? 'required' : 'nullable', 'in:moto,carro'],
             'placa' => [$conVehiculo ? 'required' : 'nullable', 'string', 'max:20'],
+            // Estudio de tatuajes: zona del cuerpo y tamaño aproximado del tatuaje.
+            'zona_cuerpo' => [$conTatuaje ? 'required' : 'nullable', 'string', 'max:100'],
+            'tamano_tatuaje' => ['nullable', 'string', 'max:50'],
             'inicio' => ['required', 'date'],
-            // Foto de referencia que el cliente eligió de la galería del servicio
-            // (ej. el corte de cabello que le gustó); debe ser una imagen real de
-            // ESE servicio, no cualquier URL, para evitar que se cuele contenido ajeno.
+            // Foto de referencia elegida de la galería del servicio (ej. el corte
+            // de cabello que le gustó); debe ser una imagen real de ESE servicio,
+            // no cualquier URL, para evitar que se cuele contenido ajeno. Si el
+            // cliente en cambio SUBE su propia foto (ej. la idea de tatuaje que
+            // quiere), llega como archivo en 'imagen_referencia' y no pasa por
+            // esta validación — se sube aparte más abajo.
             'imagen_referencia_url' => [
                 'nullable', 'string', 'max:2048',
                 function ($attribute, $value, $fail) use ($negocio) {
@@ -229,7 +283,15 @@ class PortalController extends Controller
                     }
                 },
             ],
+            // Foto propia del cliente (ej. la idea del tatuaje que quiere) — alternativa a elegir de la galería.
+            'imagen_referencia' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:8192'],
         ]);
+
+        // Si el cliente subió su propia foto, se sube a Cloudinary y reemplaza
+        // cualquier selección de la galería (una reserva no necesita ambas).
+        if ($request->hasFile('imagen_referencia')) {
+            $data['imagen_referencia_url'] = $this->subirReferenciaCliente($request, $negocio);
+        }
 
         // El campo "servicios" (varios por reserva) solo aplica a negocios Spa;
         // en cualquier otro tipo se ignora, igual que tipo_vehiculo/placa fuera de Lavadero.
@@ -299,6 +361,8 @@ class PortalController extends Controller
                 'operables_employee_id' => $data['operables_employee_id'] ?? null,
                 'tipo_vehiculo' => $data['tipo_vehiculo'] ?? null,
                 'placa' => $data['placa'] ?? null,
+                'zona_cuerpo' => $data['zona_cuerpo'] ?? null,
+                'tamano_tatuaje' => $data['tamano_tatuaje'] ?? null,
                 'observaciones' => $data['nota'] ?? null,
                 'imagen_referencia_url' => $data['imagen_referencia_url'] ?? null,
                 'inicio' => $inicio,

@@ -67,7 +67,11 @@ class VerificarMembresia
      */
     private function alertarPruebaVencida($owner): void
     {
-        $empresa = $owner->empresaDeCobro();
+        // La prueba (y el aviso de una sola vez) se rastrea en la empresa
+        // GOBERNANTE del grupo, no en el negocio puntual sobre el que se
+        // hizo la petición — así no se repite el aviso por cada negocio
+        // vinculado que comparte la misma prueba/plan.
+        $empresa = $owner->empresaDeCobro()?->empresaGobernante();
         if (! $empresa || $empresa->modo_cobro !== 'prueba' || $empresa->prueba_alerta_enviada) {
             return;
         }

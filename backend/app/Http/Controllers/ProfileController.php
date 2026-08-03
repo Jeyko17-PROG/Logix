@@ -176,4 +176,35 @@ class ProfileController extends Controller
 
         return response()->json(['logo_emoji' => $empresa->logo_emoji]);
     }
+
+    /**
+     * Políticas (requisitos, abono/cancelación) y enlaces a redes sociales
+     * del negocio, visibles en el portal público de reservas. Son identidad
+     * de ESTE negocio puntual — nunca se comparten con otros negocios
+     * vinculados en "Mis negocios", aunque sí compartan plan.
+     */
+    public function actualizarPerfilPublico(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->esPropietario()) {
+            return response()->json(['message' => 'Solo el propietario del negocio puede editar esto.'], 403);
+        }
+
+        $empresa = $user->empresaDeCobro();
+        if (! $empresa) {
+            return response()->json(['message' => 'Tu cuenta aún no tiene una empresa asociada.'], 422);
+        }
+
+        $data = $request->validate([
+            'politicas' => ['nullable', 'string', 'max:2000'],
+            'instagram_url' => ['nullable', 'string', 'max:255'],
+            'tiktok_url' => ['nullable', 'string', 'max:255'],
+            'facebook_url' => ['nullable', 'string', 'max:255'],
+            'whatsapp_url' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $empresa->update($data);
+
+        return response()->json($empresa->fresh());
+    }
 }

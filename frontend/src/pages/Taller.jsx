@@ -43,6 +43,11 @@ const CONFIG_POR_TIPO = {
     subtitulo: 'Órdenes de servicio, cortes contratados y equipo de barberos.',
     mostrarVehiculos: false, iconoOperario: '💈',
   },
+  tatuajes: {
+    titulo: 'Tatuajes / Agenda', tabOrdenes: '🎨 Sesiones de Tatuaje', tabEmpleados: '🎨 Artistas',
+    subtitulo: 'Sesiones agendadas, referencias de los clientes y portafolio de tus artistas.',
+    mostrarVehiculos: false, iconoOperario: '🎨',
+  },
 }
 const config = (tipoNegocio) => CONFIG_POR_TIPO[tipoNegocio] ?? {
   titulo: 'Taller', tabOrdenes: '🔧 Órdenes de Servicio', tabEmpleados: '👨‍🔧 Empleados del Taller',
@@ -58,6 +63,7 @@ export default function Taller() {
   const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
   const esLavadero = tipoNegocio === 'lavadero'
   const esBarberia = tipoNegocio === 'barberia'
+  const esTatuajes = tipoNegocio === 'tatuajes'
   const cfg = config(tipoNegocio)
   const [tab, setTab] = useState('ordenes')
 
@@ -86,9 +92,9 @@ export default function Taller() {
         {!esOperario && <BuscadorHistorial mostrarVehiculos={cfg.mostrarVehiculos} />}
       </div>
 
-      {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} esBarberia={esBarberia} iconoOperario={cfg.iconoOperario} />}
+      {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} esBarberia={esBarberia || esTatuajes} iconoOperario={cfg.iconoOperario} />}
       {tab === 'vehiculos' && !esOperario && cfg.mostrarVehiculos && <Vehiculos />}
-      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} esBarberia={esBarberia} />}
+      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} esBarberia={esBarberia} esTatuajes={esTatuajes} />}
     </div>
   )
 }
@@ -849,10 +855,10 @@ function ModalVehiculo({ onClose, onGuardado }) {
 }
 
 /* ============ Empleados del taller ============ */
-function Empleados({ esLavadero, esBarberia }) {
+function Empleados({ esLavadero, esBarberia, esTatuajes }) {
   const [lista, setLista] = useState([])
   const [editando, setEditando] = useState(null) // null | 'nuevo' | empleado
-  const icono = esLavadero ? '🧼' : esBarberia ? '💈' : '👨‍🔧'
+  const icono = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : '👨‍🔧'
 
   const cargar = useCallback(() => api('/empleados').then((r) => setLista(r.data ?? [])).catch(() => {}), [])
   useEffect(() => { cargar() }, [cargar])
@@ -876,6 +882,7 @@ function Empleados({ esLavadero, esBarberia }) {
               <span className="text-xs rounded-full bg-slate-700 px-2 py-0.5">{m.tipo_operario}</span>
             </div>
             <p className="text-sm text-slate-400 mt-1">CC {m.ci_cedula}{m.telefono ? ` · ${m.telefono}` : ''}</p>
+            {m.especialidad && <p className="text-sm text-slate-400">Especialidad: {m.especialidad}</p>}
             {m.comision_default > 0 && (
               <p className="text-sm text-slate-400">Comisión: {m.tipo_comision_default === 'fixed' ? COP(m.comision_default) : `${Number(m.comision_default)}%`}</p>
             )}
@@ -887,15 +894,15 @@ function Empleados({ esLavadero, esBarberia }) {
         ))}
         {lista.length === 0 && (
           <p className="text-slate-500 col-span-2 text-center py-6">
-            {esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : esBarberia ? 'Sin barberos. Crea tu equipo de estilistas.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}
+            {esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : esBarberia ? 'Sin barberos. Crea tu equipo de estilistas.' : esTatuajes ? 'Sin artistas. Crea tu equipo de tatuadores.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}
           </p>
         )}
       </div>
       {editando && (
-        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero} esBarberia={esBarberia}
+        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero} esBarberia={esBarberia} esTatuajes={esTatuajes}
           onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar() }} />
       )}
-      {!esBarberia && (
+      {!esBarberia && !esTatuajes && (
         <p className="text-xs text-slate-500 mt-4">
           💡 Para que {esLavadero ? 'un lavador entre' : 'un mecánico entre'} al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
           <span className="font-semibold"> {esLavadero ? 'Lavador' : 'Mecanico'}</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
@@ -905,17 +912,43 @@ function Empleados({ esLavadero, esBarberia }) {
   )
 }
 
-function ModalEmpleado({ empleado, esLavadero, esBarberia, onClose, onGuardado }) {
+function ModalEmpleado({ empleado, esLavadero, esBarberia, esTatuajes, onClose, onGuardado }) {
   const [tipos, setTipos] = useState([])
   const [form, setForm] = useState({
     nombre: empleado?.nombre ?? '', apellido: empleado?.apellido ?? '',
     ci_cedula: empleado?.ci_cedula ?? '', telefono: empleado?.telefono ?? '',
-    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : esBarberia ? 'barbero' : 'mecanico'),
+    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : esBarberia ? 'barbero' : esTatuajes ? 'tatuador' : 'mecanico'),
+    especialidad: empleado?.especialidad ?? '',
     comision_default: empleado?.comision_default ?? '',
     tipo_comision_default: empleado?.tipo_comision_default ?? 'percentage',
   })
+  const [galeria, setGaleria] = useState(empleado?.galeria ?? [])
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
 
   useEffect(() => { api('/empleados/tipos').then((r) => setTipos(r.tipos ?? [])).catch(() => {}) }, [])
+
+  async function agregarFotoPortafolio(file) {
+    if (!file || !empleado?.id) return
+    setSubiendoFoto(true)
+    try {
+      const fd = new FormData()
+      fd.append('imagen', file)
+      const item = await api(`/empleados/${empleado.id}/galeria`, { method: 'POST', body: fd, isForm: true })
+      setGaleria((g) => [...g, item])
+    } catch (err) {
+      alert(err.message || 'No se pudo subir la foto.')
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
+  async function quitarFotoPortafolio(imagenId) {
+    if (!empleado?.id) return
+    try {
+      await api(`/empleados/${empleado.id}/galeria/${imagenId}`, { method: 'DELETE' })
+      setGaleria((g) => g.filter((f) => f.id !== imagenId))
+    } catch (err) { alert(err.message || 'No se pudo quitar la foto.') }
+  }
 
   async function guardar(e) {
     e.preventDefault()
@@ -956,6 +989,11 @@ function ModalEmpleado({ empleado, esLavadero, esBarberia, onClose, onGuardado }
                 {tipos.map((t) => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
               </select>
             </label>
+            {form.tipo_operario === 'tatuador' && (
+              <label className="block text-sm text-slate-300">Especialidad
+                <input value={form.especialidad} onChange={set('especialidad')} placeholder="Ej. Línea fina, Realismo, Blackwork…" className="input mt-1" />
+              </label>
+            )}
             <label className="block text-sm text-slate-300">Comisión por defecto
               <div className="flex gap-1 mt-1">
                 <input type="number" min="0" step="any" value={form.comision_default} onChange={set('comision_default')} className="input !mt-0" placeholder="0" />
@@ -966,6 +1004,27 @@ function ModalEmpleado({ empleado, esLavadero, esBarberia, onClose, onGuardado }
               </div>
             </label>
           </div>
+
+          {empleado?.id && form.tipo_operario === 'tatuador' && (
+            <div>
+              <p className="text-sm text-slate-300 mb-1">Portafolio (trabajos previos)</p>
+              <div className="flex flex-wrap gap-2">
+                {galeria.map((f) => (
+                  <div key={f.id} className="relative group">
+                    <img src={f.url} alt="" className="h-16 w-16 rounded-lg object-cover border border-slate-700" />
+                    <button type="button" onClick={() => quitarFotoPortafolio(f.id)}
+                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs leading-5">✕</button>
+                  </div>
+                ))}
+                <label className="h-16 w-16 rounded-lg border border-dashed border-slate-600 flex items-center justify-center text-slate-500 hover:text-slate-300 hover:border-slate-500 cursor-pointer text-xs text-center">
+                  {subiendoFoto ? '…' : '+ Foto'}
+                  <input type="file" accept="image/*" className="hidden" disabled={subiendoFoto}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarFotoPortafolio(f); e.target.value = '' }} />
+                </label>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
             <button type="submit" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Guardar</button>

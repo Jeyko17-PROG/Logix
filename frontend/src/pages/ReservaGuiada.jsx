@@ -37,7 +37,7 @@ function Progreso({ paso }) {
  * paso a paso (servicio → especialista → fecha/hora → datos), pensado para
  * completarse desde el celular en menos de un minuto tras escanear el QR.
  */
-export default function ReservaGuiada({ base, negocio, esSpa }) {
+export default function ReservaGuiada({ base, negocio, esSpa, esTatuaje }) {
   const [paso, setPaso] = useState(0)
   const [servicios, setServicios] = useState([])
   const [serviciosSel, setServiciosSel] = useState([]) // array de objetos servicio elegidos
@@ -46,8 +46,9 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
   const [slots, setSlots] = useState(null)
   const [horaSel, setHoraSel] = useState(null)
-  const [form, setForm] = useState({ nombre_completo: '', telefono: '', email: '', nota: '' })
-  const [imagenRefSel, setImagenRefSel] = useState(null) // url de la foto de referencia elegida (ej. corte deseado)
+  const [form, setForm] = useState({ nombre_completo: '', telefono: '', email: '', nota: '', zona_cuerpo: '', tamano_tatuaje: '' })
+  const [imagenRefSel, setImagenRefSel] = useState(null) // url de la foto de referencia elegida (ej. corte deseado, de la galería)
+  const [imagenPropia, setImagenPropia] = useState(null) // archivo que el cliente sube (ej. la idea de tatuaje que quiere)
   const [confirmada, setConfirmada] = useState(null)
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(false)
@@ -83,22 +84,38 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
     e.preventDefault()
     setError(''); setCargando(true)
     try {
-      const body = {
+      const campos = {
         nombre_completo: form.nombre_completo,
         telefono: form.telefono,
         email: form.email || null,
         nota: form.nota || null,
         operables_employee_id: profesionalSel?.id || null,
-        imagen_referencia_url: imagenRefSel || null,
+        imagen_referencia_url: imagenPropia ? null : (imagenRefSel || null), // si sube su propia foto, esa manda
+        zona_cuerpo: esTatuaje ? form.zona_cuerpo : null,
+        tamano_tatuaje: esTatuaje ? form.tamano_tatuaje || null : null,
         inicio: horaSel,
       }
       if (esSpa && serviciosSel.length > 1) {
-        body.servicios = serviciosSel.map((s) => ({ servicio_id: s.id, precio_unitario: s.precio, duracion_min: s.duracion_min }))
-        body.servicio_id = serviciosSel[0].id
+        campos.servicios = serviciosSel.map((s) => ({ servicio_id: s.id, precio_unitario: s.precio, duracion_min: s.duracion_min }))
+        campos.servicio_id = serviciosSel[0].id
       } else {
-        body.servicio_id = serviciosSel[0]?.id ?? null
+        campos.servicio_id = serviciosSel[0]?.id ?? null
       }
-      const r = await api(`${base}/reservar`, { method: 'POST', body })
+
+      let r
+      if (imagenPropia) {
+        // multipart: la foto propia del cliente viaja como archivo real, no como URL.
+        const fd = new FormData()
+        Object.entries(campos).forEach(([k, v]) => {
+          if (v === null || v === undefined) return
+          if (k === 'servicios') fd.append(k, JSON.stringify(v))
+          else fd.append(k, v)
+        })
+        fd.append('imagen_referencia', imagenPropia)
+        r = await api(`${base}/reservar`, { method: 'POST', body: fd, isForm: true })
+      } else {
+        r = await api(`${base}/reservar`, { method: 'POST', body: campos })
+      }
       setConfirmada(r.cita)
     } catch (err) { setError(err.message || 'No se pudo confirmar la reserva.') }
     finally { setCargando(false) }
@@ -120,6 +137,7 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
           <p className="text-sm text-slate-400">Servicio(s)</p>
           <p className="font-semibold mb-2">{serviciosSel.map((s) => s.nombre).join(' + ') || 'Servicio'}</p>
           {profesionalSel && (<><p className="text-sm text-slate-400">Especialista</p><p className="font-semibold mb-2">{profesionalSel.nombre} {profesionalSel.apellido}</p></>)}
+          {confirmada.zona_cuerpo && (<><p className="text-sm text-slate-400">Zona / tamaño</p><p className="font-semibold mb-2">{confirmada.zona_cuerpo}{confirmada.tamano_tatuaje ? ` · ${confirmada.tamano_tatuaje}` : ''}</p></>)}
           <p className="text-sm text-slate-400">Fecha y hora</p>
           <p className="font-semibold capitalize">{fmtFecha(confirmada.inicio)} · {fmtHora(confirmada.inicio)}</p>
           {totalPrecio > 0 && <p className="text-emerald-400 font-bold mt-2">{COP(totalPrecio)}</p>}
@@ -140,8 +158,8 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
         </div>
         <button onClick={() => {
           setConfirmada(null); setPaso(0); setServiciosSel([]); setProfesionalSel(undefined)
-          setSlots(null); setHoraSel(null); setForm({ nombre_completo: '', telefono: '', email: '', nota: '' })
-          setImagenRefSel(null)
+          setSlots(null); setHoraSel(null); setForm({ nombre_completo: '', telefono: '', email: '', nota: '', zona_cuerpo: '', tamano_tatuaje: '' })
+          setImagenRefSel(null); setImagenPropia(null)
         }} className="mt-4 text-sm text-slate-400 hover:text-white">Hacer otra reserva</button>
       </div>
     )
@@ -200,7 +218,17 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
                 <div className="h-11 w-11 rounded-full bg-emerald-700 flex items-center justify-center text-sm font-bold shrink-0">
                   {(p.nombre?.[0] ?? '').toUpperCase()}{(p.apellido?.[0] ?? '').toUpperCase()}
                 </div>
-                <p className="font-semibold text-sm">{p.nombre} {p.apellido}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm">{p.nombre} {p.apellido}</p>
+                  {p.especialidad && <p className="text-xs text-slate-400">{p.especialidad}</p>}
+                  {p.galeria?.length > 0 && (
+                    <div className="flex gap-1 mt-1">
+                      {p.galeria.slice(0, 4).map((f) => (
+                        <img key={f.id} src={f.url} alt="" className="h-8 w-8 rounded object-cover" />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </button>
             ))}
             {profesionales.length === 0 && <p className="text-slate-500 text-sm">Este negocio aún no registró especialistas; te asignaremos uno automáticamente.</p>}
@@ -256,13 +284,28 @@ export default function ReservaGuiada({ base, negocio, esSpa }) {
               <p className="text-sm font-medium mb-1">📸 ¿Viste algo que te gustó? Elige una referencia (opcional)</p>
               <div className="flex flex-wrap gap-2">
                 {serviciosSel[0].galeria.map((f) => (
-                  <button type="button" key={f.id} onClick={() => setImagenRefSel(imagenRefSel === f.url ? null : f.url)}
+                  <button type="button" key={f.id} onClick={() => { setImagenRefSel(imagenRefSel === f.url ? null : f.url); setImagenPropia(null) }}
                     className={`rounded-lg overflow-hidden border-2 transition ${imagenRefSel === f.url ? 'border-emerald-500' : 'border-transparent'}`}>
                     <img src={f.url} alt="" className="h-16 w-16 object-cover" />
                   </button>
                 ))}
               </div>
             </div>
+          )}
+
+          {esTatuaje && (
+            <>
+              <input required placeholder="Zona del cuerpo (ej. Antebrazo)" value={form.zona_cuerpo}
+                onChange={(e) => setForm({ ...form, zona_cuerpo: e.target.value })} className="input" />
+              <input placeholder="Tamaño aproximado (ej. 10x10 cm)" value={form.tamano_tatuaje}
+                onChange={(e) => setForm({ ...form, tamano_tatuaje: e.target.value })} className="input" />
+              <label className="block">
+                <span className="text-sm font-medium mb-1 block">📸 Sube la idea/foto de tu tatuaje (opcional)</span>
+                <input type="file" accept="image/*" className="input"
+                  onChange={(e) => { setImagenPropia(e.target.files?.[0] ?? null); setImagenRefSel(null) }} />
+                {imagenPropia && <span className="text-xs text-emerald-400 mt-1 block">✓ {imagenPropia.name}</span>}
+              </label>
+            </>
           )}
 
           <input required placeholder="Tu nombre completo" value={form.nombre_completo}

@@ -104,8 +104,10 @@ class PaymentWebhookController extends Controller
                 if ($plan) {
                     $old = $user->plan?->nombre;
                     $user->update(['plan_id' => $plan->id]);
-                    // Multiempresa: el plan efectivo vive en la empresa.
-                    $user->empresaDeCobro()?->update(['plan_id' => $plan->id]);
+                    // Multiempresa: el plan efectivo vive en la empresa GOBERNANTE
+                    // del grupo (si el usuario tiene negocios vinculados, un solo
+                    // plan pagado cubre a todos).
+                    $user->empresaDeCobro()?->empresaGobernante()?->update(['plan_id' => $plan->id]);
                     $user->renovarMembresia();
                     Auditoria::registrar(null, $user->id, 'PAGO', strtoupper($provider) . '_WEBHOOK', $old, $plan->nombre);
                     $tx->user_id = $user->id;

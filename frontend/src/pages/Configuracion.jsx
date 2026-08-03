@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 export default function Configuracion() {
+  const { user, setUser } = useAuth()
+  const [perfilPublico, setPerfilPublico] = useState({
+    politicas: '', instagram_url: '', tiktok_url: '', facebook_url: '', whatsapp_url: '',
+  })
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false)
   const [sucursales, setSucursales] = useState([])
   const [bodegaId, setBodegaId] = useState('') // '' = horario/bloqueos generales de la empresa
   const [horarios, setHorarios] = useState([])
@@ -16,6 +22,33 @@ export default function Configuracion() {
   useEffect(() => {
     api('/bodegas').then(setSucursales).catch(() => {}) // multisucursal; si no aplica, queda vacío
   }, [])
+
+  // Precarga las políticas/redes sociales del negocio desde /me.
+  useEffect(() => {
+    const info = user?.empresa_info
+    if (!info) return
+    setPerfilPublico({
+      politicas: info.politicas ?? '',
+      instagram_url: info.instagram_url ?? '',
+      tiktok_url: info.tiktok_url ?? '',
+      facebook_url: info.facebook_url ?? '',
+      whatsapp_url: info.whatsapp_url ?? '',
+    })
+  }, [user?.empresa_info])
+
+  async function guardarPerfilPublico() {
+    setGuardandoPerfil(true)
+    try {
+      await api('/perfil/publico', { method: 'PUT', body: perfilPublico })
+      const me = await api('/me')
+      setUser(me)
+      flash('Perfil público guardado.')
+    } catch (err) {
+      alert(err.message || 'No se pudo guardar.')
+    } finally {
+      setGuardandoPerfil(false)
+    }
+  }
 
   async function cargar() {
     const q = bodegaId ? `?bodega_id=${bodegaId}` : ''
@@ -117,6 +150,39 @@ export default function Configuracion() {
           Crea y edita tus servicios (con categoría, precio, imagen y emoji) desde{' '}
           <Link to="/servicios" className="text-emerald-400 hover:underline">Servicios</Link> en el menú.
         </p>
+      </section>
+
+      {/* Portal público: políticas y redes sociales (aparecen en el enlace del QR) */}
+      <section>
+        <h2 className="font-semibold mb-2">Portal público y redes sociales</h2>
+        <p className="text-sm text-slate-400 mb-3">
+          Se muestran a tus clientes cuando escanean tu código QR o entran a tu enlace de reservas.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <label className="text-sm">Instagram
+            <input placeholder="https://instagram.com/tunegocio" value={perfilPublico.instagram_url}
+              onChange={(e) => setPerfilPublico({ ...perfilPublico, instagram_url: e.target.value })} className="input mt-1" />
+          </label>
+          <label className="text-sm">TikTok
+            <input placeholder="https://tiktok.com/@tunegocio" value={perfilPublico.tiktok_url}
+              onChange={(e) => setPerfilPublico({ ...perfilPublico, tiktok_url: e.target.value })} className="input mt-1" />
+          </label>
+          <label className="text-sm">Facebook
+            <input placeholder="https://facebook.com/tunegocio" value={perfilPublico.facebook_url}
+              onChange={(e) => setPerfilPublico({ ...perfilPublico, facebook_url: e.target.value })} className="input mt-1" />
+          </label>
+          <label className="text-sm">WhatsApp
+            <input placeholder="https://wa.me/573001234567" value={perfilPublico.whatsapp_url}
+              onChange={(e) => setPerfilPublico({ ...perfilPublico, whatsapp_url: e.target.value })} className="input mt-1" />
+          </label>
+        </div>
+        <label className="text-sm block mb-3">Políticas del negocio (requisitos, abono, cancelación…)
+          <textarea rows="4" placeholder="Ej. Mayor de 18 años. No consumir alcohol 24h antes. Se requiere abono del 30% para confirmar la cita."
+            value={perfilPublico.politicas} onChange={(e) => setPerfilPublico({ ...perfilPublico, politicas: e.target.value })} className="input mt-1" />
+        </label>
+        <button onClick={guardarPerfilPublico} disabled={guardandoPerfil} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
+          {guardandoPerfil ? 'Guardando…' : 'Guardar'}
+        </button>
       </section>
 
       {/* Bloqueos */}

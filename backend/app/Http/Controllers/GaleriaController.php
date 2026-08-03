@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Archivo;
 use App\Models\GaleriaImagen;
+use App\Models\OperablesEmployee;
 use App\Models\Producto;
 use App\Models\Servicio;
 use App\Services\CloudinaryUploader;
@@ -40,6 +41,17 @@ class GaleriaController extends Controller
     public function eliminarServicio(Servicio $servicio, GaleriaImagen $imagen)
     {
         return $this->eliminar($servicio, $imagen);
+    }
+
+    /** Portafolio de un artista/operario (ej. trabajos previos de un tatuador). */
+    public function subirArtista(Request $request, OperablesEmployee $operablesEmployee)
+    {
+        return $this->subir($request, $operablesEmployee, "logix/artistas/artista_{$operablesEmployee->id}/galeria");
+    }
+
+    public function eliminarArtista(OperablesEmployee $operablesEmployee, GaleriaImagen $imagen)
+    {
+        return $this->eliminar($operablesEmployee, $imagen);
     }
 
     private function subir(Request $request, Model $imageable, string $carpeta)

@@ -145,6 +145,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
     Route::post('/perfil/foto', [ProfileController::class, 'uploadFoto']);
     Route::post('/perfil/logo-empresa', [ProfileController::class, 'subirLogoEmpresa']);
     Route::put('/perfil/logo-emoji', [ProfileController::class, 'actualizarLogoEmoji']);
+    Route::put('/perfil/publico', [ProfileController::class, 'actualizarPerfilPublico']);
     Route::put('/perfil/password', [ProfileController::class, 'cambiarPassword']);
 
     // Catálogo de planes (visible para usuarios autenticados: dashboard, "actualizar plan")
@@ -385,6 +386,8 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         // Empleados operables (mecánicos, estilistas, técnicos, etc)
         Route::get('empleados/tipos', [OperablesEmployeeController::class, 'tipos']);
         Route::apiResource('empleados', OperablesEmployeeController::class, ['parameters' => ['empleados' => 'operablesEmployee']]);
+        Route::post('empleados/{operablesEmployee}/galeria', [GaleriaController::class, 'subirArtista']);
+        Route::delete('empleados/{operablesEmployee}/galeria/{imagen}', [GaleriaController::class, 'eliminarArtista']);
 
         // Activos/Vehículos (motos, autos, celulares, etc)
         Route::get('activos/tipos', [AssetVehicleController::class, 'tipos']);

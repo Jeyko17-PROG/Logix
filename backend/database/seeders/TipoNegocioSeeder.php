@@ -23,8 +23,8 @@ class TipoNegocioSeeder extends Seeder
             'clientes', 'facturacion', 'pdf', 'correos', 'exportacion', 'reportes', 'caja',
         ];
 
-        // "Todos los módulos" excepto los exclusivos de restaurante, lavadero o barbería.
-        $todosSinRestaurante = array_values(array_diff(array_keys(Funcionalidades::CATALOGO), ['mesas', 'cocina', 'lavadero', 'barberia']));
+        // "Todos los módulos" excepto los exclusivos de restaurante, lavadero, barbería o tatuajes.
+        $todosSinRestaurante = array_values(array_diff(array_keys(Funcionalidades::CATALOGO), ['mesas', 'cocina', 'lavadero', 'barberia', 'tatuajes']));
 
         $tipos = [
             ['clave' => 'taller_motos', 'nombre' => 'Taller de motos', 'orden' => 1,
@@ -45,6 +45,11 @@ class TipoNegocioSeeder extends Seeder
             // órdenes con vehículo/comisiones que sí usan lavadero y barbería).
             ['clave' => 'spa', 'nombre' => 'Spa / Estética de belleza', 'orden' => 8,
                 'modulos_default' => array_merge($comunes, ['agenda', 'reservas', 'qr', 'productos', 'inventario'])],
+            // Estudio de tatuajes: mismo esquema que barbería (artistas = operables_employees,
+            // agenda de citas con foto de referencia y zona/tamaño), más catálogo de productos
+            // (cuidado post-tatuaje, merch) e inventario.
+            ['clave' => 'tatuajes', 'nombre' => 'Estudio de tatuajes', 'orden' => 9,
+                'modulos_default' => array_merge($comunes, ['servicios', 'tatuajes', 'agenda', 'reservas', 'qr', 'productos', 'inventario'])],
             ['clave' => 'otro', 'nombre' => 'Otro negocio', 'orden' => 99,
                 'modulos_default' => $todosSinRestaurante],
         ];

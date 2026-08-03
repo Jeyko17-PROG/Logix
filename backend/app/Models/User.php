@@ -152,16 +152,20 @@ class User extends Authenticatable
     }
 
     /**
-     * Empresa responsable del cobro (la del usuario, resuelta también para
-     * empleados). Si tiene negocios vinculados ("Mis negocios"), devuelve la
-     * empresa GOBERNANTE del grupo (la más antigua) — un solo plan cubre a
-     * todos los negocios vinculados de la misma persona.
+     * Empresa del usuario (resuelta también para empleados). Es SIEMPRE la
+     * propia — identidad, nombre, tipo de negocio, logo y estado operativo
+     * nunca deben "saltar" a otro negocio vinculado. Para lo que sí se
+     * comparte entre negocios vinculados (plan, membresía, cupos), los
+     * métodos de Empresa (limiteClientesEfectivo, membresiaVencida,
+     * clientesUsados, etc.) ya resuelven internamente la empresa gobernante
+     * del grupo vía Empresa::empresaGobernante() — no hace falta redirigir
+     * esta fachada. Donde de verdad se necesite la gobernante explícitamente
+     * (ej. escribir el plan), se llama `->empresaGobernante()` aparte.
      */
     public function empresaDeCobro(): ?Empresa
     {
         $id = $this->empresaId();
-        $empresa = $id ? Empresa::withTrashed()->find($id) : null;
-        return $empresa?->empresaGobernante() ?? $empresa;
+        return $id ? Empresa::withTrashed()->find($id) : null;
     }
 
     /**
@@ -226,7 +230,11 @@ class User extends Authenticatable
             'codigo_activacion_intentos' => 0,
         ])->save();
 
-        $empresa = $this->empresaDeCobro();
+        // La prueba gratis (o el plan pagado) se comparte entre negocios
+        // vinculados: se revisa/arranca sobre la empresa GOBERNANTE del
+        // grupo, no sobre esta empresa nueva (que no debe tener su propio
+        // reloj de 15 días independiente si ya hay un grupo con plan activo).
+        $empresa = $this->empresaDeCobro()?->empresaGobernante();
         if ($empresa && $empresa->modo_cobro === 'prueba' && ! $empresa->membresia_vence_at) {
             $empresa->forceFill(['membresia_vence_at' => now()->addDays(15)])->save();
         }
@@ -275,10 +283,10 @@ class User extends Authenticatable
         return (int) ($this->plan?->limite_clientes ?? 0);
     }
 
-    /** Plan efectivo: el de la empresa (o el del usuario si aún no tiene empresa). */
+    /** Plan efectivo: el de la empresa gobernante del grupo (o el del usuario si aún no tiene empresa). */
     public function planEfectivo(): ?Plan
     {
-        return $this->empresaDeCobro()?->plan ?? $this->plan;
+        return $this->empresaDeCobro()?->planEfectivo() ?? $this->plan;
     }
 
     /**
