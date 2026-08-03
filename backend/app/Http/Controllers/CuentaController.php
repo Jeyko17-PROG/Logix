@@ -85,10 +85,15 @@ class CuentaController extends Controller
     /**
      * "Mis negocios" → "Crear otro negocio": el dueño ya logueado registra un
      * negocio adicional sin volver a llenar el formulario público completo
-     * (reutiliza su nombre/documento/teléfono). Igual que cualquier registro,
-     * la cuenta nace en PENDIENTE_ACTIVACION — solo el super-admin puede
-     * activarla con el código de 6 dígitos (mismo control que hoy, sin
-     * atajos); apenas se activa queda vinculada y visible en "Mis negocios".
+     * (reutiliza su nombre/documento/teléfono). No pide correo ni contraseña
+     * nuevos — como siempre se entra a este negocio con "Entrar" desde "Mis
+     * negocios" (misma sesión, sin volver a loguear), esas credenciales solo
+     * existen internamente para cumplir el requisito técnico de que cada
+     * negocio es una cuenta aparte; se generan solas y nunca hace falta
+     * escribirlas. Igual que cualquier registro, la cuenta nace en
+     * PENDIENTE_ACTIVACION — solo el super-admin puede activarla desde su
+     * panel (sin atajos de seguridad); apenas se activa queda visible y
+     * disponible en "Mis negocios".
      */
     public function nuevoNegocio(Request $request): JsonResponse
     {
@@ -101,21 +106,16 @@ class CuentaController extends Controller
             'name' => ['nullable', 'string', 'min:3', 'max:100', 'regex:/^[\pL\d\s.\'\-]+$/u'],
             'nombre_empresa' => ['required', 'string', 'min:3', 'max:100', 'regex:/^[\pL\d\s.\'\-&]+$/u'],
             'tipo_negocio_id' => ['required', 'exists:tipos_negocio,id'],
-            'email' => ['required', 'email:rfc,dns', 'unique:users,email'],
-            // Opcional: si no la escribe, se genera una temporal (igual que al crear un empleado).
-            'password' => ['nullable', 'string', 'min:8'],
             'telefono' => ['nullable', 'string', 'regex:/^[0-9+\s\-]{7,20}$/'],
         ]);
-
-        $passwordPlano = $data['password'] ?? Str::password(12);
 
         [$nuevo] = $this->auth->crearNegocio([
             'name' => $data['name'] ?? $actual->name,
             'tipo_documento' => $actual->tipo_documento,
             'numero_documento' => $actual->numero_documento,
             'telefono' => $data['telefono'] ?? $actual->telefono,
-            'email' => $data['email'],
-            'password' => $passwordPlano,
+            'email' => $this->generarEmailInterno($actual, $data['nombre_empresa']),
+            'password' => Str::password(24), // nunca se usa: se entra con "Entrar" desde Mis negocios
             'nombre_empresa' => $data['nombre_empresa'],
             'tipo_negocio_id' => $data['tipo_negocio_id'],
         ]);
@@ -124,10 +124,29 @@ class CuentaController extends Controller
         NegocioVinculado::firstOrCreate(['user_id' => $actual->id, 'vinculado_user_id' => $nuevo->id]);
 
         return response()->json([
-            'message' => 'Negocio creado. Pendiente de activación: un asesor de Fénix te compartirá el código de 6 dígitos.',
-            'password_temporal' => $data['password'] ? null : $passwordPlano,
+            'message' => 'Negocio creado. Queda "Pendiente de activación" hasta que el super-admin lo active desde su panel.',
             'negocios' => $this->misNegocios($request)->getData(),
         ], 201);
+    }
+
+    /**
+     * Genera un correo único para el nuevo negocio a partir del correo real
+     * del dueño (ej. dueño+barberia@correo.com), solo para satisfacer la
+     * restricción de que cada negocio es una fila de `users` con email
+     * único — nadie necesita conocerlo ni escribirlo jamás.
+     */
+    private function generarEmailInterno(User $actual, string $nombreNegocio): string
+    {
+        [$local, $dominio] = array_pad(explode('@', $actual->email, 2), 2, 'fenix.local');
+        $base = $local . '+' . Str::slug($nombreNegocio, '');
+
+        $intento = 0;
+        do {
+            $email = $intento === 0 ? "{$base}@{$dominio}" : "{$base}{$intento}@{$dominio}";
+            $intento++;
+        } while (User::where('email', $email)->exists());
+
+        return $email;
     }
 
     /** Deja de alternar hacia esa cuenta (no la elimina, solo quita el acceso directo). */

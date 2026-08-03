@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 
-const NEGOCIO_VACIO = { name: '', nombre_empresa: '', tipo_negocio_id: '', email: '', telefono: '', password: '' }
+const NEGOCIO_VACIO = { name: '', nombre_empresa: '', tipo_negocio_id: '', telefono: '' }
 
 const ESTADO_COLOR = {
   ACTIVO: 'bg-emerald-500/15 text-emerald-400',
@@ -72,8 +72,8 @@ export default function MisNegocios() {
   async function crear(e) {
     e.preventDefault(); setError(''); setCreando(true)
     try {
-      const r = await crearNegocio({ ...nuevoNegocio, password: nuevoNegocio.password || undefined })
-      setCreado({ email: nuevoNegocio.email, password: r.password_temporal })
+      await crearNegocio(nuevoNegocio)
+      setCreado({ nombre: nuevoNegocio.nombre_empresa })
       setMostrarCrear(false); setNuevoNegocio(NEGOCIO_VACIO)
       cargar()
     } catch (err) {
@@ -119,9 +119,8 @@ export default function MisNegocios() {
 
         {creado && (
           <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-500/10 px-4 py-3 text-sm">
-            <p className="font-semibold text-emerald-300">Negocio creado: {creado.email}</p>
-            {creado.password && <p className="text-slate-300">Contraseña: <span className="font-mono">{creado.password}</span></p>}
-            <p className="text-slate-400 text-xs mt-1">Queda "Pendiente" hasta que un asesor de Fénix te dé el código de activación de 6 dígitos.</p>
+            <p className="font-semibold text-emerald-300">Negocio creado: {creado.nombre}</p>
+            <p className="text-slate-400 text-xs mt-1">Queda "Pendiente" hasta que el super-admin de Fénix lo active. No necesitas otro correo ni otra contraseña: entra a este negocio con el botón "Entrar" de aquí mismo.</p>
             <button onClick={() => setCreado(null)} className="mt-1 text-xs text-slate-400 hover:underline">Cerrar</button>
           </div>
         )}
@@ -159,7 +158,7 @@ export default function MisNegocios() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
                 <h2 className="text-sm font-semibold text-slate-300 mb-2">Crear otro negocio</h2>
-                <p className="text-xs text-slate-500 mb-3">Registra un negocio nuevo con tus mismos datos personales, sin llenar todo el formulario de nuevo.</p>
+                <p className="text-xs text-slate-500 mb-3">Registra un negocio nuevo con tu mismo correo y contraseña — solo pide el nombre y el tipo de negocio.</p>
                 {!mostrarCrear ? (
                   <button onClick={abrirCrear} className="rounded-lg bg-emerald-700 hover:bg-emerald-600 px-4 py-2 text-sm font-semibold">+ Crear otro negocio</button>
                 ) : (
@@ -172,10 +171,8 @@ export default function MisNegocios() {
                       <option value="">Tipo de negocio…</option>
                       {tiposNegocio.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                     </select>
-                    <input type="email" required placeholder="Correo del nuevo negocio" value={nuevoNegocio.email}
-                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, email: e.target.value })} className="input" />
-                    <input type="password" placeholder="Contraseña (opcional, se genera una)" value={nuevoNegocio.password}
-                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, password: e.target.value })} className="input" />
+                    <input placeholder="Teléfono (opcional)" value={nuevoNegocio.telefono}
+                      onChange={(e) => setNuevoNegocio({ ...nuevoNegocio, telefono: e.target.value })} className="input" />
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setMostrarCrear(false)} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
                       <button disabled={creando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold flex-1">
