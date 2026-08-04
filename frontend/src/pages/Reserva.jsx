@@ -10,9 +10,8 @@ const fmtFecha = (iso) => new Date(iso).toLocaleString('es', { dateStyle: 'mediu
 const iconoVehiculo = (tipo) => (tipo === 'moto' ? '🏍️' : tipo === 'carro' ? '🚗' : '')
 
 // Ícono por defecto según el rubro del negocio, mientras no suba su propio logo.
-// tatuajes usa una imagen propia (máquina de tatuar) en vez de un emoji;
-// colócala en frontend/public/icons/tatuajes-maquina.png.
-const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈', spa: '💆', tatuajes: '/icons/tatuajes-maquina.png' }
+// tatuajes usa una imagen propia (máquina de tatuar) en vez de un emoji.
+const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈', spa: '💆', tatuajes: '/tatto.png' }
 
 // Ícono decorativo por categoría de servicio (spa/estética), por palabra clave; genérico si no calza ninguna.
 function iconoCategoria(nombre) {

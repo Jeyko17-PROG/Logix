@@ -5,9 +5,8 @@ import { useFeatures } from '../context/FeaturesContext'
 import { api } from '../api/client'
 
 // Ícono propio del rubro de tatuajes (máquina de tatuar). Reemplaza el 🎨
-// genérico en los lugares donde antes se usaba ese emoji. Coloca el archivo
-// del logo en frontend/public/icons/tatuajes-maquina.png para que aparezca.
-const ICONO_MAQUINA_TATUAR = '/icons/tatuajes-maquina.png'
+// genérico en los lugares donde antes se usaba ese emoji.
+const ICONO_MAQUINA_TATUAR = '/tatto.png'
 
 /**
  * Ícono de un ítem del menú: casi siempre es un emoji de texto, pero admite
