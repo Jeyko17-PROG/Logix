@@ -10,7 +10,9 @@ const fmtFecha = (iso) => new Date(iso).toLocaleString('es', { dateStyle: 'mediu
 const iconoVehiculo = (tipo) => (tipo === 'moto' ? '🏍️' : tipo === 'carro' ? '🚗' : '')
 
 // Ícono por defecto según el rubro del negocio, mientras no suba su propio logo.
-const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈', spa: '💆', tatuajes: '🎨' }
+// tatuajes usa una imagen propia (máquina de tatuar) en vez de un emoji;
+// colócala en frontend/public/icons/tatuajes-maquina.png.
+const ICONO_TIPO_NEGOCIO = { lavadero: '🧼', barberia: '💈', spa: '💆', tatuajes: '/icons/tatuajes-maquina.png' }
 
 // Ícono decorativo por categoría de servicio (spa/estética), por palabra clave; genérico si no calza ninguna.
 function iconoCategoria(nombre) {
@@ -50,9 +52,17 @@ export default function Reserva() {
           <img src={negocio.logo_url} alt={negocio.nombre || 'Fénix'}
             className="h-16 w-16 object-contain mx-auto mb-3 rounded-lg drop-shadow-lg"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
-        ) : (negocio?.logo_emoji || ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio]) ? (
+        ) : negocio?.logo_emoji ? (
           <div className="h-16 w-16 mx-auto mb-3 rounded-lg bg-slate-800 flex items-center justify-center text-4xl drop-shadow-lg">
-            {negocio.logo_emoji || ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]}
+            {negocio.logo_emoji}
+          </div>
+        ) : typeof ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio] === 'string' && ICONO_TIPO_NEGOCIO[negocio.tipo_negocio].startsWith('/') ? (
+          <img src={ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]} alt={negocio?.nombre || ''}
+            className="h-16 w-16 object-contain mx-auto mb-3 rounded-lg drop-shadow-lg"
+            onError={(e) => { e.currentTarget.style.display = 'none' }} />
+        ) : ICONO_TIPO_NEGOCIO[negocio?.tipo_negocio] ? (
+          <div className="h-16 w-16 mx-auto mb-3 rounded-lg bg-slate-800 flex items-center justify-center text-4xl drop-shadow-lg">
+            {ICONO_TIPO_NEGOCIO[negocio.tipo_negocio]}
           </div>
         ) : (
           <img src="/logo-fenix.png" alt="Fénix"

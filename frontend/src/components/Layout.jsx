@@ -4,6 +4,24 @@ import { useAuth } from '../context/AuthContext'
 import { useFeatures } from '../context/FeaturesContext'
 import { api } from '../api/client'
 
+// Ícono propio del rubro de tatuajes (máquina de tatuar). Reemplaza el 🎨
+// genérico en los lugares donde antes se usaba ese emoji. Coloca el archivo
+// del logo en frontend/public/icons/tatuajes-maquina.png para que aparezca.
+const ICONO_MAQUINA_TATUAR = '/icons/tatuajes-maquina.png'
+
+/**
+ * Ícono de un ítem del menú: casi siempre es un emoji de texto, pero admite
+ * una imagen propia (ej. el logo de una máquina de tatuar) cuando el valor
+ * es una ruta ("/icons/algo.png") en vez de un emoji.
+ */
+function IconoMenu({ valor, className = 'text-base' }) {
+  if (typeof valor === 'string' && valor.startsWith('/')) {
+    return <img src={valor} alt="" className={`${className} w-[1em] h-[1em] object-contain inline-block`}
+      onError={(e) => { e.currentTarget.style.display = 'none' }} />
+  }
+  return <span className={className}>{valor}</span>
+}
+
 function Campana() {
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState([])
@@ -190,11 +208,11 @@ export default function Layout() {
   const LABEL_POR_TIPO = {
     lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
     barberia: { label: 'Barbería / Agenda', icon: '💈' },
-    tatuajes: { label: 'Tatuajes / Agenda', icon: '🎨' },
+    tatuajes: { label: 'Tatuajes / Agenda', icon: ICONO_MAQUINA_TATUAR },
   }
   // El ícono de "Servicios" (catálogo de estilos/tratamientos) también cambia
   // según el rubro — antes siempre mostraba 💈 (barbería) sin importar el tipo.
-  const ICONO_SERVICIOS_POR_TIPO = { barberia: '💈', tatuajes: '🎨', spa: '💆' }
+  const ICONO_SERVICIOS_POR_TIPO = { barberia: '💈', tatuajes: ICONO_MAQUINA_TATUAR, spa: '💆' }
   const OVERRIDES_POR_RUTA = {
     '/taller': LABEL_POR_TIPO[tipoNegocio],
     '/servicios': ICONO_SERVICIOS_POR_TIPO[tipoNegocio] ? { icon: ICONO_SERVICIOS_POR_TIPO[tipoNegocio] } : null,
@@ -279,7 +297,7 @@ export default function Layout() {
               <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{seccion.grupo}</p>
               {seccion.items.map((m) => (
                 <NavLink key={m.to} to={m.to} end={m.end} onClick={() => setAbierto(false)} className={linkClass}>
-                  <span className="text-base">{m.icon}</span>{m.label}
+                  <IconoMenu valor={m.icon} />{m.label}
                 </NavLink>
               ))}
             </div>
