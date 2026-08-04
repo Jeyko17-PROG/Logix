@@ -68,7 +68,7 @@ const MENU = [
   {
     grupo: 'Taller y POS',
     items: [
-      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia' } },
+      { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia', tatuajes: 'tatuajes' } },
       { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloTipo: 'lavadero' },
       { to: '/servicios', label: 'Servicios', icon: '💈', feat: 'agenda' },
       // Mismo módulo que "Productos" en Inventario: el catálogo con fotos y
@@ -190,6 +190,14 @@ export default function Layout() {
   const LABEL_POR_TIPO = {
     lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
     barberia: { label: 'Barbería / Agenda', icon: '💈' },
+    tatuajes: { label: 'Tatuajes / Agenda', icon: '🎨' },
+  }
+  // El ícono de "Servicios" (catálogo de estilos/tratamientos) también cambia
+  // según el rubro — antes siempre mostraba 💈 (barbería) sin importar el tipo.
+  const ICONO_SERVICIOS_POR_TIPO = { barberia: '💈', tatuajes: '🎨', spa: '💆' }
+  const OVERRIDES_POR_RUTA = {
+    '/taller': LABEL_POR_TIPO[tipoNegocio],
+    '/servicios': ICONO_SERVICIOS_POR_TIPO[tipoNegocio] ? { icon: ICONO_SERVICIOS_POR_TIPO[tipoNegocio] } : null,
   }
   // Oculta del menú las funcionalidades DESACTIVADAS para el usuario.
   // El Mecánico/Lavador solo ve sus órdenes y catálogo: nada de facturación ni dinero.
@@ -203,7 +211,7 @@ export default function Layout() {
           const permitidoPorTipo = !m.soloTipo || (Array.isArray(m.soloTipo) ? m.soloTipo.includes(tipoNegocio) : m.soloTipo === tipoNegocio)
           return (!feat || visible(feat)) && (!esOperarioRol || RUTAS_MECANICO.includes(m.to)) && permitidoPorTipo && (!m.soloDueno || esDueno)
         })
-        .map((m) => (m.to === '/taller' && LABEL_POR_TIPO[tipoNegocio] ? { ...m, ...LABEL_POR_TIPO[tipoNegocio] } : m)),
+        .map((m) => (OVERRIDES_POR_RUTA[m.to] ? { ...m, ...OVERRIDES_POR_RUTA[m.to] } : m)),
     }))
     .filter((s) => s.items.length > 0)
 

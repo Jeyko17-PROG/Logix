@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const ESTADO_COLOR = {
   ACTIVO: 'bg-emerald-500/15 text-emerald-400',
@@ -9,9 +10,21 @@ const ESTADO_COLOR = {
 
 const NUEVO_VACIO = { name: '', email: '', telefono: '', rol_id: '', bodega_id: '', password: '' }
 
+// Algunos roles solo tienen sentido para el rubro que los usa (Mecánico ve
+// solo sus órdenes de taller, Lavador solo las de lavadero): en cualquier
+// otro tipo de negocio (barbería, tatuajes, tienda...) no deberían aparecer
+// como opción, para no confundir con roles de un rubro que no es el suyo.
+const ROLES_POR_RUBRO = {
+  Mecanico: ['taller_motos', 'taller_carros', 'taller_general'],
+  Lavador: ['lavadero'],
+}
+const rolAplica = (nombreRol, tipoNegocio) => !ROLES_POR_RUBRO[nombreRol] || ROLES_POR_RUBRO[nombreRol].includes(tipoNegocio)
+
 export default function Equipo() {
+  const { user } = useAuth()
+  const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
   const [usuarios, setUsuarios] = useState([])
-  const [roles, setRoles] = useState([])
+  const [rolesTodos, setRolesTodos] = useState([])
   const [bodegas, setBodegas] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -21,6 +34,9 @@ export default function Equipo() {
   const [creado, setCreado] = useState(null) // { email, password } tras crear, para mostrar una sola vez
   const [verRol, setVerRol] = useState(null) // rol cuyo detalle de permisos se muestra
 
+  // Solo los roles que aplican al rubro de este negocio (ver ROLES_POR_RUBRO).
+  const roles = rolesTodos.filter((r) => rolAplica(r.nombre, tipoNegocio))
+
   async function cargar() {
     setCargando(true); setError('')
     try {
@@ -29,7 +45,7 @@ export default function Equipo() {
         api('/equipo/roles'),
         api('/bodegas').catch(() => []),
       ])
-      setUsuarios(u); setRoles(r); setBodegas(b.data ?? b)
+      setUsuarios(u); setRolesTodos(r); setBodegas(b.data ?? b)
     } catch (err) {
       setError(err.message || 'No se pudo cargar el equipo.')
     } finally {
@@ -157,10 +173,10 @@ export default function Equipo() {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setAbierto(false)}>
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">Nuevo usuario</h2>
-            <form onSubmit={crear} className="space-y-3">
-              <input required value={nuevo.name} onChange={(e) => setNuevo({ ...nuevo, name: e.target.value })} placeholder="Nombre completo" className="input" />
-              <input required type="email" value={nuevo.email} onChange={(e) => setNuevo({ ...nuevo, email: e.target.value })} placeholder="Correo" className="input" />
-              <input value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} placeholder="Celular (opcional)" className="input" />
+            <form onSubmit={crear} className="space-y-3" autoComplete="off">
+              <input required autoComplete="off" value={nuevo.name} onChange={(e) => setNuevo({ ...nuevo, name: e.target.value })} placeholder="Nombre completo" className="input" />
+              <input required type="email" autoComplete="off" value={nuevo.email} onChange={(e) => setNuevo({ ...nuevo, email: e.target.value })} placeholder="Correo de este nuevo usuario (no el tuyo)" className="input" />
+              <input autoComplete="off" value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} placeholder="Celular (opcional)" className="input" />
               <select required value={nuevo.rol_id} onChange={(e) => setNuevo({ ...nuevo, rol_id: e.target.value })} className="input">
                 <option value="">Rol…</option>
                 {roles.filter((r) => r.nombre !== 'Usuario').map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
@@ -171,7 +187,7 @@ export default function Equipo() {
                   {bodegas.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
                 </select>
               )}
-              <input type="password" value={nuevo.password} onChange={(e) => setNuevo({ ...nuevo, password: e.target.value })} placeholder="Contraseña (opcional, se genera una si la dejas vacía)" className="input" />
+              <input type="password" autoComplete="new-password" value={nuevo.password} onChange={(e) => setNuevo({ ...nuevo, password: e.target.value })} placeholder="Contraseña (opcional, se genera una si la dejas vacía)" className="input" />
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setAbierto(false)} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>
                 <button disabled={creando} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">{creando ? 'Creando…' : 'Crear usuario'}</button>

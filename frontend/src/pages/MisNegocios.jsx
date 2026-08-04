@@ -187,9 +187,9 @@ export default function MisNegocios() {
                 <h2 className="text-sm font-semibold text-slate-300 mb-2">Vincular otro negocio tuyo</h2>
                 <p className="text-xs text-slate-500 mb-3">Si ya registraste otro negocio con un correo distinto, confírmalo aquí para verlo junto a este.</p>
                 <div className="space-y-2">
-                  <input type="email" required placeholder="Correo del otro negocio" value={vincular.email}
+                  <input type="email" required autoComplete="off" placeholder="Correo del otro negocio (no el de esta sesión)" value={vincular.email}
                     onChange={(e) => setVincular({ ...vincular, email: e.target.value })} className="input" />
-                  <input type="password" required placeholder="Contraseña de esa cuenta" value={vincular.password}
+                  <input type="password" required autoComplete="off" placeholder="Contraseña de esa cuenta" value={vincular.password}
                     onChange={(e) => setVincular({ ...vincular, password: e.target.value })} className="input" />
                   <button disabled={vinculando} className="w-full rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
                     {vinculando ? 'Vinculando…' : 'Vincular'}
