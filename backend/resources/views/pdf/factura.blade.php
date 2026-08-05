@@ -51,6 +51,13 @@
         <tr class="tot"><td>TOTAL</td><td class="right">{{ $sym }}{{ number_format($factura->total, 2) }}</td></tr>
     </table>
 
+    @if (!empty($factura->notas))
+        <div class="box" style="clear:both;">
+            <strong>Observaciones:</strong><br>
+            <span>{{ $factura->notas }}</span>
+        </div>
+    @endif
+
     @if (!empty($firma))
         <div style="clear:both;margin-top:48px;width:240px;">
             <img src="{{ $firma }}" alt="Firma" style="max-height:90px;max-width:240px;">

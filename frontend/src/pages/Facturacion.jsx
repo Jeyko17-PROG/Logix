@@ -389,8 +389,8 @@ export default function Facturacion() {
           {/* Sección: notas + totales */}
           <section className="grid gap-6 px-6 py-5 md:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Notas</span>
-              <textarea rows="4" placeholder="Observaciones de la factura (opcional)" value={cab.notas} onChange={(e) => setCab({ ...cab, notas: e.target.value })} className="input resize-none" />
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Observaciones</span>
+              <textarea rows="4" placeholder="Ej. procedimiento realizado, detalles del servicio, condiciones… (aparece impreso en el PDF)" value={cab.notas} onChange={(e) => setCab({ ...cab, notas: e.target.value })} className="input resize-none" />
             </label>
 
             <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
@@ -425,7 +425,12 @@ export default function Facturacion() {
             {facturas.map((f) => (
               <tr key={f.id} className="border-t border-slate-800 hover:bg-slate-800/30">
                 <td className="p-3 font-mono">{f.numero}</td>
-                <td className="p-3">{f.cliente?.nombre_completo}</td>
+                <td className="p-3">
+                  {f.cliente?.nombre_completo}
+                  {f.notas && (
+                    <span title={f.notas} className="ml-1.5 text-slate-500 cursor-help" aria-label="Tiene observaciones">📝</span>
+                  )}
+                </td>
                 <td className="p-3 text-slate-400">{f.fecha}</td>
                 <td className="p-3 text-right">
                   {money(f.total)}
