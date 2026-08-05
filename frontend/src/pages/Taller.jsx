@@ -39,12 +39,12 @@ const CONFIG_POR_TIPO = {
     mostrarVehiculos: true, iconoOperario: '🧼',
   },
   barberia: {
-    titulo: 'Servicios', tabOrdenes: '💈 Órdenes de Barbería', tabEmpleados: '💈 Barberos',
+    titulo: 'Órdenes', tabOrdenes: '💈 Órdenes de Barbería', tabEmpleados: '💈 Barberos',
     subtitulo: 'Órdenes de servicio, cortes contratados y equipo de barberos.',
     mostrarVehiculos: false, iconoOperario: '💈',
   },
   tatuajes: {
-    titulo: 'Servicios', tabOrdenes: '🎨 Sesiones de Tatuaje', tabEmpleados: '🎨 Artistas',
+    titulo: 'Sesiones', tabOrdenes: '🎨 Sesiones de Tatuaje', tabEmpleados: '🎨 Artistas',
     subtitulo: 'Sesiones agendadas, referencias de los clientes y portafolio de tus artistas.',
     mostrarVehiculos: false, iconoOperario: '🎨',
   },

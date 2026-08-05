@@ -204,10 +204,13 @@ export default function Layout() {
   // Dueño del negocio: quien puede gestionar el equipo (crear empleados y asignarles rol).
   const esDueno = !!user?.es_admin_empresa || ['Administrador', 'Usuario'].includes(user?.rol?.nombre)
   // "Taller / Órdenes" cambia de nombre según el tipo de negocio (misma ruta /taller).
+  // OJO: no puede llamarse "Servicios" en ningún tipo — esa palabra ya la usa
+  // el ítem de /servicios (el catálogo); si coinciden, se ven como dos enlaces
+  // idénticos en el menú y parece que uno de los dos "no aparece".
   const LABEL_POR_TIPO = {
     lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
-    barberia: { label: 'Servicios', icon: '💈' },
-    tatuajes: { label: 'Servicios', icon: ICONO_MAQUINA_TATUAR },
+    barberia: { label: 'Órdenes', icon: '💈' },
+    tatuajes: { label: 'Sesiones', icon: ICONO_MAQUINA_TATUAR },
   }
   // El ícono de "Servicios" (catálogo de estilos/tratamientos) también cambia
   // según el rubro — antes siempre mostraba 💈 (barbería) sin importar el tipo.
