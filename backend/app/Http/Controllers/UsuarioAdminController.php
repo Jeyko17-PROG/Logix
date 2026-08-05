@@ -336,24 +336,23 @@ class UsuarioAdminController extends Controller
         $email = $usuario->email;
         $nombre = $usuario->name;
 
-        // Tablas de datos del inquilino (por owner_id).
+        // Tablas de datos del inquilino (por owner_id), en un orden que respeta
+        // las 3 únicas restricciones RESTRICT del esquema (ordenes_compra.proveedor_id,
+        // orden_compra_detalle.producto_id y facturas.cliente_id): 'ordenes_compra'
+        // debe borrarse antes que 'productos'/'proveedores', y 'facturas' antes que
+        // 'clientes'. El resto de relaciones son CASCADE o SET NULL a nivel de base
+        // de datos, así que se resuelven solas sin tocar session_replication_role
+        // (Postgres administrado, como el de Render, no da permiso para eso).
         $tablas = [
-            'clientes', 'citas', 'facturas', 'notas', 'productos', 'movimientos_inventario',
-            'proveedores', 'categorias', 'bodegas', 'servicios', 'ordenes_compra',
+            'ordenes_compra', 'facturas', 'clientes', 'citas', 'notas', 'productos',
+            'movimientos_inventario', 'proveedores', 'categorias', 'bodegas', 'servicios',
             'stock_por_bodega', 'documentos', 'horarios_laborales', 'bloqueos_agenda', 'ajustes_agenda',
         ];
 
         DB::transaction(function () use ($userId, $tablas, $usuario) {
-            $isPgsql = (DB::getDriverName() === 'pgsql');
-
-            // 1. Desactivar llaves foráneas dinámicamente según la Base de Datos activa (PostgreSQL o MySQL)
-            if ($isPgsql) {
-                DB::statement("SET session_replication_role = 'replica';");
-            } else {
-                DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-            }
-
-            // Hijos (detalles) de los registros del propietario.
+            // Hijos (detalles) de los registros del propietario: ya se borran solos
+            // vía CASCADE al borrar el padre de arriba, pero se dejan explícitos
+            // por claridad/seguridad (no hace daño borrar dos veces lo mismo).
             DB::table('factura_detalle')->whereIn('factura_id', fn ($q) => $q->select('id')->from('facturas')->where('owner_id', $userId))->delete();
             DB::table('orden_compra_detalle')->whereIn('orden_compra_id', fn ($q) => $q->select('id')->from('ordenes_compra')->where('owner_id', $userId))->delete();
             DB::table('producto_proveedor')->whereIn('producto_id', fn ($q) => $q->select('id')->from('productos')->where('owner_id', $userId))->delete();
@@ -364,16 +363,9 @@ class UsuarioAdminController extends Controller
 
             DB::table('notificaciones')->where('user_id', $userId)->delete();
             DB::table('user_funcionalidades')->where('user_id', $userId)->delete();
-            
+
             $usuario->tokens()->delete();
             $usuario->forceDelete();
-
-            // 2. Volver a activar las llaves foráneas al terminar la transacción
-            if ($isPgsql) {
-                DB::statement("SET session_replication_role = 'origin';");
-            } else {
-                DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-            }
         });
 
         Auditoria::registrar($request->user()->id, null, 'ELIMINAR', 'PERMANENTE', $email, $nombre);
