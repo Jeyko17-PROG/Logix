@@ -37,7 +37,7 @@ function Progreso({ paso }) {
  * paso a paso (servicio → especialista → fecha/hora → datos), pensado para
  * completarse desde el celular en menos de un minuto tras escanear el QR.
  */
-export default function ReservaGuiada({ base, negocio, esSpa, esTatuaje }) {
+export default function ReservaGuiada({ base, negocio, esTatuaje }) {
   const [paso, setPaso] = useState(0)
   const [servicios, setServicios] = useState([])
   const [serviciosSel, setServiciosSel] = useState([]) // array de objetos servicio elegidos
@@ -59,13 +59,10 @@ export default function ReservaGuiada({ base, negocio, esSpa, esTatuaje }) {
   const duracionTotal = serviciosSel.reduce((s, x) => s + (x.duracion_min || 30), 0) || 30
   const totalPrecio = serviciosSel.reduce((s, x) => s + Number(x.precio || 0), 0)
 
+  // Cualquier tipo de negocio guiado (barbería, spa, tatuajes) permite elegir
+  // uno o varios servicios disponibles antes de continuar.
   function elegirServicio(s) {
-    if (esSpa) {
-      setServiciosSel((prev) => (prev.some((x) => x.id === s.id) ? prev.filter((x) => x.id !== s.id) : [...prev, s]))
-    } else {
-      setServiciosSel([s])
-      setTimeout(() => setPaso(1), 150) // barbería: un toque y avanza solo
-    }
+    setServiciosSel((prev) => (prev.some((x) => x.id === s.id) ? prev.filter((x) => x.id !== s.id) : [...prev, s]))
   }
 
   async function buscarHorarios() {
@@ -95,7 +92,7 @@ export default function ReservaGuiada({ base, negocio, esSpa, esTatuaje }) {
         tamano_tatuaje: esTatuaje ? form.tamano_tatuaje || null : null,
         inicio: horaSel,
       }
-      if (esSpa && serviciosSel.length > 1) {
+      if (serviciosSel.length > 1) {
         campos.servicios = serviciosSel.map((s) => ({ servicio_id: s.id, precio_unitario: s.precio, duracion_min: s.duracion_min }))
         campos.servicio_id = serviciosSel[0].id
       } else {
@@ -174,23 +171,29 @@ export default function ReservaGuiada({ base, negocio, esSpa, esTatuaje }) {
       {paso === 0 && (
         <div>
           <h2 className="text-lg font-semibold mb-1">✂️ Elige tu servicio</h2>
-          <p className="text-xs text-slate-500 mb-3">{esSpa ? 'Puedes elegir más de uno.' : 'Toca para continuar.'}</p>
+          <p className="text-xs text-slate-500 mb-3">Puedes elegir uno o varios.</p>
           <div className="grid grid-cols-2 gap-2 mb-4">
             {servicios.map((s) => {
               const elegido = serviciosSel.some((x) => x.id === s.id)
               return (
                 <button key={s.id} onClick={() => elegirServicio(s)}
-                  className={`text-left rounded-xl border p-3 transition ${elegido ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800'}`}>
-                  <div className="text-2xl mb-1">{s.icono || iconoCategoria(s.categoria?.nombre || s.nombre)}</div>
-                  <p className="text-sm font-semibold leading-tight">{s.nombre}</p>
-                  <p className="text-xs text-slate-400 mt-1">{s.duracion_min} min · {COP(s.precio)}</p>
-                  {elegido && <p className="text-xs text-emerald-400 mt-1 font-semibold">✓ Elegido</p>}
+                  className={`text-left rounded-xl border overflow-hidden transition ${elegido ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800'}`}>
+                  {s.imagen ? (
+                    <img src={s.imagen} alt="" className="h-20 w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                  ) : (
+                    <div className="h-20 w-full flex items-center justify-center text-2xl bg-slate-900/50">{s.icono || iconoCategoria(s.categoria?.nombre || s.nombre)}</div>
+                  )}
+                  <div className="p-2.5">
+                    <p className="text-sm font-semibold leading-tight">{s.nombre}</p>
+                    <p className="text-xs text-slate-400 mt-1">{COP(s.precio)}</p>
+                    {elegido && <p className="text-xs text-emerald-400 mt-1 font-semibold">✓ Elegido</p>}
+                  </div>
                 </button>
               )
             })}
             {servicios.length === 0 && <p className="col-span-2 text-slate-500 text-sm text-center py-6">Aún no hay servicios disponibles.</p>}
           </div>
-          {esSpa && serviciosSel.length > 0 && (
+          {serviciosSel.length > 0 && (
             <button onClick={() => setPaso(1)} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 py-2.5 text-sm font-semibold">
               Continuar con {serviciosSel.length} servicio(s) →
             </button>
@@ -279,7 +282,7 @@ export default function ReservaGuiada({ base, negocio, esSpa, esTatuaje }) {
 
           {/* Foto de referencia (ej. el corte de cabello que le gustó): solo aplica
               cuando hay un único servicio y ese servicio tiene fotos en su galería. */}
-          {!esSpa && serviciosSel[0]?.galeria?.length > 0 && (
+          {serviciosSel.length === 1 && serviciosSel[0]?.galeria?.length > 0 && (
             <div>
               <p className="text-sm font-medium mb-1">📸 ¿Viste algo que te gustó? Elige una referencia (opcional)</p>
               <div className="flex flex-wrap gap-2">

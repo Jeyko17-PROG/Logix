@@ -16,7 +16,7 @@ export default function QR() {
   // Prioridad: logo real subido > emoji propio elegido en Perfil > ícono genérico según el rubro.
   const logoUrl = user?.empresa_info?.logo_url
   const logoEmoji = user?.empresa_info?.logo_emoji
-  const iconoTipoNegocio = { lavadero: '🧼', barberia: '💈', spa: '💆' }[user?.empresa_info?.tipo_negocio?.clave]
+  const iconoTipoNegocio = { lavadero: '🧼', barberia: '💈', spa: '💆', tatuajes: '/tatto.png' }[user?.empresa_info?.tipo_negocio?.clave]
 
   function guardarBase() {
     setPublicBaseUrl(editando)
@@ -93,7 +93,11 @@ export default function QR() {
           <div className="mb-3 flex justify-center">
             {logoUrl
               ? <img src={logoUrl} alt="" className="h-12 w-12 object-contain rounded" />
-              : <span className="text-4xl">{logoEmoji || iconoTipoNegocio}</span>}
+              : logoEmoji
+                ? <span className="text-4xl">{logoEmoji}</span>
+                : iconoTipoNegocio?.startsWith('/')
+                  ? <img src={iconoTipoNegocio} alt="" className="h-12 w-12 object-contain rounded" />
+                  : <span className="text-4xl">{iconoTipoNegocio}</span>}
           </div>
         )}
         <QRCodeCanvas value={url} size={220} level="M" includeMargin />

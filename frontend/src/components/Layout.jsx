@@ -83,7 +83,7 @@ const MENU = [
     ],
   },
   {
-    grupo: 'Taller y POS',
+    grupo: 'Servicios',
     items: [
       { to: '/taller', label: 'Taller / Órdenes', icon: '🔧', feat: 'servicios', featPorTipo: { lavadero: 'lavadero', barberia: 'barberia', tatuajes: 'tatuajes' } },
       { to: '/planes-lavado', label: 'Planes de Lavado', icon: '🧼', feat: 'lavadero', soloTipo: 'lavadero' },
@@ -206,8 +206,8 @@ export default function Layout() {
   // "Taller / Órdenes" cambia de nombre según el tipo de negocio (misma ruta /taller).
   const LABEL_POR_TIPO = {
     lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
-    barberia: { label: 'Barbería / Agenda', icon: '💈' },
-    tatuajes: { label: 'Tatuajes / Agenda', icon: ICONO_MAQUINA_TATUAR },
+    barberia: { label: 'Servicios', icon: '💈' },
+    tatuajes: { label: 'Servicios', icon: ICONO_MAQUINA_TATUAR },
   }
   // El ícono de "Servicios" (catálogo de estilos/tratamientos) también cambia
   // según el rubro — antes siempre mostraba 💈 (barbería) sin importar el tipo.

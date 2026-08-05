@@ -236,7 +236,9 @@ class PortalController extends Controller
 
         $tipoNegocio = $this->tipoNegocioDe($negocio);
         $conVehiculo = $tipoNegocio === 'lavadero';
-        $conVariosServicios = $tipoNegocio === 'spa';
+        // Spa, barbería y tatuajes permiten elegir varios servicios en una
+        // misma reserva (ej. corte + barba, o varios estilos de tatuaje).
+        $conVariosServicios = in_array($tipoNegocio, ['spa', 'barberia', 'tatuajes'], true);
         $conTatuaje = $tipoNegocio === 'tatuajes';
 
         $data = $request->validate([

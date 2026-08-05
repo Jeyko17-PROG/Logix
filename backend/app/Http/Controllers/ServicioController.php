@@ -38,7 +38,7 @@ class ServicioController extends Controller
 
     public function update(Request $request, Servicio $servicio)
     {
-        $data = $this->validar($request);
+        $data = $this->validar($request, $servicio);
 
         // overwrite:true en Cloudinary ya reemplaza la imagen anterior en el
         // mismo public_id; sin archivo nuevo, se conserva la imagen actual.
@@ -92,9 +92,15 @@ class ServicioController extends Controller
         return $url;
     }
 
-    private function validar(Request $request): array
+    /**
+     * $servicio: al editar, se pasa el registro actual para conservar su
+     * duración si el catálogo simplificado (barbería/tatuajes) no la envía;
+     * al crear (null), una recién creada sin duración cae en 30 min por
+     * defecto para que la agenda siga pudiendo calcular horarios.
+     */
+    private function validar(Request $request, ?Servicio $servicio = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],
             'categoria_id' => ['nullable', 'exists:categorias,id'],
@@ -102,9 +108,17 @@ class ServicioController extends Controller
             // archivo la maneja guardarImagen(); si el frontend reenvía la
             // URL actual al editar, ese campo suelto se ignora sin problema.
             'icono' => ['nullable', 'string', 'max:20'],
-            'duracion_min' => ['required', 'integer', 'min:5'],
+            // Opcional: el catálogo simplificado (barbería/tatuajes) no la pide;
+            // se usa una duración por defecto para que la agenda siga funcionando.
+            'duracion_min' => ['nullable', 'integer', 'min:5'],
             'precio' => ['nullable', 'numeric', 'min:0'],
             'activo' => ['boolean'],
         ]);
+
+        if (! array_key_exists('duracion_min', $data) || $data['duracion_min'] === null) {
+            $data['duracion_min'] = $servicio?->duracion_min ?? 30;
+        }
+
+        return $data;
     }
 }
