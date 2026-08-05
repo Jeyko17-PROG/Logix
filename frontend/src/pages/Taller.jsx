@@ -317,9 +317,13 @@ function ModalCrearOrden({ onClose, onCreada }) {
   const esServicioTecnico = ['taller_general', 'otro'].includes(tipoNegocio)
   const esLavadero = tipoNegocio === 'lavadero'
   const esBarberia = tipoNegocio === 'barberia'
-  // El vehículo es obligatorio en talleres y lavadero; la barbería no maneja vehículos.
+  const esTatuajes = tipoNegocio === 'tatuajes'
+  // El servicio se elige del catálogo (no de un dropdown de "servicio de barbería"
+  // codificado a mano): aplica a cualquier negocio guiado por catálogo, no solo barbería.
+  const usaCatalogoServicios = esBarberia || esTatuajes
+  // El vehículo es obligatorio en talleres y lavadero; barbería/tatuajes no manejan vehículos.
   const vehiculoObligatorio = esTallerVehiculos || esServicioTecnico || esLavadero
-  const mostrarVehiculo = !esBarberia
+  const mostrarVehiculo = !usaCatalogoServicios
 
   const [resultados, setResultados] = useState([])
   const [buscarCliente, setBuscarCliente] = useState('')
@@ -342,8 +346,8 @@ function ModalCrearOrden({ onClose, onCreada }) {
   useEffect(() => {
     api('/empleados').then((r) => setEmpleados(r.data ?? [])).catch(() => {})
     if (esLavadero) api('/planes-lavado').then(setPlanes).catch(() => {})
-    if (esBarberia) api('/servicios').then(setServicios).catch(() => {})
-  }, [esLavadero, esBarberia])
+    if (usaCatalogoServicios) api('/servicios').then(setServicios).catch(() => {})
+  }, [esLavadero, usaCatalogoServicios])
 
   // Búsqueda reactiva: los resultados son una lista clicable, y el cliente
   // elegido queda fijado aparte (no se pierde al seguir escribiendo).
@@ -408,7 +412,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4">{esBarberia ? 'Nueva orden de barbería' : 'Nueva orden de servicio'}</h2>
+        <h2 className="text-lg font-bold mb-4">{esBarberia ? 'Nueva orden de barbería' : esTatuajes ? 'Nueva sesión de tatuaje' : 'Nueva orden de servicio'}</h2>
         <form onSubmit={crear} className="space-y-3">
           {errorCarga && <div className="rounded-lg bg-red-500/10 border border-red-500/40 px-3 py-2 text-sm text-red-300">{errorCarga}</div>}
 
@@ -480,18 +484,18 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </label>
           )}
 
-          {esBarberia && (
-            <label className="block text-sm text-slate-300">Tipo de corte / servicio
+          {usaCatalogoServicios && (
+            <label className="block text-sm text-slate-300">{esTatuajes ? 'Servicio del catálogo' : 'Tipo de corte / servicio'}
               <select value={form.servicio_id} onChange={set('servicio_id')} className="input mt-1">
                 <option value="">— Sin servicio —</option>
                 {servicios.filter((s) => s.activo).map((s) => (
-                  <option key={s.id} value={s.id}>{s.nombre} · {s.duracion_min} min · ${Number(s.precio).toLocaleString()}</option>
+                  <option key={s.id} value={s.id}>{s.nombre} · ${Number(s.precio).toLocaleString()}</option>
                 ))}
               </select>
             </label>
           )}
 
-          <label className="block text-sm text-slate-300">{esLavadero ? 'Lavador asignado' : esBarberia ? 'Barbero / estilista asignado' : 'Mecánico / técnico asignado'}
+          <label className="block text-sm text-slate-300">{esLavadero ? 'Lavador asignado' : esBarberia ? 'Barbero / estilista asignado' : esTatuajes ? 'Artista asignado' : 'Mecánico / técnico asignado'}
             <select value={form.operables_employee_id} onChange={set('operables_employee_id')} className="input mt-1">
               <option value="">— Sin asignar —</option>
               {empleados.map((m) => <option key={m.id} value={m.id}>{m.nombre} {m.apellido}</option>)}
@@ -531,7 +535,7 @@ function ModalCrearOrden({ onClose, onCreada }) {
             </div>
           )}
 
-          <label className="block text-sm text-slate-300">{esLavadero || esBarberia ? 'Notas adicionales (opcional)' : esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
+          <label className="block text-sm text-slate-300">{esLavadero || usaCatalogoServicios ? 'Notas adicionales (opcional)' : esServicioTecnico ? 'Problema reportado / estado visual del equipo' : 'Diagnóstico / falla reportada por el cliente'}
             <textarea value={form.descripcion_trabajo} onChange={set('descripcion_trabajo')} rows="3" className="input mt-1" placeholder="Ej: cambio de aceite, revisión de frenos…" />
           </label>
 
@@ -556,7 +560,8 @@ function ModalOrden({ id, esMecanico, onClose }) {
   const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
   const esLavadero = tipoNegocio === 'lavadero'
   const esBarberia = tipoNegocio === 'barberia'
-  const iconoOperario = esLavadero ? '🧼' : esBarberia ? '💈' : '👨‍🔧'
+  const esTatuajes = tipoNegocio === 'tatuajes'
+  const iconoOperario = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : '👨‍🔧'
   const [orden, setOrden] = useState(null)
   const [productos, setProductos] = useState([])
   const [empleados, setEmpleados] = useState([])
