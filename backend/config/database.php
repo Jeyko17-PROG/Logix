@@ -61,8 +61,12 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // base_path(): MYSQL_ATTR_SSL_CA en .env es una ruta relativa (ej.
+            // "ca.pem"); sin esto, PDO la busca relativa al cwd del proceso
+            // (distinto según se ejecute por Apache o `php artisan` por CLI)
+            // y falla con "failed loading cafile stream".
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA') ? base_path(env('MYSQL_ATTR_SSL_CA')) : null,
             ]) : [],
         ],
 
@@ -82,7 +86,7 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA') ? base_path(env('MYSQL_ATTR_SSL_CA')) : null,
             ]) : [],
         ],
 
