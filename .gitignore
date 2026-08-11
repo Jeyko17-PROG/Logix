@@ -1,0 +1,7 @@
+# Carpetas ajenas a este proyecto que no deben mezclarse aquí (por si se
+# vuelven a crear/copiar por accidente en la raíz del repo).
+/free-claude-code-backup/
+
+# Cruft común de SO/editor.
+.DS_Store
+Thumbs.db
