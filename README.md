@@ -2,24 +2,24 @@
 
 POS/ERP multi-negocio en la nube (SaaS): talleres de motos/carros, lavaderos, barberías, estudios de tatuajes, restaurantes, tiendas y spas. Cada negocio es una cuenta aislada (multi-inquilino) con su propio plan, módulos y datos.
 
-## Arquitectura: dos aplicaciones separadas, a propósito
+## Arquitectura: dos aplicaciones independientes, a propósito
 
-Este repositorio contiene **dos proyectos independientes**, cada uno con su propio despliegue. No es un monolito Laravel con frontend embebido — es una API + una SPA desacopladas, que es lo que permite tener la PWA instalable y la futura app de Capacitor.
+Este repositorio contiene **dos proyectos independientes**, cada uno con su propio despliegue — `frontend/` vive anidado dentro de `backend/` solo por organización visual del repositorio, pero **no** están integrados: no es un monolito Laravel con frontend embebido, es una API + una SPA desacopladas (lo que permite tener la PWA instalable y la futura app de Capacitor).
 
 ```
 Logix.MD/
-├── backend/    → API REST en Laravel (PHP). Se despliega en Render.
-│                 routes/api.php, app/Http/Controllers, migraciones, etc.
-└── frontend/   → SPA en React + Vite + Tailwind (PWA). Se despliega en Vercel.
-                  src/pages, src/components, src/api/client.js (consume la API del backend).
+└── backend/            → API REST en Laravel (PHP). Se despliega en Render.
+    ├── app/, routes/, database/...  → todo el código de la API
+    └── frontend/       → SPA en React + Vite + Tailwind (PWA). Se despliega en Vercel
+                           (por separado — Vercel apunta su "Root Directory" aquí).
 ```
 
-| Carpeta     | Qué es                          | Dónde vive en producción                  |
-|-------------|----------------------------------|--------------------------------------------|
-| `backend/`  | API Laravel + Sanctum, PostgreSQL | Render (`logix-backend-wla9.onrender.com`) |
-| `frontend/` | React + Vite, PWA                 | Vercel (`logix-delta.vercel.app`)           |
+| Carpeta              | Qué es                          | Dónde vive en producción                  |
+|-----------------------|----------------------------------|--------------------------------------------|
+| `backend/`            | API Laravel + Sanctum, PostgreSQL | Render (`logix-backend-wla9.onrender.com`) |
+| `backend/frontend/`   | React + Vite, PWA                 | Vercel (`logix-delta.vercel.app`)           |
 
-El frontend nunca sirve archivos PHP ni el backend sirve la SPA — se comunican solo por HTTP (`frontend/src/api/client.js` llama a `/api/*` en el backend). `backend/resources/` existe pero es solo para las plantillas Blade que usa Laravel internamente (ej. el PDF de facturas) — no es "donde va el frontend".
+El frontend nunca sirve archivos PHP ni el backend sirve la SPA — se comunican solo por HTTP (`backend/frontend/src/api/client.js` llama a `/api/*` en el backend). El build de Render ignora `backend/frontend/` por completo (ver `backend/.dockerignore`). `backend/resources/` es algo aparte: solo las plantillas Blade que usa Laravel internamente (ej. el PDF de facturas) — no es "donde va el frontend".
 
 ## Cómo arrancar en local
 
@@ -31,11 +31,11 @@ cd backend
 php artisan serve
 
 # Terminal 2 — Frontend (http://localhost:5173)
-cd frontend
+cd backend/frontend
 npm run dev
 ```
 
-El frontend redirige `/api/*` al backend (configurado en `frontend/vite.config.js`). Prueba de conexión: `GET /api/tipos-negocio`.
+El frontend redirige `/api/*` al backend (configurado en `backend/frontend/vite.config.js`). Prueba de conexión: `GET /api/tipos-negocio`.
 
 Base de datos local: MySQL (ver `backend/.env`, `DB_CONNECTION=mysql`). Producción corre sobre PostgreSQL en Render.
 

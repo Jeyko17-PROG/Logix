@@ -1,0 +1,3 @@
+# frontend/ vive dentro de backend/ solo por organización del repositorio;
+# el build de Render (imagen PHP/Apache) no lo necesita para nada.
+frontend/
