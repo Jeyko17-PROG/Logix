@@ -1,3 +1,17 @@
+# ---- Etapa 1: compila el frontend (React/Vite) ----
+# Se replica la misma estructura relativa que en el repo real
+# (resources/frontend junto a public/) para que las rutas relativas de
+# vite.config.js (publicDirectory: '../../public', outDir del PWA) resuelvan
+# igual que en local.
+FROM node:20-slim AS frontend-build
+WORKDIR /build
+COPY resources/frontend resources/frontend
+COPY public public
+WORKDIR /build/resources/frontend
+RUN npm ci
+RUN npm run build
+
+# ---- Etapa 2: imagen final PHP/Apache (sirve la API y los assets ya compilados) ----
 FROM php:8.4-apache
 
 # Instalar dependencias del sistema y extensiones de PHP requeridas
@@ -26,6 +40,12 @@ COPY . .
 
 # Instalar dependencias de Laravel ignorando restricciones de plataforma
 RUN composer install --no-interaction --optimize-autoloader --no-dev --ignore-platform-reqs
+
+# Trae los assets del frontend ya compilados en la Etapa 1 (JS/CSS con hash,
+# manifest de Vite, service worker) — esta imagen final nunca instala Node.
+COPY --from=frontend-build /build/public/build ./public/build
+COPY --from=frontend-build /build/public/sw.js ./public/sw.js
+COPY --from=frontend-build /build/public/workbox-*.js ./public/
 
 # Configurar los permisos correctos para Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache

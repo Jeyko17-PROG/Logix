@@ -17,6 +17,10 @@
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
+# Service worker de la PWA: se regenera en cada build de Vite (ver
+# resources/frontend/vite.config.js), no debe quedar una copia vieja en git.
+/public/sw.js
+/public/workbox-*.js
 /public/storage
 /storage/*.key
 /storage/pail

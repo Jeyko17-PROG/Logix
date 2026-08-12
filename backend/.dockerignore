@@ -1,3 +1,9 @@
-# frontend/ vive dentro de backend/ solo por organización del repositorio;
-# el build de Render (imagen PHP/Apache) no lo necesita para nada.
-frontend/
+# .dockerignore aplica a TODAS las etapas del build (no se puede excluir
+# solo en una) — resources/frontend/ no se excluye aquí porque la Etapa 1
+# (Node) lo necesita para compilar.
+
+# Nunca hornear el .env local dentro de la imagen: las variables reales
+# las inyecta Render/el VPS en tiempo de ejecución.
+.env
+node_modules/
+vendor/
