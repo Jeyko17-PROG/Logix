@@ -23,7 +23,7 @@ return new class extends Migration
     {
         if (DB::getDriverName() === 'pgsql') {
             DB::statement('ALTER TABLE servicios ALTER COLUMN imagen TYPE TEXT');
-        } else {
+        } elseif (DB::getDriverName() === 'mysql') {
             DB::statement('ALTER TABLE servicios MODIFY imagen TEXT NULL');
         }
     }
@@ -32,7 +32,7 @@ return new class extends Migration
     {
         if (DB::getDriverName() === 'pgsql') {
             DB::statement('ALTER TABLE servicios ALTER COLUMN imagen TYPE VARCHAR(255)');
-        } else {
+        } elseif (DB::getDriverName() === 'mysql') {
             DB::statement('ALTER TABLE servicios MODIFY imagen VARCHAR(255) NULL');
         }
     }

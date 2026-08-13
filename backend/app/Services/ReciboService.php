@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Factura;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class ReciboService
 {
-    public function __construct(private Notificador $notificador) {}
+    public function __construct(private Notificador $notificador, private NodeRenderService $renderer) {}
 
     /** Genera (o regenera) el PDF de la factura y guarda su URL. */
     public function generarPdf(Factura $factura): string
@@ -30,10 +29,10 @@ class ReciboService
             }
         }
 
-        $pdf = Pdf::loadView('pdf.factura', ['factura' => $factura, 'firma' => $firma]);
+        $pdf = $this->renderer->pdf('factura', ['factura' => $factura, 'firma' => $firma]);
 
         $nombre = "facturas/{$factura->numero}_" . now()->timestamp . '.pdf';
-        Storage::disk('public')->put($nombre, $pdf->output());
+        Storage::disk('public')->put($nombre, $pdf);
         $url = Storage::url($nombre);
         $factura->update(['pdf_url' => $url]);
 

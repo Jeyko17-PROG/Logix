@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Services\NodeRenderService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
@@ -50,10 +51,12 @@ class CorreoLogix extends Mailable
 
     public function content(): Content
     {
-        return new Content(view: 'emails.generico', with: [
+        $html = app(NodeRenderService::class)->email([
             'titulo' => $this->titulo,
             'lineas' => $this->lineas,
         ]);
+
+        return new Content(html: $html);
     }
 
     public function attachments(): array

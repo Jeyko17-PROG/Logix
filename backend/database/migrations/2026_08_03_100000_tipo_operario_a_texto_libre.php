@@ -34,7 +34,7 @@ return new class extends Migration
             }
             DB::statement('ALTER TABLE operables_employees ALTER COLUMN tipo_operario TYPE VARCHAR(30)');
             DB::statement("ALTER TABLE operables_employees ALTER COLUMN tipo_operario SET DEFAULT 'mecanico'");
-        } else {
+        } elseif (DB::getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE operables_employees MODIFY tipo_operario VARCHAR(30) NOT NULL DEFAULT 'mecanico'");
         }
     }

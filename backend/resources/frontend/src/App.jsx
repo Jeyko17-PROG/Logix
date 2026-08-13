@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import Welcome from './pages/Welcome'
 import Bienvenida from './pages/Bienvenida'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -40,6 +41,7 @@ import SoloSuperAdmin from './components/SoloSuperAdmin'
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<Welcome />} />
       <Route path="/bienvenida" element={<Bienvenida />} />
       <Route path="/login" element={<Login />} />
       <Route path="/restablecer" element={<Restablecer />} />
@@ -58,7 +60,7 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/perfil" element={<Perfil />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/productos" element={<Productos />} />

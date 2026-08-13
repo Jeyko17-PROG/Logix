@@ -17,9 +17,8 @@ return [
     |
     */
 
-    // PostgreSQL es el motor estándar de Logix (producción en Render).
-    // El desarrollo local puede usar mysql definiendo DB_CONNECTION en .env.
-    'default' => env('DB_CONNECTION', 'pgsql'),
+    // MySQL es el motor estándar de Logix (producción en VPS monolítico).
+    'default' => env('DB_CONNECTION', 'mysql'),
 
     /*
     |--------------------------------------------------------------------------

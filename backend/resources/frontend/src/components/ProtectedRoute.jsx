@@ -12,7 +12,7 @@ export default function ProtectedRoute({ children }) {
     )
   }
 
-  if (!user) return <Navigate to="/bienvenida" replace />
+  if (!user) return <Navigate to="/" replace />
 
   return children
 }

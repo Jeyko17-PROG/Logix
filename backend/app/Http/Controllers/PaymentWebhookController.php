@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Services\CreditService;
 use App\Services\Notificador;
 use App\Services\WompiService;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\NodeRenderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -23,6 +23,7 @@ class PaymentWebhookController extends Controller
         private CreditService $creditService,
         private Notificador $notificador,
         private WompiService $wompi,
+        private NodeRenderService $renderer,
     ) {}
 
     public function handle(Request $request, string $provider)
@@ -205,7 +206,7 @@ class PaymentWebhookController extends Controller
     private function enviarReciboPago(User $user, string $concepto, float $monto, PaymentTransaction $tx): void
     {
         try {
-            $pdf = Pdf::loadView('pdf.recibo_pago', [
+            $pdf = $this->renderer->pdf('recibo_pago', [
                 'usuario' => $user,
                 'concepto' => $concepto,
                 'monto' => $monto,
@@ -214,7 +215,7 @@ class PaymentWebhookController extends Controller
             ]);
 
             $ruta = "recibos/recibo_{$tx->id}_" . now()->timestamp . '.pdf';
-            Storage::disk('public')->put($ruta, $pdf->output());
+            Storage::disk('public')->put($ruta, $pdf);
 
             Log::info("PDF generado exitosamente en: " . Storage::disk('public')->path($ruta));
 

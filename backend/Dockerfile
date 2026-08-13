@@ -42,10 +42,29 @@ COPY . .
 RUN composer install --no-interaction --optimize-autoloader --no-dev --ignore-platform-reqs
 
 # Trae los assets del frontend ya compilados en la Etapa 1 (JS/CSS con hash,
-# manifest de Vite, service worker) — esta imagen final nunca instala Node.
+# manifest de Vite, service worker).
 COPY --from=frontend-build /build/public/build ./public/build
 COPY --from=frontend-build /build/public/sw.js ./public/sw.js
 COPY --from=frontend-build /build/public/workbox-*.js ./public/
+
+# Node en la imagen final: NodeRenderService (App\Services\NodeRenderService)
+# invoca `node` en tiempo de ejecución para generar PDFs (factura, orden de
+# compra, recibo de pago) y el HTML del correo genérico — no es solo un paso
+# de build como el frontend. Se copian los binarios ya compilados de la misma
+# imagen node:20-slim de la Etapa 1 (misma base Debian que php:8.4-apache)
+# en vez de instalar Node vía apt, para no depender de un repo externo.
+COPY --from=frontend-build /usr/local/bin/node /usr/local/bin/node
+COPY --from=frontend-build /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=frontend-build /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=frontend-build /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+# Instala las dependencias de pdf-render y compila los CLIs (dist/*.cjs).
+# npm prune quita esbuild y demás devDependencies tras el build: en runtime
+# solo hace falta lo que dist/*.cjs importa (react, @react-pdf/renderer, etc).
+RUN cd pdf-render \
+    && npm install \
+    && npm run build \
+    && npm prune --omit=dev
 
 # Configurar los permisos correctos para Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
@@ -60,7 +79,7 @@ ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# Exponer el puerto por defecto de Render
+# Exponer el puerto HTTP estándar (el VPS lo mapea/proxya según corresponda)
 EXPOSE 80
 
 # Script de arranque: migraciones + seeders + storage:link + worker de colas

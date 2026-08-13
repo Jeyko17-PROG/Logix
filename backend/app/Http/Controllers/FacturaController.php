@@ -9,7 +9,7 @@ use App\Services\Notificador;
 use App\Services\KardexService;
 use App\Services\CreditService;
 use App\Services\ReciboService;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\NodeRenderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +22,7 @@ class FacturaController extends Controller
         private KardexService $kardex,
         private CreditService $creditService,
         private ReciboService $recibo,
+        private NodeRenderService $renderer,
     ) {}
 
     public function index(Request $request)
@@ -365,10 +366,10 @@ class FacturaController extends Controller
             }
         }
 
-        $pdf = Pdf::loadView('pdf.factura', ['factura' => $factura, 'firma' => $firma]);
+        $pdf = $this->renderer->pdf('factura', ['factura' => $factura, 'firma' => $firma]);
 
         $nombre = "facturas/{$factura->numero}_" . now()->timestamp . '.pdf';
-        Storage::disk('public')->put($nombre, $pdf->output());
+        Storage::disk('public')->put($nombre, $pdf);
         $url = Storage::url($nombre);
         $factura->update(['pdf_url' => $url]);
 

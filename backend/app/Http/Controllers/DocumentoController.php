@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Documento;
 use App\Models\OrdenCompra;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\NodeRenderService;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentoController extends Controller
 {
+    public function __construct(private NodeRenderService $renderer) {}
+
     public function index()
     {
         return Documento::with(['firma', 'creador:id,name'])->latest()->paginate(20);
@@ -21,13 +23,13 @@ class DocumentoController extends Controller
     {
         $orden->load(['proveedor', 'bodega:id,nombre', 'detalles.producto:id,sku,nombre']);
 
-        $pdf = Pdf::loadView('pdf.orden_compra', [
+        $pdf = $this->renderer->pdf('orden_compra', [
             'orden' => $orden,
             'firma' => null,
         ]);
 
         $nombre = "documentos/orden_compra_{$orden->id}_" . now()->timestamp . '.pdf';
-        Storage::disk('public')->put($nombre, $pdf->output());
+        Storage::disk('public')->put($nombre, $pdf);
         $url = Storage::url($nombre);
 
         // Reutiliza el documento si ya existía para esta orden.

@@ -5,7 +5,7 @@ PROJECT_DIR="/var/www/html"
 DB_DIR="$PROJECT_DIR/database"
 WEB_USER="www-data"
 
-echo "=== Iniciando tareas de arranque en Render ==="
+echo "=== Iniciando tareas de arranque del contenedor ==="
 
 # Asegurar directorios base
 mkdir -p "$DB_DIR"
@@ -13,9 +13,9 @@ mkdir -p "$PROJECT_DIR/storage"
 mkdir -p "$PROJECT_DIR/bootstrap/cache"
 
 # --- Bloque legado SQLite: SOLO aplica si la conexión es sqlite ---
-# (En producción la BD es PostgreSQL vía variables de entorno; este bloque
-#  no debe pisar DB_DATABASE cuando se usa pgsql/mysql.)
-if [ "${DB_CONNECTION:-pgsql}" = "sqlite" ]; then
+# (En producción la BD es MySQL vía variables de entorno; este bloque no
+#  debe pisar DB_DATABASE cuando se usa mysql.)
+if [ "${DB_CONNECTION:-mysql}" = "sqlite" ]; then
   if [ -f "$DB_DIR/database.sqlite" ]; then
     echo "Copiando database.sqlite a /tmp para habilitar escritura..."
     cp "$DB_DIR/database.sqlite" /tmp/database.sqlite || true

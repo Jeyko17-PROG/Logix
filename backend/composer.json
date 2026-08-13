@@ -7,7 +7,6 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
-        "barryvdh/laravel-dompdf": "^3.1",
         "cloudinary/cloudinary_php": "^3.1",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
@@ -43,7 +42,8 @@
             "@php artisan key:generate",
             "@php artisan migrate --force",
             "npm install --ignore-scripts",
-            "npm run build"
+            "npm run build",
+            "cd pdf-render && npm install --ignore-scripts && npm run build"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
