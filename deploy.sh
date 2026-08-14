@@ -73,7 +73,11 @@ if [ "$CERT_EXISTS" != "yes" ]; then
   echo "==> Pidiendo el certificado real a Let's Encrypt (requiere que ${DOMAIN} ya apunte a este VPS)..."
   docker compose run --rm --entrypoint sh certbot -c \
     "rm -rf /etc/letsencrypt/live/${DOMAIN} /etc/letsencrypt/archive/${DOMAIN} /etc/letsencrypt/renewal/${DOMAIN}.conf"
-  docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
+  # --entrypoint certbot es imprescindible: el servicio `certbot` define su
+  # propio entrypoint (el bucle de renovación de arriba) que, sin esto,
+  # ignora "certonly ..." como parámetros posicionales muertos y se queda
+  # en el bucle infinito sin pedir nunca el certificado.
+  docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot \
     -d "${DOMAIN}" --email "${CERTBOT_EMAIL}" --agree-tos --no-eff-email
 
   echo "==> Recargando nginx con el certificado real..."
