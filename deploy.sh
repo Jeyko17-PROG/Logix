@@ -7,13 +7,13 @@ set -euo pipefail
 # Docker Compose plugin ya instalados.
 #
 # Uso:
-#   REPO_URL=git@github.com:tu-usuario/Logix.MD.git ./deploy.sh
-# (o edita REPO_URL abajo). Reintentar el script es seguro: no repite pasos
-# que ya quedaron hechos (certificado, .env, etc).
+#   REPO_URL=https://github.com/otro-usuario/otro-repo.git BRANCH=otra-rama ./deploy.sh
+# (o edita REPO_URL/BRANCH abajo). Reintentar el script es seguro: no repite
+# pasos que ya quedaron hechos (certificado, .env, etc).
 
-REPO_URL="${REPO_URL:-git@github.com:TU_USUARIO/Logix.MD.git}"
+REPO_URL="${REPO_URL:-https://github.com/Jeyko17-PROG/Logix.git}"
 APP_DIR="${APP_DIR:-$HOME/Logix.MD}"
-BRANCH="${BRANCH:-main}"
+BRANCH="${BRANCH:-vps-mysql-monolito}"
 
 echo "==> Repo: $REPO_URL -> $APP_DIR (rama: $BRANCH)"
 if [ -d "$APP_DIR/.git" ]; then
