@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { api, getToken } from '../api/client';
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -7,23 +8,8 @@ export default function Welcome() {
   const appVersion = 'v1.0.0';
 
   useEffect(() => {
-    // Verificar si el usuario está autenticado
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/user', {
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-        if (response.ok) {
-          setIsAuthenticated(true);
-        }
-      } catch {
-        setIsAuthenticated(false);
-      }
-    };
-    
-    checkAuth();
+    if (!getToken()) return;
+    api('/me').then(() => setIsAuthenticated(true)).catch(() => setIsAuthenticated(false));
   }, []);
 
   const handleNavigation = (path) => {
@@ -53,7 +39,7 @@ export default function Welcome() {
         ) : (
           <nav className="flex items-center justify-end gap-4">
             <a
-              onClick={() => handleNavigation('/bienvenida')}
+              onClick={() => handleNavigation('/dashboard')}
               className="inline-block px-5 py-1.5 dark:text-[#EDEDEC] border-[#19140035] hover:border-[#1915014a] border text-[#1b1b18] dark:border-[#3E3E3A] dark:hover:border-[#62605b] rounded-sm text-sm leading-normal cursor-pointer"
             >
               Panel

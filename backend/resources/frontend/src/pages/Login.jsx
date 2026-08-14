@@ -38,9 +38,9 @@ export default function Login() {
   async function irSegunNegocios() {
     try {
       const negocios = await misNegocios()
-      navigate(negocios.length > 1 ? '/mis-negocios' : '/')
+      navigate(negocios.length > 1 ? '/mis-negocios' : '/dashboard')
     } catch {
-      navigate('/')
+      navigate('/dashboard')
     }
   }
 
@@ -72,7 +72,7 @@ export default function Login() {
           setOk(data.message)
           setMostrarBienvenida(true)
         } else {
-          navigate('/')
+          navigate('/dashboard')
         }
       } else if (modo === 'activar') {
         await activar(form.email, form.codigo)
