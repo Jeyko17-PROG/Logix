@@ -17,7 +17,7 @@ export default function Bienvenida() {
 
   // Si ya hay sesión activa, ir directo al sistema.
   useEffect(() => {
-    if (!cargando && user) navigate('/', { replace: true })
+    if (!cargando && user) navigate('/dashboard', { replace: true })
   }, [user, cargando, navigate])
 
   return (
