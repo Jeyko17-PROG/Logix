@@ -50,13 +50,13 @@ COPY --from=frontend-build /build/public/workbox-*.js ./public/
 # Node en la imagen final: NodeRenderService (App\Services\NodeRenderService)
 # invoca `node` en tiempo de ejecución para generar PDFs (factura, orden de
 # compra, recibo de pago) y el HTML del correo genérico — no es solo un paso
-# de build como el frontend. Se copian los binarios ya compilados de la misma
-# imagen node:20-slim de la Etapa 1 (misma base Debian que php:8.4-apache)
-# en vez de instalar Node vía apt, para no depender de un repo externo.
-COPY --from=frontend-build /usr/local/bin/node /usr/local/bin/node
-COPY --from=frontend-build /usr/local/bin/npm /usr/local/bin/npm
-COPY --from=frontend-build /usr/local/bin/npx /usr/local/bin/npx
-COPY --from=frontend-build /usr/local/lib/node_modules /usr/local/lib/node_modules
+# de build como el frontend. Copiar los binarios sueltos de node:20-slim no
+# funciona (el `npm` de node 20+ resuelve rutas internas relativas a su propio
+# árbol de instalación, ej. ../lib/cli.js, que no quedan bien solo copiando
+# /usr/local/bin + node_modules); se instala vía el repo oficial de NodeSource.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 # Instala las dependencias de pdf-render y compila los CLIs (dist/*.cjs).
 # npm prune quita esbuild y demás devDependencies tras el build: en runtime
