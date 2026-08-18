@@ -219,6 +219,15 @@ export default function Facturacion() {
     window.open(r.whatsapp_url, '_blank', 'noopener,noreferrer')
   }
 
+  async function eliminar(f) {
+    if (!confirm(`¿Eliminar la factura ${f.numero}? Esto restaura el stock de los productos vendidos y no se puede deshacer.`)) return
+    try {
+      await api(`/facturas/${f.id}`, { method: 'DELETE' })
+      if (pagosDe?.id === f.id) setPagosDe(null)
+      cargar()
+    } catch (err) { alert(err.message || 'No se pudo eliminar la factura.') }
+  }
+
   // Se puede seguir abonando mientras la factura no esté pagada del todo ni anulada.
   const admitePagos = (f) => !['PAGADA', 'ANULADA'].includes(f.estado) && Number(f.saldo_pendiente ?? f.total) > 0
 
@@ -444,7 +453,8 @@ export default function Facturacion() {
                   <button onClick={() => verPagos(f)} className="text-violet-400 hover:underline mr-3">Pagos</button>
                   <button onClick={() => generarPdf(f)} className="text-sky-400 hover:underline mr-3">PDF</button>
                   <button onClick={() => enviarWhatsApp(f)} className="text-lime-400 hover:underline mr-3">WhatsApp</button>
-                  <button onClick={() => enviar(f)} className="text-emerald-400 hover:underline">Enviar</button>
+                  <button onClick={() => enviar(f)} className="text-emerald-400 hover:underline mr-3">Enviar</button>
+                  <button onClick={() => eliminar(f)} className="text-red-400 hover:underline">Eliminar</button>
                 </td>
               </tr>
             ))}
