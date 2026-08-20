@@ -60,6 +60,14 @@ export default function Empresas() {
     accion(() => api(`/admin/empresas/${e.id}/regenerar-codigo`, { method: 'POST' }))
   }
 
+  async function enviarCodigo(e) {
+    if (!confirm(`¿Enviar el código de activación por correo a ${e.dueno?.email || 'el dueño'}?`)) return
+    try {
+      const r = await api(`/admin/empresas/${e.id}/enviar-codigo`, { method: 'POST' })
+      alert(r.message || 'Código enviado.')
+    } catch (err) { alert(err.message || 'No se pudo enviar el correo.') }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -139,7 +147,10 @@ export default function Empresas() {
                       <div>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR.PENDIENTE_ACTIVACION}`}>Pendiente de activación</span>
                         <p className="mt-1 text-xs text-slate-300">Código: <span className="font-mono font-bold tracking-widest">{e.codigo_activacion}</span></p>
-                        <button onClick={() => regenerarCodigo(e)} className="mt-0.5 text-xs text-sky-400 hover:underline">Regenerar código</button>
+                        <div className="mt-0.5 flex gap-3">
+                          <button onClick={() => enviarCodigo(e)} className="text-xs text-emerald-400 hover:underline">Enviar por correo</button>
+                          <button onClick={() => regenerarCodigo(e)} className="text-xs text-sky-400 hover:underline">Regenerar código</button>
+                        </div>
                       </div>
                     ) : (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[e.estado] ?? ''}`}>{e.estado}</span>

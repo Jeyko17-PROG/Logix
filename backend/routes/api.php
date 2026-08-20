@@ -196,6 +196,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::post('empresas/{empresa}/plan', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarPlan']);
         Route::post('empresas/{empresa}/limite', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'cambiarLimite']);
         Route::post('empresas/{empresa}/regenerar-codigo', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'regenerarCodigoActivacion']);
+        Route::post('empresas/{empresa}/enviar-codigo', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'enviarCodigoActivacion']);
         Route::get('empresas/{empresa}/modulos', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'modulos']);
         Route::put('empresas/{empresa}/modulos', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'guardarModulos']);
         Route::post('empresas/{empresa}/modulos/aplicar-plan', [App\Http\Controllers\Admin\EmpresaAdminController::class, 'aplicarPlanModulos']);

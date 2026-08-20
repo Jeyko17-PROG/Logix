@@ -167,6 +167,36 @@ class EmpresaAdminController extends Controller
     }
 
     /**
+     * Envía por correo, directo al dueño de la empresa, el código de
+     * activación que ya tiene asignado (sin regenerarlo). El super-admin
+     * sigue siendo quien decide CUÁNDO enviarlo — este botón solo reemplaza
+     * el copiar/pegar manual del código a WhatsApp/correo personal.
+     */
+    public function enviarCodigoActivacion(Request $request, Empresa $empresa): JsonResponse
+    {
+        $owner = $empresa->owner;
+        abort_unless($owner && $owner->estado === 'PENDIENTE_ACTIVACION', 422, 'El dueño de esta empresa ya está activo.');
+
+        $enviado = app(Notificador::class)->correo(
+            $owner->email,
+            'Tu código de activación — Fénix',
+            '¡Ya casi puedes entrar!',
+            [
+                "Hola {$owner->name},",
+                'Tu cuenta en Fénix fue aprobada. Usa este código de 6 dígitos en la pantalla de activación para empezar:',
+                $owner->codigo_activacion,
+                'Si no solicitaste esta cuenta, puedes ignorar este mensaje.',
+            ],
+        );
+
+        abort_unless($enviado, 500, 'No se pudo enviar el correo. Revisa la configuración de correo (MAIL_*) e intenta de nuevo.');
+
+        Auditoria::registrar($request->user()->id, $owner->id, 'EMPRESA', 'ENVIAR_CODIGO_ACTIVACION', null, null);
+
+        return response()->json(['message' => "Código enviado a {$owner->email}."]);
+    }
+
+    /**
      * Cambia el plan de la empresa. Si pertenece a un grupo de negocios
      * vinculados ("Mis negocios"), el plan se guarda en la empresa
      * GOBERNANTE del grupo (aunque se haya hecho clic en otra fila), porque
