@@ -10,6 +10,7 @@ use App\Services\KardexService;
 use App\Services\CreditService;
 use App\Services\ReciboService;
 use App\Services\NodeRenderService;
+use App\Support\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -354,19 +355,23 @@ class FacturaController extends Controller
     public function generarPdf(Factura $factura)
     {
         $this->autorizarBodega($factura);
-        $factura->load(['cliente', 'detalles']);
+        $factura->load(['cliente', 'detalles', 'empresa']);
 
         // Embebe la firma como data URI: DomPDF no resuelve rutas /storage/ relativas.
         $firma = null;
         if ($factura->firma_url) {
-            $ruta = str_replace('/storage/', '', $factura->firma_url);
+            $ruta = StorageUrl::rutaLocal($factura->firma_url);
             if (Storage::disk('public')->exists($ruta)) {
                 $firma = 'data:' . Storage::disk('public')->mimeType($ruta)
                     . ';base64,' . base64_encode(Storage::disk('public')->get($ruta));
             }
         }
 
-        $pdf = $this->renderer->pdf('factura', ['factura' => $factura, 'firma' => $firma]);
+        $pdf = $this->renderer->pdf('factura', [
+            'factura' => $factura,
+            'firma' => $firma,
+            'logo' => $factura->empresa?->logo_url,
+        ]);
 
         $nombre = "facturas/{$factura->numero}_" . now()->timestamp . '.pdf';
         Storage::disk('public')->put($nombre, $pdf);
@@ -390,7 +395,7 @@ class FacturaController extends Controller
             $factura->refresh();
         }
 
-        $ruta = str_replace('/storage/', '', (string) $factura->pdf_url);
+        $ruta = StorageUrl::rutaLocal($factura->pdf_url);
         if (! $ruta || ! Storage::disk('public')->exists($ruta)) {
             abort(404, 'PDF no encontrado.');
         }
@@ -420,7 +425,7 @@ class FacturaController extends Controller
             $factura->refresh();
         }
         $adjunto = $factura->pdf_url
-            ? Storage::disk('public')->path(str_replace('/storage/', '', $factura->pdf_url))
+            ? Storage::disk('public')->path(StorageUrl::rutaLocal($factura->pdf_url))
             : null;
 
         // Si la empresa configuró su propio correo de facturación, la factura
@@ -487,11 +492,11 @@ class FacturaController extends Controller
         $esperada = hash_hmac('sha256', $factura->id . '|' . $factura->numero, (string) config('app.key'));
         abort_unless(hash_equals($esperada, (string) $request->query('t', '')), 403, 'Enlace inválido.');
 
-        $ruta = str_replace('/storage/', '', (string) $factura->pdf_url);
+        $ruta = StorageUrl::rutaLocal($factura->pdf_url);
         if (! $factura->pdf_url || ! Storage::disk('public')->exists($ruta)) {
             $this->generarPdf($factura);
             $factura->refresh();
-            $ruta = str_replace('/storage/', '', (string) $factura->pdf_url);
+            $ruta = StorageUrl::rutaLocal($factura->pdf_url);
         }
 
         $contenido = Storage::disk('public')->get($ruta);

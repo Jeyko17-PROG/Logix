@@ -4,12 +4,16 @@ import { money, formatDate } from '../lib/format.js';
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 10, fontFamily: 'Helvetica', color: '#1f2937' },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: '#111827',
     borderBottomStyle: 'solid',
     paddingBottom: 8,
     marginBottom: 12,
   },
+  logo: { height: 40, maxWidth: 110, objectFit: 'contain' },
   h1: { fontSize: 18, fontFamily: 'Helvetica-Bold' },
   muted: { color: '#6b7280', fontSize: 9, marginTop: 2 },
   box: {
@@ -58,7 +62,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function Factura({ factura, firma }) {
+export default function Factura({ factura, firma, logo }) {
   const currency = factura?.currency ?? 'COP';
   const cliente = factura?.cliente ?? {};
   const detalles = factura?.detalles ?? [];
@@ -67,10 +71,13 @@ export default function Factura({ factura, firma }) {
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.h1}>Factura {factura?.numero}</Text>
-          <Text style={styles.muted}>
-            Logix · {formatDate(factura?.fecha)} · {factura?.estado}
-          </Text>
+          <View>
+            <Text style={styles.h1}>Factura {factura?.numero}</Text>
+            <Text style={styles.muted}>
+              Logix · {formatDate(factura?.fecha)} · {factura?.estado}
+            </Text>
+          </View>
+          {logo ? <Image src={logo} style={styles.logo} /> : null}
         </View>
 
         <View style={styles.box}>

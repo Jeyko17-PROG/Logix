@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Documento;
 use App\Models\FirmaElectronica;
+use App\Support\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -24,7 +25,7 @@ class FirmaController extends Controller
     {
         $hash = null;
         if ($documento->archivo_url) {
-            $ruta = str_replace('/storage/', '', $documento->archivo_url);
+            $ruta = StorageUrl::rutaLocal($documento->archivo_url);
             if (Storage::disk('public')->exists($ruta)) {
                 $hash = hash('sha256', Storage::disk('public')->get($ruta));
             }

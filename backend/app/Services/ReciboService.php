@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Factura;
+use App\Support\StorageUrl;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -18,18 +19,22 @@ class ReciboService
     /** Genera (o regenera) el PDF de la factura y guarda su URL. */
     public function generarPdf(Factura $factura): string
     {
-        $factura->loadMissing(['cliente', 'detalles']);
+        $factura->loadMissing(['cliente', 'detalles', 'empresa']);
 
         $firma = null;
         if ($factura->firma_url) {
-            $ruta = str_replace('/storage/', '', $factura->firma_url);
+            $ruta = StorageUrl::rutaLocal($factura->firma_url);
             if (Storage::disk('public')->exists($ruta)) {
                 $firma = 'data:' . Storage::disk('public')->mimeType($ruta)
                     . ';base64,' . base64_encode(Storage::disk('public')->get($ruta));
             }
         }
 
-        $pdf = $this->renderer->pdf('factura', ['factura' => $factura, 'firma' => $firma]);
+        $pdf = $this->renderer->pdf('factura', [
+            'factura' => $factura,
+            'firma' => $firma,
+            'logo' => $factura->empresa?->logo_url,
+        ]);
 
         $nombre = "facturas/{$factura->numero}_" . now()->timestamp . '.pdf';
         Storage::disk('public')->put($nombre, $pdf);
@@ -58,7 +63,7 @@ class ReciboService
             }
 
             $adjunto = $factura->pdf_url
-                ? Storage::disk('public')->path(str_replace('/storage/', '', $factura->pdf_url))
+                ? Storage::disk('public')->path(StorageUrl::rutaLocal($factura->pdf_url))
                 : null;
 
             // Si la empresa configuró su propio correo de facturación, la factura
