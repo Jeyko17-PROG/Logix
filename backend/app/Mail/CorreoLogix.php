@@ -56,7 +56,7 @@ class CorreoLogix extends Mailable
             'lineas' => $this->lineas,
         ]);
 
-        return new Content(html: $html);
+        return new Content(htmlString: $html);
     }
 
     public function attachments(): array
