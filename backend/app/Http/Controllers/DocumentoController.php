@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Documento;
 use App\Models\OrdenCompra;
 use App\Services\NodeRenderService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentoController extends Controller
@@ -23,10 +24,15 @@ class DocumentoController extends Controller
     {
         $orden->load(['proveedor', 'bodega:id,nombre', 'detalles.producto:id,sku,nombre']);
 
-        $pdf = $this->renderer->pdf('orden_compra', [
-            'orden' => $orden,
-            'firma' => null,
-        ]);
+        try {
+            $pdf = $this->renderer->pdf('orden_compra', [
+                'orden' => $orden,
+                'firma' => null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('No se pudo generar el PDF de la orden de compra', ['orden_id' => $orden->id, 'error' => $e->getMessage()]);
+            return response()->json(['message' => 'No se pudo generar el PDF. Intenta de nuevo en un momento.'], 502);
+        }
 
         $nombre = "documentos/orden_compra_{$orden->id}_" . now()->timestamp . '.pdf';
         Storage::disk('public')->put($nombre, $pdf);

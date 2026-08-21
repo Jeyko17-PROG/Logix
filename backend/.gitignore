@@ -29,3 +29,7 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Backups de base de datos: nunca deben vivir en git (datos reales de usuarios).
+*.sql
+backup_*.sql

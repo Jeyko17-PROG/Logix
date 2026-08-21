@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # código fuente (docker-php-ext-install) — mucho más rápido y liviano en
 # RAM durante el build, que es justo lo que agotaba la memoria del VPS.
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
-RUN install-php-extensions pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd
+RUN install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd
 
 # Activar el módulo de reescritura de Apache para Laravel (mod_rewrite)
 RUN a2enmod rewrite

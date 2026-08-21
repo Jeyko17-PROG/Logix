@@ -9,10 +9,10 @@ use App\Services\Notificador;
 use App\Services\KardexService;
 use App\Services\CreditService;
 use App\Services\ReciboService;
-use App\Services\NodeRenderService;
 use App\Support\StorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -23,7 +23,6 @@ class FacturaController extends Controller
         private KardexService $kardex,
         private CreditService $creditService,
         private ReciboService $recibo,
-        private NodeRenderService $renderer,
     ) {}
 
     public function index(Request $request)
@@ -355,28 +354,13 @@ class FacturaController extends Controller
     public function generarPdf(Factura $factura)
     {
         $this->autorizarBodega($factura);
-        $factura->load(['cliente', 'detalles', 'empresa']);
 
-        // Embebe la firma como data URI: DomPDF no resuelve rutas /storage/ relativas.
-        $firma = null;
-        if ($factura->firma_url) {
-            $ruta = StorageUrl::rutaLocal($factura->firma_url);
-            if (Storage::disk('public')->exists($ruta)) {
-                $firma = 'data:' . Storage::disk('public')->mimeType($ruta)
-                    . ';base64,' . base64_encode(Storage::disk('public')->get($ruta));
-            }
+        try {
+            $url = $this->recibo->generarPdf($factura);
+        } catch (\Throwable $e) {
+            Log::error('No se pudo generar el PDF de la factura', ['factura' => $factura->numero, 'error' => $e->getMessage()]);
+            return response()->json(['message' => 'No se pudo generar el PDF. Intenta de nuevo en un momento.'], 502);
         }
-
-        $pdf = $this->renderer->pdf('factura', [
-            'factura' => $factura,
-            'firma' => $firma,
-            'logo' => $factura->empresa?->logo_url,
-        ]);
-
-        $nombre = "facturas/{$factura->numero}_" . now()->timestamp . '.pdf';
-        Storage::disk('public')->put($nombre, $pdf);
-        $url = Storage::url($nombre);
-        $factura->update(['pdf_url' => $url]);
 
         return response()->json([
             'pdf_url' => $url,
@@ -391,8 +375,13 @@ class FacturaController extends Controller
         $this->autorizarBodega($factura);
 
         if (! $factura->pdf_url) {
-            $this->generarPdf($factura);
-            $factura->refresh();
+            try {
+                $this->recibo->generarPdf($factura);
+                $factura->refresh();
+            } catch (\Throwable $e) {
+                Log::error('No se pudo generar el PDF de la factura', ['factura' => $factura->numero, 'error' => $e->getMessage()]);
+                abort(502, 'No se pudo generar el PDF. Intenta de nuevo en un momento.');
+            }
         }
 
         $ruta = StorageUrl::rutaLocal($factura->pdf_url);
@@ -421,8 +410,13 @@ class FacturaController extends Controller
 
         // Asegura que el PDF exista.
         if (! $factura->pdf_url) {
-            $this->generarPdf($factura);
-            $factura->refresh();
+            try {
+                $this->recibo->generarPdf($factura);
+                $factura->refresh();
+            } catch (\Throwable $e) {
+                Log::error('No se pudo generar el PDF de la factura', ['factura' => $factura->numero, 'error' => $e->getMessage()]);
+                return response()->json(['message' => 'No se pudo generar el PDF para enviarlo. Intenta de nuevo en un momento.'], 502);
+            }
         }
         $adjunto = $factura->pdf_url
             ? Storage::disk('public')->path(StorageUrl::rutaLocal($factura->pdf_url))
@@ -494,9 +488,14 @@ class FacturaController extends Controller
 
         $ruta = StorageUrl::rutaLocal($factura->pdf_url);
         if (! $factura->pdf_url || ! Storage::disk('public')->exists($ruta)) {
-            $this->generarPdf($factura);
-            $factura->refresh();
-            $ruta = StorageUrl::rutaLocal($factura->pdf_url);
+            try {
+                $this->recibo->generarPdf($factura);
+                $factura->refresh();
+                $ruta = StorageUrl::rutaLocal($factura->pdf_url);
+            } catch (\Throwable $e) {
+                Log::error('No se pudo generar el PDF publico de la factura', ['factura' => $factura->numero, 'error' => $e->getMessage()]);
+                abort(502, 'No se pudo generar el PDF. Intenta de nuevo en un momento.');
+            }
         }
 
         $contenido = Storage::disk('public')->get($ruta);
