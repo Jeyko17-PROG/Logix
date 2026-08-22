@@ -20,6 +20,7 @@ export default function Productos() {
   const [valorTotalInventario, setValorTotalInventario] = useState(0)
   const [galeria, setGaleria] = useState([]) // fotos adicionales del producto en edición
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [unidadCustom, setUnidadCustom] = useState(false)
 
   async function cargar() {
     const data = await api('/productos')
@@ -31,10 +32,11 @@ export default function Productos() {
     api('/categorias').then(setCategorias)
   }, [])
 
-  function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setGaleria([]); setAbierto(true) }
+  function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setGaleria([]); setUnidadCustom(false); setAbierto(true) }
   async function editar(p) {
     setForm({ ...VACIO, ...p, categoria_id: p.categoria_id ?? '' })
     setImagen(null); setEditId(p.id); setError(''); setAbierto(true); setGaleria([])
+    setUnidadCustom(!UNIDADES_MEDIDA.includes(String(p.unidad_medida ?? 'UND').toUpperCase()))
     try { setGaleria((await api(`/productos/${p.id}`)).galeria ?? []) } catch { /* no bloquea la edición */ }
   }
 
@@ -128,9 +130,30 @@ export default function Productos() {
             <option value="">Sin categoría</option>
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
-          <select value={form.unidad_medida} onChange={set('unidad_medida')} className="input" title="Unidad de medida (se usa también para armar el SKU automático)">
-            {UNIDADES_MEDIDA.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
+          <div className="flex gap-2">
+            <select
+              value={unidadCustom ? 'personalizado' : form.unidad_medida}
+              onChange={(e) => {
+                if (e.target.value === 'personalizado') { setUnidadCustom(true); setForm({ ...form, unidad_medida: '' }) }
+                else { setUnidadCustom(false); setForm({ ...form, unidad_medida: e.target.value }) }
+              }}
+              className="input"
+              title="Unidad de medida (se usa también para armar el SKU automático)"
+            >
+              {UNIDADES_MEDIDA.map((u) => <option key={u} value={u}>{u}</option>)}
+              <option value="personalizado">Personalizado…</option>
+            </select>
+            {unidadCustom && (
+              <input
+                required
+                placeholder="Ej: ROLLO, BULTO, GALÓN…"
+                value={form.unidad_medida}
+                onChange={(e) => setForm({ ...form, unidad_medida: e.target.value.toUpperCase().slice(0, 20) })}
+                maxLength={20}
+                className="input"
+              />
+            )}
+          </div>
           <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="input" />
           <input type="text" inputMode="decimal" placeholder="Precio costo (ej: 250.000)" value={form.precio_costo} onChange={set('precio_costo')} className="input" required />
           <input type="text" inputMode="decimal" placeholder="Precio venta (ej: 400.000)" value={form.precio_venta} onChange={set('precio_venta')} className="input" required />
