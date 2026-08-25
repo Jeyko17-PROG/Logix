@@ -6,7 +6,7 @@ import { useFeatures } from '../context/FeaturesContext'
 
 const COP = (n) => '$' + Number(n).toLocaleString('es-CO')
 
-const PLANTILLA = { id: null, nombre: '', precio_mensual: 0, limite_clientes: 200, incluye: [], funcionalidades: [], activo: true, orden: 99 }
+const PLANTILLA = { id: null, nombre: '', precio_mensual: 0, limite_clientes: 200, limite_citas: 200, incluye: [], funcionalidades: [], activo: true, orden: 99 }
 
 export default function Planes() {
   const { user } = useAuth()
@@ -64,7 +64,8 @@ export default function Planes() {
   async function guardar(p) {
     const body = {
       nombre: p.nombre, precio_mensual: Number(p.precio_mensual),
-      limite_clientes: Number(p.limite_clientes), incluye: p.incluye,
+      limite_clientes: Number(p.limite_clientes), limite_citas: Number(p.limite_citas),
+      incluye: p.incluye,
       funcionalidades: p.funcionalidades, activo: p.activo, orden: Number(p.orden) || 0,
     }
     try {
@@ -222,6 +223,9 @@ function ModalPlan({ plan, catalogo, onClose, onGuardar }) {
             </label>
             <label className="block text-sm text-slate-300">Límite de clientes
               <input type="number" min="1" value={form.limite_clientes} onChange={set('limite_clientes')} className="input mt-1" required />
+            </label>
+            <label className="block text-sm text-slate-300">Límite de citas
+              <input type="number" min="1" value={form.limite_citas} onChange={set('limite_citas')} className="input mt-1" required />
             </label>
           </div>
 
