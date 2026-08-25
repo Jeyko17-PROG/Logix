@@ -176,6 +176,34 @@ class KardexService
         });
     }
 
+    /**
+     * Elimina una fila de stock (producto × bodega) que se creó por error o
+     * que quedó huérfana (ej. el producto ya se borró). Si todavía tiene
+     * cantidad, primero se registra una SALIDA de ajuste que la deja en cero
+     * -conserva el rastro en el Kardex- y recién ahí se borra la fila; no es
+     * un edit-a-mano silencioso de la cantidad.
+     */
+    public function eliminarStock(StockBodega $stock, ?int $usuarioId = null): void
+    {
+        DB::transaction(function () use ($stock, $usuarioId) {
+            if ((float) $stock->cantidad > 0) {
+                $this->registrar([
+                    'producto_id' => $stock->producto_id,
+                    'tipo' => 'SALIDA',
+                    'motivo' => 'AJUSTE_ELIMINACION',
+                    'bodega_origen_id' => $stock->bodega_id,
+                    'cantidad' => (float) $stock->cantidad,
+                    'costo_unitario' => (float) $stock->costo_promedio,
+                    'costo_promedio_resultante' => (float) $stock->costo_promedio,
+                    'stock_resultante' => 0,
+                    'usuario_id' => $usuarioId,
+                ], []);
+            }
+
+            $stock->delete();
+        });
+    }
+
     /** Aplica un ajuste de cantidad (+/-) a una fila de stock, sin dejarla negativa. */
     private function ajustarCantidad(int $productoId, int $bodegaId, float $delta): void
     {

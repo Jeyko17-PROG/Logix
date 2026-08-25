@@ -27,6 +27,20 @@ export default function Inventario() {
     setMovimientos(m.data ?? m)
   }
 
+  async function eliminarStock(s) {
+    const nombre = s.producto?.nombre ?? 'este producto (ya eliminado)'
+    const aviso = Number(s.cantidad) > 0
+      ? ` Tiene ${Number(s.cantidad).toLocaleString('es-CO')} unidades — se registrará un ajuste en el Kardex antes de borrarlo.`
+      : ''
+    if (!confirm(`¿Eliminar el registro de stock de "${nombre}" en ${s.bodega?.nombre}?${aviso} No se puede deshacer.`)) return
+    try {
+      await api(`/inventario/stock/${s.id}`, { method: 'DELETE' })
+      cargar()
+    } catch (err) {
+      alert(err.message || 'No se pudo eliminar el registro de stock.')
+    }
+  }
+
   async function eliminarMovimiento(m) {
     if (!confirm(`¿Eliminar este movimiento (${m.tipo} de ${Number(m.cantidad).toLocaleString('es-CO')} × ${m.producto?.nombre})? Esto ajusta el stock de vuelta y no se puede deshacer.`)) return
     try {
@@ -176,14 +190,16 @@ export default function Inventario() {
         <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="w-full text-sm">
             <thead className="bg-slate-800 text-slate-300">
-              <tr><th className="text-left p-3">Producto</th><th className="text-left p-3">Bodega</th><th className="p-3 w-40">Nivel</th><th className="text-right p-3">Cantidad</th><th className="text-right p-3">Mínimo</th><th className="text-right p-3">Costo prom.</th></tr>
+              <tr><th className="text-left p-3">Producto</th><th className="text-left p-3">Bodega</th><th className="p-3 w-40">Nivel</th><th className="text-right p-3">Cantidad</th><th className="text-right p-3">Mínimo</th><th className="text-right p-3">Costo prom.</th><th className="p-3"></th></tr>
             </thead>
             <tbody>
               {stock.map((s) => {
                 const n = nivel(s)
                 return (
                   <tr key={s.id} className={`border-t border-slate-800 ${FILA[n.tono]}`}>
-                    <td className="p-3 font-medium">{s.producto?.nombre}</td>
+                    <td className="p-3 font-medium">
+                      {s.producto?.nombre ?? <span className="italic text-slate-500">(producto eliminado)</span>}
+                    </td>
                     <td className="p-3 text-slate-400">{s.bodega?.nombre}</td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
@@ -196,10 +212,13 @@ export default function Inventario() {
                     <td className={`p-3 text-right font-semibold ${n.tono === 'red' ? 'text-red-300' : n.tono === 'amber' ? 'text-amber-300' : ''}`}>{Number(s.cantidad).toLocaleString('es-CO')}</td>
                     <td className="p-3 text-right text-slate-400">{Number(s.stock_minimo).toLocaleString('es-CO')}</td>
                     <td className="p-3 text-right text-slate-400">${Number(s.costo_promedio).toLocaleString()}</td>
+                    <td className="p-3 text-right">
+                      <button onClick={() => eliminarStock(s)} className="text-red-400 hover:underline text-xs">Eliminar</button>
+                    </td>
                   </tr>
                 )
               })}
-              {stock.length === 0 && <tr><td colSpan="6" className="p-6 text-center text-slate-500">Sin movimientos de stock aún.</td></tr>}
+              {stock.length === 0 && <tr><td colSpan="7" className="p-6 text-center text-slate-500">Sin movimientos de stock aún.</td></tr>}
             </tbody>
           </table>
         </div>

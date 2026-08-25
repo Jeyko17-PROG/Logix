@@ -187,6 +187,33 @@ class InventarioController extends Controller
         return response()->json(['message' => 'Movimiento eliminado y stock ajustado.']);
     }
 
+    /**
+     * Elimina una fila de stock (producto × bodega) mal cargada o huérfana
+     * (producto ya borrado). Si tenía cantidad, KardexService la deja en
+     * cero con un ajuste registrado antes de borrar la fila.
+     */
+    public function eliminarStock(Request $request, StockBodega $stock)
+    {
+        if ($request->user()?->estaLimitadoABodega()) {
+            abort_unless((int) $stock->bodega_id === (int) $request->user()->bodega_id, 403, 'No tienes acceso a otro establecimiento.');
+        }
+
+        $etiqueta = $stock->producto?->nombre ?? "producto #{$stock->producto_id}";
+        $this->kardex->eliminarStock($stock, $request->user()->id);
+
+        Auditoria::registrar(
+            $request->user()->id,
+            null,
+            'INVENTARIO_STOCK',
+            'ELIMINAR',
+            $etiqueta,
+            null,
+            $stock->bodega_id,
+        );
+
+        return response()->json(['message' => 'Registro de stock eliminado.']);
+    }
+
     private function requerir(array $data, string $campo, string $nombre): int
     {
         abort_unless(! empty($data[$campo]), 422, "Debes indicar {$nombre}.");
