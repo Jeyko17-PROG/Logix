@@ -78,7 +78,7 @@ export default function Planes() {
   return (
     <div>
       {/* Siempre visible: evita que esta pantalla se sienta un callejón sin salida. */}
-      <Link to="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
+      <Link to="/dashboard" className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
         ← Volver al Dashboard
       </Link>
 
@@ -90,7 +90,7 @@ export default function Planes() {
             No se confirmó el pago en la pasarela. Puedes volver al dashboard y reintentar más tarde.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link to="/" className="rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-2 text-sm font-semibold">← Volver al Dashboard</Link>
+            <Link to="/dashboard" className="rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-2 text-sm font-semibold">← Volver al Dashboard</Link>
             <Link to="/planes" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold">Intentar de nuevo</Link>
           </div>
           {referenciaPago && <p className="text-xs text-amber-200/60 mt-2">Referencia: {referenciaPago}</p>}

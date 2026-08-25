@@ -39,11 +39,11 @@ export default function MisNegocios() {
   useEffect(() => { cargar() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function elegir(n) {
-    if (n.es_actual) { navigate('/'); return }
+    if (n.es_actual) { navigate('/dashboard'); return }
     setEntrando(n.id); setError('')
     try {
       await entrarNegocio(n.id)
-      navigate('/')
+      navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'No se pudo entrar a ese negocio.')
     } finally {

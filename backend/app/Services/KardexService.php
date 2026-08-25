@@ -186,21 +186,27 @@ class KardexService
     public function eliminarStock(StockBodega $stock, ?int $usuarioId = null): void
     {
         DB::transaction(function () use ($stock, $usuarioId) {
-            if ((float) $stock->cantidad > 0) {
+            // Relee con lockForUpdate() en vez de confiar en la instancia que
+            // llegó del controller (cargada fuera de la transacción): otra
+            // venta/traslado concurrente pudo haber cambiado la cantidad
+            // real entre ese momento y este.
+            $bloqueado = $this->lockStock($stock->producto_id, $stock->bodega_id);
+
+            if ((float) $bloqueado->cantidad > 0) {
                 $this->registrar([
-                    'producto_id' => $stock->producto_id,
+                    'producto_id' => $bloqueado->producto_id,
                     'tipo' => 'SALIDA',
                     'motivo' => 'AJUSTE_ELIMINACION',
-                    'bodega_origen_id' => $stock->bodega_id,
-                    'cantidad' => (float) $stock->cantidad,
-                    'costo_unitario' => (float) $stock->costo_promedio,
-                    'costo_promedio_resultante' => (float) $stock->costo_promedio,
+                    'bodega_origen_id' => $bloqueado->bodega_id,
+                    'cantidad' => (float) $bloqueado->cantidad,
+                    'costo_unitario' => (float) $bloqueado->costo_promedio,
+                    'costo_promedio_resultante' => (float) $bloqueado->costo_promedio,
                     'stock_resultante' => 0,
                     'usuario_id' => $usuarioId,
                 ], []);
             }
 
-            $stock->delete();
+            $bloqueado->delete();
         });
     }
 

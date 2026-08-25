@@ -275,7 +275,7 @@ export default function Layout() {
             <span className="text-xl">☰</span>
             Menú
           </button>
-          <button onClick={() => navigate('/')} aria-label="Volver al Dashboard" className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/80 text-slate-200 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 text-base leading-none">
+          <button onClick={() => navigate('/dashboard')} aria-label="Volver al Dashboard" className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/80 text-slate-200 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 text-base leading-none">
             <span className="text-lg">←</span>
             Atrás
           </button>
