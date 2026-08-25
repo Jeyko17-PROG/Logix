@@ -288,6 +288,7 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
         Route::delete('productos/{producto}/galeria/{imagen}', [GaleriaController::class, 'eliminarProducto'])->middleware('feature:productos');
 
         Route::post('inventario/movimientos', [InventarioController::class, 'registrarMovimiento'])->middleware('feature:inventario');
+        Route::delete('inventario/movimientos/{movimiento}', [InventarioController::class, 'eliminarMovimiento'])->middleware('feature:inventario');
         Route::post('inventario/minimo', [InventarioController::class, 'definirMinimo'])->middleware('feature:inventario');
     });
 

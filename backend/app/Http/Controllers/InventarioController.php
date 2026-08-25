@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Auditoria;
 use App\Models\MovimientoInventario;
 use App\Models\StockBodega;
 use App\Services\KardexService;
@@ -154,6 +155,36 @@ class InventarioController extends Controller
         };
 
         return response()->json($movimiento->load(['producto:id,sku,nombre']), 201);
+    }
+
+    /**
+     * Elimina un movimiento cargado manualmente y revierte su efecto en el
+     * stock (ver KardexService::eliminar). No permite borrar movimientos
+     * generados automáticamente por otro documento (factura, orden de
+     * compra, etc.) ni movimientos fuera de la bodega del usuario limitado.
+     */
+    public function eliminarMovimiento(Request $request, MovimientoInventario $movimiento)
+    {
+        if ($request->user()?->estaLimitadoABodega()) {
+            $bodegaUsuario = $request->user()->bodega_id;
+            $tocaSuBodega = (int) $movimiento->bodega_origen_id === (int) $bodegaUsuario
+                || (int) $movimiento->bodega_destino_id === (int) $bodegaUsuario;
+            abort_unless($tocaSuBodega, 403, 'No tienes acceso a otro establecimiento.');
+        }
+
+        $this->kardex->eliminar($movimiento);
+
+        Auditoria::registrar(
+            $request->user()->id,
+            null,
+            'INVENTARIO_MOVIMIENTO',
+            'ELIMINAR',
+            "{$movimiento->tipo} · {$movimiento->cantidad}",
+            null,
+            $movimiento->bodega_origen_id ?? $movimiento->bodega_destino_id,
+        );
+
+        return response()->json(['message' => 'Movimiento eliminado y stock ajustado.']);
     }
 
     private function requerir(array $data, string $campo, string $nombre): int

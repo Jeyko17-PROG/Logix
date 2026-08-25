@@ -145,6 +145,54 @@ class KardexService
     }
 
     /**
+     * Elimina un movimiento cargado a mano desde Inventario (sin referencia a
+     * otro documento, ej. una factura) y revierte su efecto en el stock.
+     *
+     * Solo ajusta la CANTIDAD; el costo promedio no se reconstruye hacia
+     * atrás (no es invertible con precisión si hubo movimientos posteriores
+     * al que se está borrando) — mismo criterio que ya usan las SALIDAs, que
+     * tampoco tocan el costo promedio.
+     */
+    public function eliminar(MovimientoInventario $movimiento): void
+    {
+        if ($movimiento->referencia_tipo) {
+            throw ValidationException::withMessages([
+                'movimiento' => ["Este movimiento lo generó {$movimiento->referencia_tipo} automáticamente; no se puede eliminar desde aquí."],
+            ]);
+        }
+
+        DB::transaction(function () use ($movimiento) {
+            match ($movimiento->tipo) {
+                'ENTRADA' => $this->ajustarCantidad($movimiento->producto_id, $movimiento->bodega_destino_id, -(float) $movimiento->cantidad),
+                'SALIDA' => $this->ajustarCantidad($movimiento->producto_id, $movimiento->bodega_origen_id, (float) $movimiento->cantidad),
+                'TRASLADO' => (function () use ($movimiento) {
+                    $this->ajustarCantidad($movimiento->producto_id, $movimiento->bodega_origen_id, (float) $movimiento->cantidad);
+                    $this->ajustarCantidad($movimiento->producto_id, $movimiento->bodega_destino_id, -(float) $movimiento->cantidad);
+                })(),
+                default => null,
+            };
+
+            $movimiento->delete();
+        });
+    }
+
+    /** Aplica un ajuste de cantidad (+/-) a una fila de stock, sin dejarla negativa. */
+    private function ajustarCantidad(int $productoId, int $bodegaId, float $delta): void
+    {
+        $stock = $this->lockStock($productoId, $bodegaId);
+        $resultante = (float) $stock->cantidad + $delta;
+
+        if ($resultante < 0) {
+            throw ValidationException::withMessages([
+                'movimiento' => ['No se puede eliminar: dejaría el stock en negativo (es probable que ya se haya vendido o movido parte de esa cantidad).'],
+            ]);
+        }
+
+        $stock->cantidad = $resultante;
+        $stock->save();
+    }
+
+    /**
      * Obtiene (o crea) y bloquea la fila de stock producto×bodega.
      */
     private function lockStock(int $productoId, int $bodegaId): StockBodega

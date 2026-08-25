@@ -7,6 +7,7 @@ const MOV_VACIO = { tipo: 'ENTRADA', producto_id: '', cantidad: '', costo_unitar
 export default function Inventario() {
   const [stock, setStock] = useState([])
   const [alertas, setAlertas] = useState([])
+  const [movimientos, setMovimientos] = useState([])
   const [productos, setProductos] = useState([])
   const [bodegas, setBodegas] = useState([])
   const [mov, setMov] = useState(MOV_VACIO)
@@ -16,9 +17,24 @@ export default function Inventario() {
 
   async function cargar(termino = buscar) {
     const qs = termino ? `?buscar=${encodeURIComponent(termino)}` : ''
-    const [s, a] = await Promise.all([api(`/inventario/stock${qs}`), api('/inventario/alertas')])
+    const [s, a, m] = await Promise.all([
+      api(`/inventario/stock${qs}`),
+      api('/inventario/alertas'),
+      api('/inventario/movimientos'),
+    ])
     setStock(s.data ?? s)
     setAlertas(a)
+    setMovimientos(m.data ?? m)
+  }
+
+  async function eliminarMovimiento(m) {
+    if (!confirm(`¿Eliminar este movimiento (${m.tipo} de ${Number(m.cantidad).toLocaleString('es-CO')} × ${m.producto?.nombre})? Esto ajusta el stock de vuelta y no se puede deshacer.`)) return
+    try {
+      await api(`/inventario/movimientos/${m.id}`, { method: 'DELETE' })
+      cargar()
+    } catch (err) {
+      alert(err.message || 'No se pudo eliminar el movimiento.')
+    }
   }
   useEffect(() => {
     cargar()
@@ -184,6 +200,50 @@ export default function Inventario() {
                 )
               })}
               {stock.length === 0 && <tr><td colSpan="6" className="p-6 text-center text-slate-500">Sin movimientos de stock aún.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Movimientos recientes (Kardex) */}
+      <div>
+        <h2 className="font-semibold mb-3">Movimientos recientes</h2>
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-800 text-slate-300">
+              <tr>
+                <th className="text-left p-3">Fecha</th>
+                <th className="text-left p-3">Tipo</th>
+                <th className="text-left p-3">Producto</th>
+                <th className="text-right p-3">Cantidad</th>
+                <th className="text-left p-3">Bodega</th>
+                <th className="text-left p-3">Usuario</th>
+                <th className="p-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {movimientos.map((m) => (
+                <tr key={m.id} className="border-t border-slate-800">
+                  <td className="p-3 text-slate-400">{new Date(m.created_at).toLocaleString('es-CO')}</td>
+                  <td className="p-3">{m.tipo}{m.motivo ? <span className="text-slate-500"> · {m.motivo}</span> : null}</td>
+                  <td className="p-3 font-medium">{m.producto?.nombre}</td>
+                  <td className="p-3 text-right">{Number(m.cantidad).toLocaleString('es-CO')}</td>
+                  <td className="p-3 text-slate-400">
+                    {m.bodega_origen && m.bodega_destino
+                      ? `${m.bodega_origen.nombre} → ${m.bodega_destino.nombre}`
+                      : (m.bodega_origen ?? m.bodega_destino)?.nombre}
+                  </td>
+                  <td className="p-3 text-slate-400">{m.usuario?.name ?? '—'}</td>
+                  <td className="p-3 text-right">
+                    {m.referencia_tipo ? (
+                      <span className="text-xs text-slate-600" title={`Generado automáticamente por ${m.referencia_tipo}`}>Automático</span>
+                    ) : (
+                      <button onClick={() => eliminarMovimiento(m)} className="text-red-400 hover:underline text-xs">Eliminar</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {movimientos.length === 0 && <tr><td colSpan="7" className="p-6 text-center text-slate-500">Sin movimientos registrados aún.</td></tr>}
             </tbody>
           </table>
         </div>
