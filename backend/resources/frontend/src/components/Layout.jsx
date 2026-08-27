@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useFeatures } from '../context/FeaturesContext'
@@ -25,11 +25,28 @@ function Campana() {
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState([])
   const [noLeidas, setNoLeidas] = useState(0)
+  const [banners, setBanners] = useState([])
+  // Máximo id de notificación ya visto: null = todavía no cargó la primera
+  // vez (no se debe mostrar banner de nada que ya existía al entrar).
+  const maxIdVistoRef = useRef(null)
 
   async function cargar() {
     try {
       const [lista, count] = await Promise.all([api('/notificaciones'), api('/notificaciones/no-leidas')])
       setItems(lista); setNoLeidas(count.no_leidas)
+
+      if (maxIdVistoRef.current !== null) {
+        const nuevas = lista.filter((n) => n.tipo === 'RESERVA' && n.id > maxIdVistoRef.current)
+        if (nuevas.length > 0) {
+          setBanners((b) => [...nuevas, ...b])
+          nuevas.forEach((n) => {
+            setTimeout(() => setBanners((b) => b.filter((x) => x.id !== n.id)), 10000)
+          })
+        }
+      }
+      if (lista.length > 0) {
+        maxIdVistoRef.current = Math.max(lista[0].id, maxIdVistoRef.current ?? 0)
+      }
     } catch { /* ignore */ }
   }
   useEffect(() => {
@@ -47,23 +64,41 @@ function Campana() {
   }
 
   return (
-    <div className="relative">
-      <button onClick={abrir} className="relative p-2 rounded-lg hover:bg-slate-800 text-lg">🔔
-        {noLeidas > 0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full px-1.5">{noLeidas}</span>}
-      </button>
-      {abierto && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50">
-          {items.length === 0 && <p className="p-4 text-slate-500 text-sm">Sin notificaciones.</p>}
-          {items.map((n) => (
-            <div key={n.id} className="p-3 border-b border-slate-700 text-sm">
-              <p className="font-medium">{n.titulo}</p>
-              {n.mensaje && <p className="text-slate-400 text-xs">{n.mensaje}</p>}
-              <p className="text-slate-600 text-xs mt-1">{new Date(n.created_at).toLocaleString('es')}</p>
+    <>
+      <div className="relative">
+        <button onClick={abrir} className="relative p-2 rounded-lg hover:bg-slate-800 text-lg">🔔
+          {noLeidas > 0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full px-1.5">{noLeidas}</span>}
+        </button>
+        {abierto && (
+          <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50">
+            {items.length === 0 && <p className="p-4 text-slate-500 text-sm">Sin notificaciones.</p>}
+            {items.map((n) => (
+              <div key={n.id} className="p-3 border-b border-slate-700 text-sm">
+                <p className="font-medium">{n.titulo}</p>
+                {n.mensaje && <p className="text-slate-400 text-xs">{n.mensaje}</p>}
+                <p className="text-slate-600 text-xs mt-1">{new Date(n.created_at).toLocaleString('es')}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Banner de reserva nueva: aparece solo, sin necesidad de abrir la campana */}
+      {banners.length > 0 && (
+        <div className="fixed top-20 right-4 z-[60] flex flex-col gap-2 w-80 max-w-[90vw]">
+          {banners.map((n) => (
+            <div key={n.id} className="rounded-xl bg-emerald-600 text-white shadow-xl p-3 text-sm flex items-start gap-2">
+              <span className="text-lg leading-none">📅</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">Nueva reserva</p>
+                {n.mensaje && <p className="text-emerald-50 text-xs mt-0.5">{n.mensaje}</p>}
+              </div>
+              <button onClick={() => setBanners((b) => b.filter((x) => x.id !== n.id))} className="text-emerald-100 hover:text-white leading-none">✕</button>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </>
   )
 }
 
