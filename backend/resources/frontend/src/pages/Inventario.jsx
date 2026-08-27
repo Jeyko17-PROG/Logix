@@ -160,36 +160,36 @@ export default function Inventario() {
         <h2 className="sm:col-span-3 font-semibold">Registrar movimiento (Kardex)</h2>
         {error && <div className="sm:col-span-3 text-red-300 text-sm">{error}</div>}
         {ok && <div className="sm:col-span-3 text-emerald-300 text-sm">{ok}</div>}
-        <select value={mov.tipo} onChange={set('tipo')} className="input">
-          <option value="ENTRADA">Entrada</option>
-          <option value="SALIDA">Salida</option>
-          <option value="TRASLADO">Traslado</option>
-        </select>
-        <select required value={mov.producto_id} onChange={set('producto_id')} className="input">
-          <option value="">Producto…</option>
-          {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
-        </select>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
+          <select value={mov.tipo} onChange={set('tipo')} className="input">
+            <option value="ENTRADA">Entrada</option>
+            <option value="SALIDA">Salida</option>
+            <option value="TRASLADO">Traslado</option>
+          </select>
           <input
             type="text"
             inputMode="decimal"
             required
-            placeholder={tienePresentacion && modoCantidad === 'compra' ? `Cantidad en ${productoSeleccionado.unidad_compra}` : 'Cantidad'}
+            placeholder="Cantidad"
             value={mov.cantidad}
             onChange={set('cantidad')}
             className="input"
           />
-          {tienePresentacion ? (
-            <select value={modoCantidad} onChange={(e) => setModoCantidad(e.target.value)} className="input shrink-0 w-auto">
-              <option value="base">{productoSeleccionado.unidad_medida}</option>
-              <option value="compra">{productoSeleccionado.unidad_compra}</option>
-            </select>
-          ) : (
-            <select disabled value="base" className="input shrink-0 w-auto opacity-60" title="Este producto no tiene una presentación de compra configurada (ver Productos)">
-              <option value="base">{productoSeleccionado?.unidad_medida ?? 'UND'}</option>
-            </select>
-          )}
         </div>
+        <select required value={mov.producto_id} onChange={set('producto_id')} className="input">
+          <option value="">Producto…</option>
+          {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
+        </select>
+        {tienePresentacion ? (
+          <select value={modoCantidad} onChange={(e) => setModoCantidad(e.target.value)} className="input">
+            <option value="base">Unidad: {productoSeleccionado.unidad_medida}</option>
+            <option value="compra">Unidad: {productoSeleccionado.unidad_compra}</option>
+          </select>
+        ) : (
+          <select disabled value="base" className="input opacity-60" title="Este producto no tiene una presentación de compra configurada (ver Productos)">
+            <option value="base">Unidad: {productoSeleccionado?.unidad_medida ?? 'UND'}</option>
+          </select>
+        )}
         {tienePresentacion && modoCantidad === 'compra' && mov.cantidad && (
           <p className="sm:col-span-3 -mt-2 text-xs text-slate-400">
             = {(aNumero(mov.cantidad) * Number(productoSeleccionado.unidades_por_compra)).toLocaleString('es-CO')} {productoSeleccionado.unidad_medida}
