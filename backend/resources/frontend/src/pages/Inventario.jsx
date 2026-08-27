@@ -169,7 +169,7 @@ export default function Inventario() {
           <option value="">Producto…</option>
           {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
         </select>
-        <div className={tienePresentacion ? 'flex gap-2' : ''}>
+        <div className="flex gap-2">
           <input
             type="text"
             inputMode="decimal"
@@ -179,10 +179,14 @@ export default function Inventario() {
             onChange={set('cantidad')}
             className="input"
           />
-          {tienePresentacion && (
+          {tienePresentacion ? (
             <select value={modoCantidad} onChange={(e) => setModoCantidad(e.target.value)} className="input shrink-0 w-auto">
               <option value="base">{productoSeleccionado.unidad_medida}</option>
               <option value="compra">{productoSeleccionado.unidad_compra}</option>
+            </select>
+          ) : (
+            <select disabled value="base" className="input shrink-0 w-auto opacity-60" title="Este producto no tiene una presentación de compra configurada (ver Productos)">
+              <option value="base">{productoSeleccionado?.unidad_medida ?? 'UND'}</option>
             </select>
           )}
         </div>
