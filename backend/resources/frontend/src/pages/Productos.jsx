@@ -4,6 +4,7 @@ import { aNumero } from '../utils/numero'
 
 const VACIO = {
   sku: '', codigo_barras: '', nombre: '', descripcion: '', unidad_medida: 'UND',
+  unidad_compra: '', unidades_por_compra: '',
   precio_costo: '', precio_venta: '', categoria_id: '', activo: true, disponible: true,
 }
 
@@ -21,6 +22,7 @@ export default function Productos() {
   const [galeria, setGaleria] = useState([]) // fotos adicionales del producto en edición
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [unidadCustom, setUnidadCustom] = useState(false)
+  const [usarPresentacion, setUsarPresentacion] = useState(false)
 
   async function cargar() {
     const data = await api('/productos')
@@ -32,11 +34,12 @@ export default function Productos() {
     api('/categorias').then(setCategorias)
   }, [])
 
-  function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setGaleria([]); setUnidadCustom(false); setAbierto(true) }
+  function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setGaleria([]); setUnidadCustom(false); setUsarPresentacion(false); setAbierto(true) }
   async function editar(p) {
-    setForm({ ...VACIO, ...p, categoria_id: p.categoria_id ?? '' })
+    setForm({ ...VACIO, ...p, categoria_id: p.categoria_id ?? '', unidad_compra: p.unidad_compra ?? '', unidades_por_compra: p.unidades_por_compra ?? '' })
     setImagen(null); setEditId(p.id); setError(''); setAbierto(true); setGaleria([])
     setUnidadCustom(!UNIDADES_MEDIDA.includes(String(p.unidad_medida ?? 'UND').toUpperCase()))
+    setUsarPresentacion(!!p.unidad_compra)
     try { setGaleria((await api(`/productos/${p.id}`)).galeria ?? []) } catch { /* no bloquea la edición */ }
   }
 
@@ -74,13 +77,18 @@ export default function Productos() {
         // pisarlos con un valor mal serializado. Un booleano `false` via
         // FormData.append() se vuelve el string "false", que Laravel rechaza
         // (la regla "boolean" solo acepta true/false/0/1/"0"/"1").
-        if (['is_service', 'has_commission', 'commission_type', 'commission_value'].includes(k)) return
+        if (['is_service', 'has_commission', 'commission_type', 'commission_value', 'unidad_compra', 'unidades_por_compra'].includes(k)) return
         if (k === 'activo' || k === 'disponible') fd.append(k, v ? '1' : '0')
         // Precios en formato colombiano: "400.000" debe llegar como 400000.
         else if (k === 'precio_costo' || k === 'precio_venta') fd.append(k, aNumero(v))
         else if (v !== null && v !== '') fd.append(k, v)
       })
       if (imagen) fd.append('imagen', imagen)
+      // Presentación de compra: si está desactivada se manda vacío para
+      // que el backend la borre (limpiar la config previa), en vez de
+      // simplemente omitirla y dejar el valor viejo pegado.
+      fd.append('unidad_compra', usarPresentacion ? form.unidad_compra : '')
+      fd.append('unidades_por_compra', usarPresentacion ? aNumero(form.unidades_por_compra) : '')
 
       if (editId) await api(`/productos/${editId}/update`, { method: 'POST', body: fd, isForm: true })
       else await api('/productos', { method: 'POST', body: fd, isForm: true })
@@ -158,6 +166,33 @@ export default function Productos() {
                 maxLength={20}
                 className="input"
               />
+            )}
+          </div>
+          <div className="sm:col-span-2 rounded-lg border border-slate-700 p-3">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" checked={usarPresentacion} onChange={(e) => setUsarPresentacion(e.target.checked)} />
+              Se compra por caja/paquete (ej: CAJA de 12 {form.unidad_medida || 'UND'})
+            </label>
+            {usarPresentacion && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  required
+                  placeholder="Nombre presentación (ej: CAJA)"
+                  value={form.unidad_compra}
+                  onChange={(e) => setForm({ ...form, unidad_compra: e.target.value.toUpperCase().slice(0, 20) })}
+                  maxLength={20}
+                  className="input"
+                />
+                <input
+                  required
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={`Cuántas ${form.unidad_medida || 'UND'} trae`}
+                  value={form.unidades_por_compra}
+                  onChange={set('unidades_por_compra')}
+                  className="input"
+                />
+              </div>
             )}
           </div>
           <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="input" />

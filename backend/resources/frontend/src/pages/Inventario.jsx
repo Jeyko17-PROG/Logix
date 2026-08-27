@@ -11,6 +11,7 @@ export default function Inventario() {
   const [productos, setProductos] = useState([])
   const [bodegas, setBodegas] = useState([])
   const [mov, setMov] = useState(MOV_VACIO)
+  const [modoCantidad, setModoCantidad] = useState('base') // 'base' = unidad_medida, 'compra' = presentación (ej. CAJA)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
   const [buscar, setBuscar] = useState('')
@@ -64,26 +65,40 @@ export default function Inventario() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buscar])
 
+  const productoSeleccionado = productos.find((p) => String(p.id) === String(mov.producto_id))
+  const tienePresentacion = !!(productoSeleccionado?.unidad_compra && Number(productoSeleccionado?.unidades_por_compra) > 0)
+
   async function registrar(e) {
     e.preventDefault()
     setError(''); setOk('')
     try {
+      // El Kardex siempre guarda en unidad_medida (unidad base). Si el usuario
+      // cargó la cantidad en la presentación de compra (ej. "3 CAJA"), se
+      // convierte a la unidad base ANTES de mandarla — el stock real nunca
+      // se entera de que existió una "caja", solo ve unidades.
+      const cantidadBase = tienePresentacion && modoCantidad === 'compra'
+        ? aNumero(mov.cantidad) * Number(productoSeleccionado.unidades_por_compra)
+        : aNumero(mov.cantidad)
       await api('/inventario/movimientos', { method: 'POST', body: {
         ...mov,
-        cantidad: aNumero(mov.cantidad),
+        cantidad: cantidadBase,
         costo_unitario: mov.costo_unitario ? aNumero(mov.costo_unitario) : undefined,
         bodega_origen_id: mov.bodega_origen_id || undefined,
         bodega_destino_id: mov.bodega_destino_id || undefined,
       } })
       setOk('Movimiento registrado.')
       setMov(MOV_VACIO)
+      setModoCantidad('base')
       cargar()
     } catch (err) {
       setError(err.message)
     }
   }
 
-  const set = (k) => (e) => setMov({ ...mov, [k]: e.target.value })
+  const set = (k) => (e) => {
+    if (k === 'producto_id') setModoCantidad('base')
+    setMov({ ...mov, [k]: e.target.value })
+  }
   const esTraslado = mov.tipo === 'TRASLADO'
   const usaOrigen = mov.tipo === 'SALIDA' || esTraslado
   const usaDestino = mov.tipo === 'ENTRADA' || esTraslado
@@ -154,7 +169,29 @@ export default function Inventario() {
           <option value="">Producto…</option>
           {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
         </select>
-        <input type="text" inputMode="decimal" required placeholder="Cantidad" value={mov.cantidad} onChange={set('cantidad')} className="input" />
+        <div className={tienePresentacion ? 'flex gap-2' : ''}>
+          <input
+            type="text"
+            inputMode="decimal"
+            required
+            placeholder={tienePresentacion && modoCantidad === 'compra' ? `Cantidad en ${productoSeleccionado.unidad_compra}` : 'Cantidad'}
+            value={mov.cantidad}
+            onChange={set('cantidad')}
+            className="input"
+          />
+          {tienePresentacion && (
+            <select value={modoCantidad} onChange={(e) => setModoCantidad(e.target.value)} className="input shrink-0 w-auto">
+              <option value="base">{productoSeleccionado.unidad_medida}</option>
+              <option value="compra">{productoSeleccionado.unidad_compra}</option>
+            </select>
+          )}
+        </div>
+        {tienePresentacion && modoCantidad === 'compra' && mov.cantidad && (
+          <p className="sm:col-span-3 -mt-2 text-xs text-slate-400">
+            = {(aNumero(mov.cantidad) * Number(productoSeleccionado.unidades_por_compra)).toLocaleString('es-CO')} {productoSeleccionado.unidad_medida}
+            {' '}(1 {productoSeleccionado.unidad_compra} = {Number(productoSeleccionado.unidades_por_compra).toLocaleString('es-CO')} {productoSeleccionado.unidad_medida})
+          </p>
+        )}
         {usaOrigen && (
           <select required value={mov.bodega_origen_id} onChange={set('bodega_origen_id')} className="input">
             <option value="">Bodega origen…</option>

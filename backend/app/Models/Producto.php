@@ -24,6 +24,8 @@ class Producto extends Model
         'nombre',
         'descripcion',
         'unidad_medida',
+        'unidad_compra',
+        'unidades_por_compra',
         'is_service',
         'has_commission',
         'commission_type',
@@ -39,6 +41,7 @@ class Producto extends Model
     protected $casts = [
         'precio_costo' => 'decimal:2',
         'precio_venta' => 'decimal:2',
+        'unidades_por_compra' => 'decimal:4',
         'activo' => 'boolean',
         'disponible' => 'boolean',
         'is_service' => 'boolean',

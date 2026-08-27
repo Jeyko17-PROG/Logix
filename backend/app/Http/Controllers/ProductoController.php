@@ -175,6 +175,10 @@ class ProductoController extends Controller
             // Nulo/vacío = se autogenera al guardar (ver generarSku()).
             'sku' => ['nullable', 'string', 'max:100', "unique:productos,sku{$unique}"],
             'unidad_medida' => ['nullable', 'string', 'max:20'],
+            // Presentación de compra opcional (ej. "CAJA" = 12 UND): si viene una,
+            // debe venir la otra, para que la conversión nunca quede a medias.
+            'unidad_compra' => ['nullable', 'string', 'max:20', 'required_with:unidades_por_compra'],
+            'unidades_por_compra' => ['nullable', 'numeric', 'min:0.0001', 'required_with:unidad_compra'],
             'codigo_barras' => ['nullable', 'string', 'max:100', "unique:productos,codigo_barras{$unique}"],
             'nombre' => ['required', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],
