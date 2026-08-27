@@ -15,10 +15,12 @@ services:
         condition: service_healthy
     volumes:
       # Persiste lo que Storage::disk('public') genera (PDFs de facturas,
-      # órdenes de compra, recibos) entre reinicios/redeploys. El resto de
-      # storage/ (logs, caché de framework) se regenera solo, no hace falta
-      # persistirlo.
+      # órdenes de compra, recibos) entre reinicios/redeploys.
       - storage_data:/var/www/html/storage/app/public
+      # Persiste storage/logs/laravel.log: sin esto, cada redeploy borraba
+      # el log y era imposible diagnosticar un error que el usuario reportó
+      # después de un redeploy (el contenedor viejo, con el log, ya no existe).
+      - logs_data:/var/www/html/storage/logs
     networks:
       - logix
 
@@ -74,6 +76,7 @@ services:
 volumes:
   db_data:
   storage_data:
+  logs_data:
   certbot_conf:
   certbot_www:
 

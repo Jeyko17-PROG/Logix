@@ -69,6 +69,12 @@ export default function Productos() {
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
+        // Estos campos no tienen control en este formulario (vienen heredados
+        // del producto al editar, ver `editar()`) - no se reenvían para no
+        // pisarlos con un valor mal serializado. Un booleano `false` via
+        // FormData.append() se vuelve el string "false", que Laravel rechaza
+        // (la regla "boolean" solo acepta true/false/0/1/"0"/"1").
+        if (['is_service', 'has_commission', 'commission_type', 'commission_value'].includes(k)) return
         if (k === 'activo' || k === 'disponible') fd.append(k, v ? '1' : '0')
         // Precios en formato colombiano: "400.000" debe llegar como 400000.
         else if (k === 'precio_costo' || k === 'precio_venta') fd.append(k, aNumero(v))

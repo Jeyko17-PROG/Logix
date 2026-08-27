@@ -42,6 +42,17 @@ export default function Facturacion() {
   // Solo se puede editar mientras no esté pagada/anulada (el backend ya lo bloquea igual).
   const esEditable = (f) => !['PAGADA', 'ANULADA'].includes(f.estado)
 
+  // Por defecto solo se ven las facturas pendientes (todo lo que no es PAGADA);
+  // las pagadas quedan en su propia pestaña para no revolver el listado.
+  const [filtroEstado, setFiltroEstado] = useState('pendientes')
+  const facturasFiltradas = facturas.filter((f) => {
+    if (filtroEstado === 'pagadas') return f.estado === 'PAGADA'
+    if (filtroEstado === 'pendientes') return f.estado !== 'PAGADA'
+    return true
+  })
+  const totalPagadas = facturas.filter((f) => f.estado === 'PAGADA').length
+  const totalPendientes = facturas.length - totalPagadas
+
   // Foco automático en el lector de código de barras al abrir la venta rápida
   // (tienda/comercio): el cajero puede escanear de inmediato sin hacer clic.
   useEffect(() => {
@@ -425,13 +436,30 @@ export default function Facturacion() {
         </form>
       )}
 
+      {/* Filtro: pendientes / pagadas / todas — evita mezclar lo ya cobrado con lo activo */}
+      <div className="flex gap-2 mb-3">
+        {[
+          ['pendientes', `Pendientes (${totalPendientes})`],
+          ['pagadas', `Pagadas (${totalPagadas})`],
+          ['todas', `Todas (${facturas.length})`],
+        ].map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => setFiltroEstado(v)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${filtroEstado === v ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-300">
             <tr><th className="text-left p-3">Número</th><th className="text-left p-3">Cliente</th><th className="text-left p-3">Fecha</th><th className="text-right p-3">Total</th><th className="text-left p-3">Estado</th><th className="p-3"></th></tr>
           </thead>
           <tbody>
-            {facturas.map((f) => (
+            {facturasFiltradas.map((f) => (
               <tr key={f.id} className="border-t border-slate-800 hover:bg-slate-800/30">
                 <td className="p-3 font-mono">{f.numero}</td>
                 <td className="p-3">
@@ -458,7 +486,11 @@ export default function Facturacion() {
                 </td>
               </tr>
             ))}
-            {facturas.length === 0 && <tr><td colSpan="6" className="p-6 text-center text-slate-500">Sin facturas aún.</td></tr>}
+            {facturasFiltradas.length === 0 && (
+              <tr><td colSpan="6" className="p-6 text-center text-slate-500">
+                {filtroEstado === 'pagadas' ? 'Sin facturas pagadas aún.' : filtroEstado === 'pendientes' ? 'Sin facturas pendientes.' : 'Sin facturas aún.'}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>

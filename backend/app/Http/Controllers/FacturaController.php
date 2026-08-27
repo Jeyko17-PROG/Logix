@@ -311,7 +311,10 @@ class FacturaController extends Controller
 
             $updates = [];
             if (isset($data['fecha'])) $updates['fecha'] = $data['fecha'];
-            if (isset($data['notas'])) $updates['notas'] = $data['notas'];
+            // array_key_exists (no isset): "notas" es nullable a propósito -
+            // isset() trata null como "no enviado" y nunca dejaba vaciar las
+            // notas de una factura ya creada.
+            if (array_key_exists('notas', $data)) $updates['notas'] = $data['notas'];
             if (isset($data['currency'])) $updates['currency'] = $data['currency'];
             if (array_key_exists('exchange_rate', $data)) $updates['exchange_rate'] = $data['exchange_rate'];
 
