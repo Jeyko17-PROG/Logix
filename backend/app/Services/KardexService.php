@@ -210,6 +210,72 @@ class KardexService
         });
     }
 
+    /**
+     * Edita directamente la cantidad de una fila de stock (corrige un error
+     * de carga) y registra el ajuste en el Kardex como un ENTRADA/SALIDA
+     * normal (motivo AJUSTE_EDICION), para que quede en "Movimientos
+     * recientes" igual que cualquier otro movimiento manual.
+     */
+    public function ajustarStock(int $productoId, int $bodegaId, float $nuevaCantidad, ?float $costoUnitario, ?int $usuarioId = null): MovimientoInventario
+    {
+        if ($nuevaCantidad < 0) {
+            throw ValidationException::withMessages([
+                'cantidad' => ['La cantidad no puede ser negativa.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($productoId, $bodegaId, $nuevaCantidad, $costoUnitario, $usuarioId) {
+            $stock = $this->lockStock($productoId, $bodegaId);
+            $actual = (float) $stock->cantidad;
+            $delta = $nuevaCantidad - $actual;
+
+            if (abs($delta) < 0.0001) {
+                throw ValidationException::withMessages([
+                    'cantidad' => ['Esa ya es la cantidad actual.'],
+                ]);
+            }
+
+            if ($delta > 0) {
+                $costoActual = (float) $stock->costo_promedio;
+                $costo = $costoUnitario ?? $costoActual;
+                $nuevoCosto = $nuevaCantidad > 0
+                    ? (($actual * $costoActual) + ($delta * $costo)) / $nuevaCantidad
+                    : $costo;
+                $stock->cantidad = $nuevaCantidad;
+                $stock->costo_promedio = $nuevoCosto;
+                $stock->save();
+
+                return $this->registrar([
+                    'producto_id' => $productoId,
+                    'tipo' => 'ENTRADA',
+                    'motivo' => 'AJUSTE_EDICION',
+                    'bodega_destino_id' => $bodegaId,
+                    'cantidad' => $delta,
+                    'costo_unitario' => $costo,
+                    'costo_promedio_resultante' => $nuevoCosto,
+                    'stock_resultante' => $nuevaCantidad,
+                    'usuario_id' => $usuarioId,
+                ], []);
+            }
+
+            $costoActual = (float) $stock->costo_promedio; // las salidas no alteran el promedio
+            $stock->cantidad = $nuevaCantidad;
+            $stock->save();
+
+            return $this->registrar([
+                'producto_id' => $productoId,
+                'tipo' => 'SALIDA',
+                'motivo' => 'AJUSTE_EDICION',
+                'bodega_origen_id' => $bodegaId,
+                'cantidad' => abs($delta),
+                'costo_unitario' => $costoActual,
+                'costo_promedio_resultante' => $costoActual,
+                'stock_resultante' => $nuevaCantidad,
+                'usuario_id' => $usuarioId,
+            ], []);
+        });
+    }
+
     /** Aplica un ajuste de cantidad (+/-) a una fila de stock, sin dejarla negativa. */
     private function ajustarCantidad(int $productoId, int $bodegaId, float $delta): void
     {

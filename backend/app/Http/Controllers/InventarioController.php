@@ -214,6 +214,48 @@ class InventarioController extends Controller
         return response()->json(['message' => 'Registro de stock eliminado.']);
     }
 
+    /**
+     * Corrige a mano la cantidad de una fila de stock (producto × bodega).
+     * No pisa el valor en silencio: internamente registra un ajuste
+     * ENTRADA/SALIDA en el Kardex (ver KardexService::ajustarStock), así
+     * queda visible en "Movimientos recientes" igual que cualquier otro
+     * movimiento manual.
+     */
+    public function editarStock(Request $request, StockBodega $stock)
+    {
+        if ($request->user()?->estaLimitadoABodega()) {
+            abort_unless((int) $stock->bodega_id === (int) $request->user()->bodega_id, 403, 'No tienes acceso a otro establecimiento.');
+        }
+
+        $data = $request->validate([
+            'cantidad' => ['required', 'numeric', 'min:0'],
+            'costo_unitario' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $etiqueta = $stock->producto?->nombre ?? "producto #{$stock->producto_id}";
+        $anterior = (float) $stock->cantidad;
+
+        $movimiento = $this->kardex->ajustarStock(
+            $stock->producto_id,
+            $stock->bodega_id,
+            $data['cantidad'],
+            $data['costo_unitario'] ?? null,
+            $request->user()->id,
+        );
+
+        Auditoria::registrar(
+            $request->user()->id,
+            null,
+            'INVENTARIO_STOCK',
+            'EDITAR',
+            "{$etiqueta}: {$anterior} → {$data['cantidad']}",
+            null,
+            $stock->bodega_id,
+        );
+
+        return response()->json($movimiento->load(['producto:id,sku,nombre']));
+    }
+
     private function requerir(array $data, string $campo, string $nombre): int
     {
         abort_unless(! empty($data[$campo]), 422, "Debes indicar {$nombre}.");

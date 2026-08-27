@@ -18,6 +18,7 @@ export default function Inventario() {
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
   const [buscar, setBuscar] = useState('')
+  const [editando, setEditando] = useState(null) // { id, cantidad, costo_unitario }
 
   async function cargar(termino = buscar) {
     const qs = termino ? `?buscar=${encodeURIComponent(termino)}` : ''
@@ -42,6 +43,24 @@ export default function Inventario() {
       cargar()
     } catch (err) {
       alert(err.message || 'No se pudo eliminar el registro de stock.')
+    }
+  }
+
+  function iniciarEdicion(s) {
+    setEditando({ id: s.id, cantidad: String(s.cantidad), costo_unitario: '' })
+  }
+
+  async function guardarEdicion() {
+    if (!editando) return
+    try {
+      await api(`/inventario/stock/${editando.id}`, { method: 'PUT', body: {
+        cantidad: aNumero(editando.cantidad),
+        costo_unitario: editando.costo_unitario ? aNumero(editando.costo_unitario) : undefined,
+      } })
+      setEditando(null)
+      cargar()
+    } catch (err) {
+      alert(err.message || 'No se pudo editar la cantidad.')
     }
   }
 
@@ -280,6 +299,7 @@ export default function Inventario() {
             <tbody>
               {stock.map((s) => {
                 const n = nivel(s)
+                const enEdicion = editando?.id === s.id
                 return (
                   <tr key={s.id} className={`border-t border-slate-800 ${FILA[n.tono]}`}>
                     <td className="p-3 font-medium">
@@ -294,11 +314,45 @@ export default function Inventario() {
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${BADGE[n.tono]}`}>{n.label}</span>
                       </div>
                     </td>
-                    <td className={`p-3 text-right font-semibold ${n.tono === 'red' ? 'text-red-300' : n.tono === 'amber' ? 'text-amber-300' : ''}`}>{Number(s.cantidad).toLocaleString('es-CO')}</td>
+                    <td className={`p-3 text-right font-semibold ${n.tono === 'red' ? 'text-red-300' : n.tono === 'amber' ? 'text-amber-300' : ''}`}>
+                      {enEdicion ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            autoFocus
+                            value={editando.cantidad}
+                            onChange={(e) => setEditando({ ...editando, cantidad: e.target.value })}
+                            className="input w-24 text-right py-1"
+                          />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="Costo (si sube)"
+                            title="Costo unitario, solo si la cantidad sube (para recalcular el costo promedio). Si la bajas, no hace falta."
+                            value={editando.costo_unitario}
+                            onChange={(e) => setEditando({ ...editando, costo_unitario: e.target.value })}
+                            className="input w-28 text-right py-1"
+                          />
+                        </div>
+                      ) : (
+                        Number(s.cantidad).toLocaleString('es-CO')
+                      )}
+                    </td>
                     <td className="p-3 text-right text-slate-400">{Number(s.stock_minimo).toLocaleString('es-CO')}</td>
                     <td className="p-3 text-right text-slate-400">${Number(s.costo_promedio).toLocaleString()}</td>
-                    <td className="p-3 text-right">
-                      <button onClick={() => eliminarStock(s)} className="text-red-400 hover:underline text-xs">Eliminar</button>
+                    <td className="p-3 text-right whitespace-nowrap">
+                      {enEdicion ? (
+                        <>
+                          <button onClick={guardarEdicion} className="text-emerald-400 hover:underline text-xs mr-3">Guardar</button>
+                          <button onClick={() => setEditando(null)} className="text-slate-400 hover:underline text-xs">Cancelar</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => iniciarEdicion(s)} className="text-emerald-400 hover:underline text-xs mr-3">Editar</button>
+                          <button onClick={() => eliminarStock(s)} className="text-red-400 hover:underline text-xs">Eliminar</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 )
