@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { aNumero } from '../utils/numero'
 
 const MOV_VACIO = { tipo: 'ENTRADA', producto_id: '', cantidad: '', costo_unitario: '', bodega_origen_id: '', bodega_destino_id: '', motivo: '' }
+const UNIDADES_MOV = ['UND', 'KG', 'LT', 'MT', 'CAJA', 'PAR', 'DOCENA', 'PAQUETE']
 
 export default function Inventario() {
   const [stock, setStock] = useState([])
@@ -11,7 +12,9 @@ export default function Inventario() {
   const [productos, setProductos] = useState([])
   const [bodegas, setBodegas] = useState([])
   const [mov, setMov] = useState(MOV_VACIO)
-  const [modoCantidad, setModoCantidad] = useState('base') // 'base' = unidad_medida, 'compra' = presentación (ej. CAJA)
+  const [unidadMov, setUnidadMov] = useState('') // unidad en la que se está cargando la cantidad (puede ser distinta a la unidad base del producto)
+  const [unidadPersonalizada, setUnidadPersonalizada] = useState('')
+  const [factorManual, setFactorManual] = useState('') // cuántas unidades base equivalen a 1 de unidadMov, cuando no coincide con la unidad base ni con la presentación de compra configurada
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
   const [buscar, setBuscar] = useState('')
@@ -67,18 +70,30 @@ export default function Inventario() {
 
   const productoSeleccionado = productos.find((p) => String(p.id) === String(mov.producto_id))
   const tienePresentacion = !!(productoSeleccionado?.unidad_compra && Number(productoSeleccionado?.unidades_por_compra) > 0)
+  const unidadBase = productoSeleccionado?.unidad_medida ?? 'UND'
+  // Opciones del selector: la lista fija de siempre + la unidad base del producto
+  // y su presentación de compra (por si no estaban en la lista fija), sin repetidos.
+  const opcionesUnidad = Array.from(new Set([unidadBase, ...UNIDADES_MOV, ...(tienePresentacion ? [productoSeleccionado.unidad_compra] : [])].filter(Boolean)))
+  const unidadElegida = unidadMov === 'PERSONALIZADO' ? unidadPersonalizada.trim().toUpperCase() : unidadMov
+  const esUnidadBase = !!unidadElegida && unidadElegida === unidadBase
+  const coincideConCompra = tienePresentacion && unidadElegida === productoSeleccionado.unidad_compra
+  const necesitaFactorManual = !!unidadElegida && !esUnidadBase && !coincideConCompra
+  const factorEfectivo = esUnidadBase ? 1 : coincideConCompra ? Number(productoSeleccionado.unidades_por_compra) : (aNumero(factorManual) || null)
 
   async function registrar(e) {
     e.preventDefault()
     setError(''); setOk('')
+    if (!unidadElegida) { setError('Selecciona la unidad en la que estás cargando la cantidad.'); return }
+    if (necesitaFactorManual && !factorEfectivo) {
+      setError(`Indica cuántas ${unidadBase} equivalen a 1 ${unidadElegida}.`)
+      return
+    }
     try {
       // El Kardex siempre guarda en unidad_medida (unidad base). Si el usuario
-      // cargó la cantidad en la presentación de compra (ej. "3 CAJA"), se
-      // convierte a la unidad base ANTES de mandarla — el stock real nunca
-      // se entera de que existió una "caja", solo ve unidades.
-      const cantidadBase = tienePresentacion && modoCantidad === 'compra'
-        ? aNumero(mov.cantidad) * Number(productoSeleccionado.unidades_por_compra)
-        : aNumero(mov.cantidad)
+      // cargó la cantidad en otra unidad (ej. "3 CAJA"), se convierte a la
+      // unidad base ANTES de mandarla — el stock real nunca se entera de que
+      // existió una "caja", solo ve unidades.
+      const cantidadBase = aNumero(mov.cantidad) * factorEfectivo
       await api('/inventario/movimientos', { method: 'POST', body: {
         ...mov,
         cantidad: cantidadBase,
@@ -88,17 +103,27 @@ export default function Inventario() {
       } })
       setOk('Movimiento registrado.')
       setMov(MOV_VACIO)
-      setModoCantidad('base')
+      setUnidadMov(''); setUnidadPersonalizada(''); setFactorManual('')
       cargar()
     } catch (err) {
       setError(err.message)
     }
   }
 
-  const set = (k) => (e) => {
-    if (k === 'producto_id') setModoCantidad('base')
-    setMov({ ...mov, [k]: e.target.value })
+  function elegirProducto(e) {
+    const id = e.target.value
+    const p = productos.find((x) => String(x.id) === String(id))
+    setMov({ ...mov, producto_id: id })
+    setUnidadMov(p?.unidad_medida ?? '')
+    setUnidadPersonalizada(''); setFactorManual('')
   }
+
+  function elegirUnidad(e) {
+    setUnidadMov(e.target.value)
+    setUnidadPersonalizada(''); setFactorManual('')
+  }
+
+  const set = (k) => (e) => setMov({ ...mov, [k]: e.target.value })
   const esTraslado = mov.tipo === 'TRASLADO'
   const usaOrigen = mov.tipo === 'SALIDA' || esTraslado
   const usaDestino = mov.tipo === 'ENTRADA' || esTraslado
@@ -160,42 +185,32 @@ export default function Inventario() {
         <h2 className="sm:col-span-3 font-semibold">Registrar movimiento (Kardex)</h2>
         {error && <div className="sm:col-span-3 text-red-300 text-sm">{error}</div>}
         {ok && <div className="sm:col-span-3 text-emerald-300 text-sm">{ok}</div>}
-        <div className="flex flex-col gap-2">
-          <select value={mov.tipo} onChange={set('tipo')} className="input">
-            <option value="ENTRADA">Entrada</option>
-            <option value="SALIDA">Salida</option>
-            <option value="TRASLADO">Traslado</option>
-          </select>
-          <input
-            type="text"
-            inputMode="decimal"
-            required
-            placeholder="Cantidad"
-            value={mov.cantidad}
-            onChange={set('cantidad')}
-            className="input"
-          />
-        </div>
-        <select required value={mov.producto_id} onChange={set('producto_id')} className="input">
+        {/* Fila 1: tipo, producto, cantidad */}
+        <select value={mov.tipo} onChange={set('tipo')} className="input">
+          <option value="ENTRADA">Entrada</option>
+          <option value="SALIDA">Salida</option>
+          <option value="TRASLADO">Traslado</option>
+        </select>
+        <select required value={mov.producto_id} onChange={elegirProducto} className="input">
           <option value="">Producto…</option>
           {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}</option>)}
         </select>
-        {tienePresentacion ? (
-          <select value={modoCantidad} onChange={(e) => setModoCantidad(e.target.value)} className="input">
-            <option value="base">Unidad: {productoSeleccionado.unidad_medida}</option>
-            <option value="compra">Unidad: {productoSeleccionado.unidad_compra}</option>
-          </select>
-        ) : (
-          <select disabled value="base" className="input opacity-60" title="Este producto no tiene una presentación de compra configurada (ver Productos)">
-            <option value="base">Unidad: {productoSeleccionado?.unidad_medida ?? 'UND'}</option>
-          </select>
-        )}
-        {tienePresentacion && modoCantidad === 'compra' && mov.cantidad && (
-          <p className="sm:col-span-3 -mt-2 text-xs text-slate-400">
-            = {(aNumero(mov.cantidad) * Number(productoSeleccionado.unidades_por_compra)).toLocaleString('es-CO')} {productoSeleccionado.unidad_medida}
-            {' '}(1 {productoSeleccionado.unidad_compra} = {Number(productoSeleccionado.unidades_por_compra).toLocaleString('es-CO')} {productoSeleccionado.unidad_medida})
-          </p>
-        )}
+        <input
+          type="text"
+          inputMode="decimal"
+          required
+          placeholder="Cantidad"
+          value={mov.cantidad}
+          onChange={set('cantidad')}
+          className="input"
+        />
+
+        {/* Fila 2: unidad, bodega(s), costo unitario */}
+        <select required value={unidadMov} onChange={elegirUnidad} className="input" disabled={!mov.producto_id}>
+          <option value="">{mov.producto_id ? 'Unidad…' : 'Elige un producto primero'}</option>
+          {opcionesUnidad.map((u) => <option key={u} value={u}>{u}</option>)}
+          <option value="PERSONALIZADO">Personalizado…</option>
+        </select>
         {usaOrigen && (
           <select required value={mov.bodega_origen_id} onChange={set('bodega_origen_id')} className="input">
             <option value="">Bodega origen…</option>
@@ -211,6 +226,35 @@ export default function Inventario() {
         {mov.tipo === 'ENTRADA' && (
           <input type="text" inputMode="decimal" placeholder="Costo unitario (ej: 120.000)" value={mov.costo_unitario} onChange={set('costo_unitario')} className="input" />
         )}
+
+        {unidadMov === 'PERSONALIZADO' && (
+          <input
+            required
+            placeholder="Nombre de la unidad (ej: ROLLO, BULTO…)"
+            value={unidadPersonalizada}
+            onChange={(e) => setUnidadPersonalizada(e.target.value.toUpperCase().slice(0, 20))}
+            maxLength={20}
+            className="input"
+          />
+        )}
+        {necesitaFactorManual && (
+          <input
+            type="text"
+            inputMode="decimal"
+            required
+            placeholder={`¿Cuántas ${unidadBase} trae 1 ${unidadElegida}?`}
+            value={factorManual}
+            onChange={(e) => setFactorManual(e.target.value)}
+            className="input"
+          />
+        )}
+        {factorEfectivo && factorEfectivo !== 1 && mov.cantidad && (
+          <p className="sm:col-span-3 -mt-2 text-xs text-slate-400">
+            = {(aNumero(mov.cantidad) * factorEfectivo).toLocaleString('es-CO')} {unidadBase}
+            {' '}(1 {unidadElegida} = {factorEfectivo.toLocaleString('es-CO')} {unidadBase})
+          </p>
+        )}
+
         <div className="sm:col-span-3">
           <button className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">Registrar</button>
         </div>
