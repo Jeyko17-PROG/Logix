@@ -56,6 +56,22 @@ class KardexService
     }
 
     /**
+     * Revierte una SALIDA anterior (ej. al eliminar una factura o reducir sus
+     * cantidades): devuelve la cantidad a la bodega SIN alterar el costo
+     * promedio. Internamente es una ENTRADA valorada al costo promedio
+     * vigente — matemáticamente eso deja el promedio ponderado intacto (dar
+     * de alta N unidades al mismo costo que ya tenían no puede moverlo) — a
+     * diferencia de entrada() a secas, que sí recalcula el promedio con el
+     * costo que se le pase.
+     */
+    public function revertirSalida(int $productoId, int $bodegaId, float $cantidad, ?int $usuarioId = null, string $motivo = 'REVERSO', array $referencia = []): MovimientoInventario
+    {
+        $costoActual = (float) (StockBodega::where('producto_id', $productoId)->where('bodega_id', $bodegaId)->value('costo_promedio') ?? 0);
+
+        return $this->entrada($productoId, $bodegaId, $cantidad, $costoActual, $usuarioId, $motivo, $referencia);
+    }
+
+    /**
      * Registra una SALIDA (venta, pérdida, ajuste negativo) desde una bodega.
      */
     public function salida(int $productoId, int $bodegaId, float $cantidad, ?int $usuarioId = null, string $motivo = 'VENTA', array $referencia = []): MovimientoInventario

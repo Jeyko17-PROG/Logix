@@ -482,7 +482,7 @@ export default function Facturacion() {
                   <button onClick={() => generarPdf(f)} className="text-sky-400 hover:underline mr-3">PDF</button>
                   <button onClick={() => enviarWhatsApp(f)} className="text-lime-400 hover:underline mr-3">WhatsApp</button>
                   <button onClick={() => enviar(f)} className="text-emerald-400 hover:underline mr-3">Enviar</button>
-                  <button onClick={() => eliminar(f)} className="text-red-400 hover:underline">Eliminar</button>
+                  {esEditable(f) && <button onClick={() => eliminar(f)} className="text-red-400 hover:underline">Eliminar</button>}
                 </td>
               </tr>
             ))}

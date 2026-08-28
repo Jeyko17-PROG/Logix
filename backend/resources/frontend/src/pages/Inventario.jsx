@@ -111,12 +111,17 @@ export default function Inventario() {
       // El Kardex siempre guarda en unidad_medida (unidad base). Si el usuario
       // cargó la cantidad en otra unidad (ej. "3 CAJA"), se convierte a la
       // unidad base ANTES de mandarla — el stock real nunca se entera de que
-      // existió una "caja", solo ve unidades.
+      // existió una "caja", solo ve unidades. El costo unitario que se
+      // escribe es "cuánto costó 1 {unidadElegida}" (ej. 1 CAJA), pero el
+      // Kardex necesita el costo POR UNIDAD BASE para el promedio ponderado
+      // — se divide por el mismo factor, si no se hiciera, "costó 120.000 la
+      // caja de 12" se registraría como si costara 120.000 CADA unidad.
       const cantidadBase = aNumero(mov.cantidad) * factorEfectivo
+      const costoBase = mov.costo_unitario ? aNumero(mov.costo_unitario) / factorEfectivo : undefined
       await api('/inventario/movimientos', { method: 'POST', body: {
         ...mov,
         cantidad: cantidadBase,
-        costo_unitario: mov.costo_unitario ? aNumero(mov.costo_unitario) : undefined,
+        costo_unitario: costoBase,
         bodega_origen_id: mov.bodega_origen_id || undefined,
         bodega_destino_id: mov.bodega_destino_id || undefined,
       } })
@@ -243,7 +248,20 @@ export default function Inventario() {
           </select>
         )}
         {mov.tipo === 'ENTRADA' && (
-          <input type="text" inputMode="decimal" placeholder="Costo unitario (ej: 120.000)" value={mov.costo_unitario} onChange={set('costo_unitario')} className="input" />
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder={unidadElegida ? `Costo por ${unidadElegida} (ej: 120.000)` : 'Costo unitario (ej: 120.000)'}
+            title="Cuánto costó UNA de la unidad elegida arriba (ej. una CAJA completa, no una unidad suelta)."
+            value={mov.costo_unitario}
+            onChange={set('costo_unitario')}
+            className="input"
+          />
+        )}
+        {mov.tipo === 'ENTRADA' && !esUnidadBase && factorEfectivo && mov.costo_unitario && (
+          <p className="sm:col-span-3 -mt-2 text-xs text-slate-400">
+            = {(aNumero(mov.costo_unitario) / factorEfectivo).toLocaleString('es-CO')} por {unidadBase}
+          </p>
         )}
 
         {unidadMov === 'PERSONALIZADO' && (

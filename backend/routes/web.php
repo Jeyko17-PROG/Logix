@@ -10,4 +10,5 @@ use Illuminate\Support\Facades\Route;
 // El negative lookahead exige el segmento completo (seguido de "/" o fin de
 // string), no solo el prefijo: así "/apidocs" o "/buildings" sí caen en la SPA
 // en vez de quedar excluidos por empezar con las mismas letras que "api"/"build".
-Route::get('/{any?}', [SpaController::class, 'index'])->where('any', '^(?!(?:api|storage|build)(?:/|$)).*$');
+// "up" excluido para no tapar el healthcheck nativo de Laravel (bootstrap/app.php: health: '/up').
+Route::get('/{any?}', [SpaController::class, 'index'])->where('any', '^(?!(?:api|storage|build|up)(?:/|$)).*$');

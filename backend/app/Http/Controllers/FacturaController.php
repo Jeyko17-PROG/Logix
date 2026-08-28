@@ -294,7 +294,7 @@ class FacturaController extends Controller
                     if ($diff > 0) {
                         $this->kardex->salida((int) $pid, $bodegaId, (float) $diff, $request->user()->id, 'VENTA_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
                     } elseif ($diff < 0) {
-                        $this->kardex->entrada((int) $pid, $bodegaId, (float) abs($diff),  $request->user()->id, 'DEVOLUCION_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                        $this->kardex->revertirSalida((int) $pid, $bodegaId, (float) abs($diff), $request->user()->id, 'DEVOLUCION_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
                     }
                 }
 
@@ -337,12 +337,22 @@ class FacturaController extends Controller
     {
         $this->autorizarBodega($factura);
 
+        // Una factura PAGADA tiene pagos registrados (FacturaPago) que quedarían
+        // huérfanos, y ANULADA ya pasó por su propio flujo de reversión — en
+        // ambos casos borrar aquí duplicaría o rompería la reversión de stock.
+        // Mismo criterio que ya usa update() para bloquear la edición.
+        if (in_array($factura->estado, ['PAGADA', 'ANULADA'], true)) {
+            return response()->json([
+                'message' => 'No se puede eliminar una factura ' . strtolower($factura->estado) . '.',
+            ], 422);
+        }
+
         return DB::transaction(function () use ($request, $factura) {
             $bodegaId = $factura->bodega_id;
 
             foreach ($factura->detalles as $d) {
                 if (! empty($d->producto_id) && (float) $d->cantidad > 0) {
-                    $this->kardex->entrada((int) $d->producto_id, $bodegaId, (float) $d->cantidad, $request->user()->id, 'REVERSO_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                    $this->kardex->revertirSalida((int) $d->producto_id, $bodegaId, (float) $d->cantidad, $request->user()->id, 'REVERSO_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
                 }
             }
 
