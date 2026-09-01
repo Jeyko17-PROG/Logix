@@ -55,6 +55,12 @@ class InventarioController extends Controller
         if ($producto = $request->query('producto_id')) {
             $q->where('producto_id', $producto);
         }
+        if ($tipo = $request->query('tipo')) {
+            $q->where('tipo', $tipo);
+        }
+        if ($bodegaId = $request->query('bodega_id')) {
+            $q->where(fn ($w) => $w->where('bodega_origen_id', $bodegaId)->orWhere('bodega_destino_id', $bodegaId));
+        }
         if ($buscar = $request->query('buscar')) {
             $q->whereHas('producto', function ($sub) use ($buscar) {
                 $sub->where('nombre', 'like', "%{$buscar}%")

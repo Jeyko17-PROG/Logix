@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { aNumero } from '../utils/numero'
+import { aNumero, formatearEnVivo } from '../utils/numero'
 
 const MOV_VACIO = { tipo: 'ENTRADA', producto_id: '', cantidad: '', costo_unitario: '', bodega_origen_id: '', bodega_destino_id: '', motivo: '' }
 const UNIDADES_MOV = ['UND', 'KG', 'LT', 'MT', 'CAJA', 'PAR', 'DOCENA', 'PAQUETE']
@@ -19,13 +19,19 @@ export default function Inventario() {
   const [ok, setOk] = useState('')
   const [buscar, setBuscar] = useState('')
   const [editando, setEditando] = useState(null) // { id, cantidad, costo_unitario }
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroBodega, setFiltroBodega] = useState('')
 
-  async function cargar(termino = buscar) {
+  async function cargar(termino = buscar, tipo = filtroTipo, bodegaId = filtroBodega) {
     const qs = termino ? `?buscar=${encodeURIComponent(termino)}` : ''
+    const paramsMov = new URLSearchParams()
+    if (tipo) paramsMov.set('tipo', tipo)
+    if (bodegaId) paramsMov.set('bodega_id', bodegaId)
+    const qsMov = paramsMov.toString() ? `?${paramsMov.toString()}` : ''
     const [s, a, m] = await Promise.all([
       api(`/inventario/stock${qs}`),
       api('/inventario/alertas'),
-      api('/inventario/movimientos'),
+      api(`/inventario/movimientos${qsMov}`),
     ])
     setStock(s.data ?? s)
     setAlertas(a)
@@ -79,13 +85,13 @@ export default function Inventario() {
     api('/bodegas').then(setBodegas)
   }, [])
 
-  // Vuelve a consultar el stock cada vez que cambia el texto de búsqueda
-  // (con un pequeño debounce para no disparar una petición por tecla).
+  // Vuelve a consultar cada vez que cambia el texto de búsqueda o los filtros
+  // de movimientos (con un pequeño debounce para no disparar una petición por tecla).
   useEffect(() => {
-    const t = setTimeout(() => cargar(buscar), 300)
+    const t = setTimeout(() => cargar(buscar, filtroTipo, filtroBodega), 300)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buscar])
+  }, [buscar, filtroTipo, filtroBodega])
 
   const productoSeleccionado = productos.find((p) => String(p.id) === String(mov.producto_id))
   const tienePresentacion = !!(productoSeleccionado?.unidad_compra && Number(productoSeleccionado?.unidades_por_compra) > 0)
@@ -225,7 +231,7 @@ export default function Inventario() {
           required
           placeholder="Cantidad"
           value={mov.cantidad}
-          onChange={set('cantidad')}
+          onChange={(e) => setMov({ ...mov, cantidad: formatearEnVivo(e.target.value) })}
           className="input"
         />
 
@@ -254,7 +260,7 @@ export default function Inventario() {
             placeholder={unidadElegida ? `Costo por ${unidadElegida} (ej: 120.000)` : 'Costo unitario (ej: 120.000)'}
             title="Cuánto costó UNA de la unidad elegida arriba (ej. una CAJA completa, no una unidad suelta)."
             value={mov.costo_unitario}
-            onChange={set('costo_unitario')}
+            onChange={(e) => setMov({ ...mov, costo_unitario: formatearEnVivo(e.target.value) })}
             className="input"
           />
         )}
@@ -281,7 +287,7 @@ export default function Inventario() {
             required
             placeholder={`¿Cuántas ${unidadBase} trae 1 ${unidadElegida}?`}
             value={factorManual}
-            onChange={(e) => setFactorManual(e.target.value)}
+            onChange={(e) => setFactorManual(formatearEnVivo(e.target.value))}
             className="input"
           />
         )}
@@ -340,7 +346,7 @@ export default function Inventario() {
                             inputMode="decimal"
                             autoFocus
                             value={editando.cantidad}
-                            onChange={(e) => setEditando({ ...editando, cantidad: e.target.value })}
+                            onChange={(e) => setEditando({ ...editando, cantidad: formatearEnVivo(e.target.value) })}
                             className="input w-24 text-right py-1"
                           />
                           <input
@@ -349,7 +355,7 @@ export default function Inventario() {
                             placeholder="Costo (si sube)"
                             title="Costo unitario, solo si la cantidad sube (para recalcular el costo promedio). Si la bajas, no hace falta."
                             value={editando.costo_unitario}
-                            onChange={(e) => setEditando({ ...editando, costo_unitario: e.target.value })}
+                            onChange={(e) => setEditando({ ...editando, costo_unitario: formatearEnVivo(e.target.value) })}
                             className="input w-28 text-right py-1"
                           />
                         </div>
@@ -383,7 +389,21 @@ export default function Inventario() {
 
       {/* Movimientos recientes (Kardex) */}
       <div>
-        <h2 className="font-semibold mb-3">Movimientos recientes</h2>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="font-semibold">Movimientos recientes</h2>
+          <div className="flex gap-2">
+            <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="input w-40">
+              <option value="">Todos los tipos</option>
+              <option value="ENTRADA">Entrada</option>
+              <option value="SALIDA">Salida</option>
+              <option value="TRASLADO">Traslado</option>
+            </select>
+            <select value={filtroBodega} onChange={(e) => setFiltroBodega(e.target.value)} className="input w-44">
+              <option value="">Todas las bodegas</option>
+              {bodegas.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+            </select>
+          </div>
+        </div>
         <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="w-full text-sm">
             <thead className="bg-slate-800 text-slate-300">

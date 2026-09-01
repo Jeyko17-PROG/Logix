@@ -44,3 +44,18 @@ export function aNumero(valor) {
 export function aPesos(n) {
   return '$' + aNumero(n).toLocaleString('es-CO', { maximumFractionDigits: 2 })
 }
+
+// Formatea EN VIVO mientras el usuario escribe en un <input> (punto de miles
+// cada 3 dígitos, coma decimal), sin esperar a enviar el formulario. Úsala en
+// el onChange de cantidades/costos/precios: guarda en el estado el resultado
+// de esta función (ya formateado con puntos), y sigue pasando ese mismo
+// string por aNumero() al enviar — aNumero() ya sabe leer "1.200.000,50".
+export function formatearEnVivo(valor) {
+  let s = String(valor ?? '')
+  const negativo = s.trim().startsWith('-')
+  s = s.replace(/[^\d,]/g, '') // el usuario solo teclea dígitos y la coma decimal; los puntos de miles se agregan solos
+  const [entera, ...resto] = s.split(',')
+  const enteraFormateada = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  const decimal = resto.length ? ',' + resto.join('').slice(0, 2) : (s.includes(',') ? ',' : '')
+  return (negativo ? '-' : '') + enteraFormateada + decimal
+}

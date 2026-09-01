@@ -17,13 +17,17 @@ class ProductoController extends Controller
     public function index(Request $request)
     {
         $buscar = $request->query('buscar');
-        $filtro = function ($q) use ($buscar) {
+        $categoriaId = $request->query('categoria_id');
+        $filtro = function ($q) use ($buscar, $categoriaId) {
             if ($buscar) {
                 $q->where(function ($w) use ($buscar) {
                     $w->where('nombre', 'like', "%{$buscar}%")
                         ->orWhere('sku', 'like', "%{$buscar}%")
                         ->orWhere('codigo_barras', 'like', "%{$buscar}%");
                 });
+            }
+            if ($categoriaId) {
+                $q->where('categoria_id', $categoriaId);
             }
         };
 

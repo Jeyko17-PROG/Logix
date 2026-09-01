@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { aNumero } from '../utils/numero'
+import { aNumero, formatearEnVivo } from '../utils/numero'
 
 const VACIO = {
   sku: '', codigo_barras: '', nombre: '', descripcion: '', unidad_medida: 'UND',
@@ -23,16 +23,31 @@ export default function Productos() {
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [unidadCustom, setUnidadCustom] = useState(false)
   const [usarPresentacion, setUsarPresentacion] = useState(false)
+  const [buscar, setBuscar] = useState('')
+  const [categoriaFiltro, setCategoriaFiltro] = useState('')
 
-  async function cargar() {
-    const data = await api('/productos')
+  async function cargar(termino = buscar, categoria = categoriaFiltro) {
+    const params = new URLSearchParams()
+    if (termino) params.set('buscar', termino)
+    if (categoria) params.set('categoria_id', categoria)
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const data = await api(`/productos${qs}`)
     setLista(data.data ?? data)
     setValorTotalInventario(data.valor_total_inventario ?? 0)
   }
   useEffect(() => {
     cargar()
     api('/categorias').then(setCategorias)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Vuelve a consultar cada vez que cambia el texto de búsqueda o la categoría
+  // (con un pequeño debounce para no disparar una petición por tecla).
+  useEffect(() => {
+    const t = setTimeout(() => cargar(buscar, categoriaFiltro), 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buscar, categoriaFiltro])
 
   function nuevo() { setForm(VACIO); setImagen(null); setEditId(null); setError(''); setGaleria([]); setUnidadCustom(false); setUsarPresentacion(false); setAbierto(true) }
   async function editar(p) {
@@ -134,6 +149,20 @@ export default function Productos() {
         <button onClick={nuevo} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold">+ Nuevo</button>
       </div>
 
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Buscar por nombre, SKU o código de barras…"
+          value={buscar}
+          onChange={(e) => setBuscar(e.target.value)}
+          className="input flex-1 min-w-[220px]"
+        />
+        <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} className="input w-48">
+          <option value="">Todas las categorías</option>
+          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+      </div>
+
       {abierto && (
         <form onSubmit={guardar} className="mb-6 rounded-xl border border-slate-800 bg-slate-800/50 p-5 grid sm:grid-cols-2 gap-3">
           {error && <div className="sm:col-span-2 text-red-300 text-sm">{error}</div>}
@@ -189,15 +218,17 @@ export default function Productos() {
                   inputMode="decimal"
                   placeholder={`Cuántas ${form.unidad_medida || 'UND'} trae`}
                   value={form.unidades_por_compra}
-                  onChange={set('unidades_por_compra')}
+                  onChange={(e) => setForm({ ...form, unidades_por_compra: formatearEnVivo(e.target.value) })}
                   className="input"
                 />
               </div>
             )}
           </div>
           <input type="file" accept="image/*" onChange={(e) => setImagen(e.target.files?.[0] ?? null)} className="input" />
-          <input type="text" inputMode="decimal" placeholder="Precio costo (ej: 250.000)" value={form.precio_costo} onChange={set('precio_costo')} className="input" required />
-          <input type="text" inputMode="decimal" placeholder="Precio venta (ej: 400.000)" value={form.precio_venta} onChange={set('precio_venta')} className="input" required />
+          <input type="text" inputMode="decimal" placeholder="Precio costo (ej: 250.000)" value={form.precio_costo}
+            onChange={(e) => setForm({ ...form, precio_costo: formatearEnVivo(e.target.value) })} className="input" required />
+          <input type="text" inputMode="decimal" placeholder="Precio venta (ej: 400.000)" value={form.precio_venta}
+            onChange={(e) => setForm({ ...form, precio_venta: formatearEnVivo(e.target.value) })} className="input" required />
           <textarea placeholder="Descripción" value={form.descripcion ?? ''} onChange={set('descripcion')} className="input sm:col-span-2" />
           {editId && (
             <div className="sm:col-span-2">
