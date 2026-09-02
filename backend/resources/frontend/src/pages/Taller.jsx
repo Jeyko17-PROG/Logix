@@ -48,6 +48,11 @@ const CONFIG_POR_TIPO = {
     subtitulo: 'Sesiones agendadas, referencias de los clientes y portafolio de tus artistas.',
     mostrarVehiculos: false, iconoOperario: '🎨',
   },
+  accesorios_motos: {
+    titulo: 'Órdenes', tabOrdenes: '🔧 Órdenes de Instalación', tabEmpleados: '🔧 Instaladores',
+    subtitulo: 'Órdenes de instalación de accesorios y equipo de instaladores.',
+    mostrarVehiculos: true, iconoOperario: '🔧',
+  },
 }
 const config = (tipoNegocio) => CONFIG_POR_TIPO[tipoNegocio] ?? {
   titulo: 'Taller', tabOrdenes: '🔧 Órdenes de Servicio', tabEmpleados: '👨‍🔧 Empleados del Taller',
@@ -59,11 +64,13 @@ export default function Taller() {
   const { user } = useAuth()
   const esMecanico = user?.rol?.nombre === 'Mecanico'
   const esLavadorRol = user?.rol?.nombre === 'Lavador'
-  const esOperario = esMecanico || esLavadorRol
+  const esInstaladorRol = user?.rol?.nombre === 'Instalador'
+  const esOperario = esMecanico || esLavadorRol || esInstaladorRol
   const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
   const esLavadero = tipoNegocio === 'lavadero'
   const esBarberia = tipoNegocio === 'barberia'
   const esTatuajes = tipoNegocio === 'tatuajes'
+  const esAccesoriosMotos = tipoNegocio === 'accesorios_motos'
   const cfg = config(tipoNegocio)
   const [tab, setTab] = useState('ordenes')
 
@@ -94,7 +101,7 @@ export default function Taller() {
 
       {tab === 'ordenes' && <Ordenes esMecanico={esOperario} esLavadero={esLavadero} esBarberia={esBarberia || esTatuajes} iconoOperario={cfg.iconoOperario} />}
       {tab === 'vehiculos' && !esOperario && cfg.mostrarVehiculos && <Vehiculos />}
-      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} esBarberia={esBarberia} esTatuajes={esTatuajes} />}
+      {tab === 'empleados' && !esOperario && <Empleados esLavadero={esLavadero} esBarberia={esBarberia} esTatuajes={esTatuajes} esAccesoriosMotos={esAccesoriosMotos} />}
     </div>
   )
 }
@@ -313,7 +320,10 @@ function ModalCrearOrden({ onClose, onCreada }) {
   const { user } = useAuth()
   // El formulario se adapta al tipo de negocio de la empresa.
   const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave ?? ''
-  const esTallerVehiculos = ['taller_motos', 'taller_carros'].includes(tipoNegocio)
+  // Accesorios de motos: mismo tratamiento que taller_motos (vehículo
+  // obligatorio + checklist de entrada), la moto es la del cliente que
+  // recibe la instalación.
+  const esTallerVehiculos = ['taller_motos', 'taller_carros', 'accesorios_motos'].includes(tipoNegocio)
   const esServicioTecnico = ['taller_general', 'otro'].includes(tipoNegocio)
   const esLavadero = tipoNegocio === 'lavadero'
   const esBarberia = tipoNegocio === 'barberia'
@@ -561,7 +571,8 @@ function ModalOrden({ id, esMecanico, onClose }) {
   const esLavadero = tipoNegocio === 'lavadero'
   const esBarberia = tipoNegocio === 'barberia'
   const esTatuajes = tipoNegocio === 'tatuajes'
-  const iconoOperario = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : '👨‍🔧'
+  const esAccesoriosMotos = tipoNegocio === 'accesorios_motos'
+  const iconoOperario = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : esAccesoriosMotos ? '🔧' : '👨‍🔧'
   const [orden, setOrden] = useState(null)
   const [productos, setProductos] = useState([])
   const [empleados, setEmpleados] = useState([])
@@ -860,10 +871,10 @@ function ModalVehiculo({ onClose, onGuardado }) {
 }
 
 /* ============ Empleados del taller ============ */
-function Empleados({ esLavadero, esBarberia, esTatuajes }) {
+function Empleados({ esLavadero, esBarberia, esTatuajes, esAccesoriosMotos }) {
   const [lista, setLista] = useState([])
   const [editando, setEditando] = useState(null) // null | 'nuevo' | empleado
-  const icono = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : '👨‍🔧'
+  const icono = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : esAccesoriosMotos ? '🔧' : '👨‍🔧'
 
   const cargar = useCallback(() => api('/empleados').then((r) => setLista(r.data ?? [])).catch(() => {}), [])
   useEffect(() => { cargar() }, [cargar])
@@ -899,30 +910,30 @@ function Empleados({ esLavadero, esBarberia, esTatuajes }) {
         ))}
         {lista.length === 0 && (
           <p className="text-slate-500 col-span-2 text-center py-6">
-            {esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : esBarberia ? 'Sin barberos. Crea tu equipo de estilistas.' : esTatuajes ? 'Sin artistas. Crea tu equipo de tatuadores.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}
+            {esLavadero ? 'Sin lavadores. Crea tu equipo de lavado.' : esBarberia ? 'Sin barberos. Crea tu equipo de estilistas.' : esTatuajes ? 'Sin artistas. Crea tu equipo de tatuadores.' : esAccesoriosMotos ? 'Sin instaladores. Crea tu equipo de instaladores.' : 'Sin empleados. Crea tu equipo de mecánicos/técnicos.'}
           </p>
         )}
       </div>
       {editando && (
-        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero} esBarberia={esBarberia} esTatuajes={esTatuajes}
+        <ModalEmpleado empleado={editando === 'nuevo' ? null : editando} esLavadero={esLavadero} esBarberia={esBarberia} esTatuajes={esTatuajes} esAccesoriosMotos={esAccesoriosMotos}
           onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargar() }} />
       )}
       {!esBarberia && !esTatuajes && (
         <p className="text-xs text-slate-500 mt-4">
-          💡 Para que {esLavadero ? 'un lavador entre' : 'un mecánico entre'} al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
-          <span className="font-semibold"> {esLavadero ? 'Lavador' : 'Mecanico'}</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
+          💡 Para que {esLavadero ? 'un lavador entre' : esAccesoriosMotos ? 'un instalador entre' : 'un mecánico entre'} al sistema con su propio usuario (y solo vea sus órdenes), créale una cuenta con rol
+          <span className="font-semibold"> {esLavadero ? 'Lavador' : esAccesoriosMotos ? 'Instalador' : 'Mecanico'}</span> desde Configuración → Equipo, vinculándola a su ficha de empleado.
         </p>
       )}
     </div>
   )
 }
 
-function ModalEmpleado({ empleado, esLavadero, esBarberia, esTatuajes, onClose, onGuardado }) {
+function ModalEmpleado({ empleado, esLavadero, esBarberia, esTatuajes, esAccesoriosMotos, onClose, onGuardado }) {
   const [tipos, setTipos] = useState([])
   const [form, setForm] = useState({
     nombre: empleado?.nombre ?? '', apellido: empleado?.apellido ?? '',
     ci_cedula: empleado?.ci_cedula ?? '', telefono: empleado?.telefono ?? '',
-    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : esBarberia ? 'barbero' : esTatuajes ? 'tatuador' : 'mecanico'),
+    tipo_operario: empleado?.tipo_operario ?? (esLavadero ? 'lavador' : esBarberia ? 'barbero' : esTatuajes ? 'tatuador' : esAccesoriosMotos ? 'instalador' : 'mecanico'),
     especialidad: empleado?.especialidad ?? '',
     comision_default: empleado?.comision_default ?? '',
     tipo_comision_default: empleado?.tipo_comision_default ?? 'percentage',
@@ -974,7 +985,7 @@ function ModalEmpleado({ empleado, esLavadero, esBarberia, esTatuajes, onClose, 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : esLavadero ? 'Nuevo lavador' : esBarberia ? 'Nuevo barbero' : 'Nuevo empleado del taller'}</h2>
+        <h2 className="text-lg font-bold mb-4">{empleado ? `Editar a ${empleado.nombre} ${empleado.apellido}` : esLavadero ? 'Nuevo lavador' : esBarberia ? 'Nuevo barbero' : esAccesoriosMotos ? 'Nuevo instalador' : 'Nuevo empleado del taller'}</h2>
         <form onSubmit={guardar} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm text-slate-300">Nombre *
@@ -997,6 +1008,11 @@ function ModalEmpleado({ empleado, esLavadero, esBarberia, esTatuajes, onClose, 
             {form.tipo_operario === 'tatuador' && (
               <label className="block text-sm text-slate-300">Especialidad
                 <input value={form.especialidad} onChange={set('especialidad')} placeholder="Ej. Línea fina, Realismo, Blackwork…" className="input mt-1" />
+              </label>
+            )}
+            {form.tipo_operario === 'instalador' && (
+              <label className="block text-sm text-slate-300">¿Qué instala? (personalizado)
+                <input value={form.especialidad} onChange={set('especialidad')} placeholder="Ej. Instalación de luces, alarmas, escapes…" className="input mt-1" />
               </label>
             )}
             <label className="block text-sm text-slate-300">Comisión por defecto

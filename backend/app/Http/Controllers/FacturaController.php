@@ -593,10 +593,10 @@ class FacturaController extends Controller
         return response()->json($factura, 201);
     }
 
-    /** El rol Mecanico no tiene acceso a la facturación (montos ni listados). */
+    /** Los roles operativos restringidos (Mecanico, Instalador...) no acceden a la facturación (montos ni listados). */
     private function bloquearMecanico(Request $request): void
     {
-        if ($request->user()?->esMecanico()) {
+        if ($request->user()?->esMecanico() || $request->user()?->esInstalador()) {
             abort(403, 'Tu rol no tiene acceso a la facturación.');
         }
     }

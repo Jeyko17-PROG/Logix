@@ -136,6 +136,12 @@ class User extends Authenticatable
         return $this->tieneRol('Lavador');
     }
 
+    /** Rol Instalador (accesorios de motos): solo ve sus órdenes asignadas, sin acceso a facturación ni precios. */
+    public function esInstalador(): bool
+    {
+        return $this->tieneRol('Instalador');
+    }
+
     /**
      * FACHADA — Usuario responsable del cobro SaaS: el dueño de la empresa.
      * (Si aún no hay empresa, cae al dueño del workspace como antes.)

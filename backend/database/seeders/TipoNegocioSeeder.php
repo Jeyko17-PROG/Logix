@@ -50,6 +50,11 @@ class TipoNegocioSeeder extends Seeder
             // (cuidado post-tatuaje, merch) e inventario.
             ['clave' => 'tatuajes', 'nombre' => 'Estudio de tatuajes', 'orden' => 9,
                 'modulos_default' => array_merge($comunes, ['servicios', 'tatuajes', 'agenda', 'reservas', 'qr', 'productos', 'inventario'])],
+            // Venta de accesorios/repuestos de moto (catálogo + inventario propio) con
+            // servicio de instalación agendable (ej. instalación de luces) a cargo de
+            // un equipo de instaladores (operables_employees, rol "Instalador").
+            ['clave' => 'accesorios_motos', 'nombre' => 'Accesorios y repuestos de motos', 'orden' => 10,
+                'modulos_default' => array_merge($comunes, ['servicios', 'agenda', 'reservas', 'qr', 'productos', 'inventario', 'proveedores'])],
             ['clave' => 'otro', 'nombre' => 'Otro negocio', 'orden' => 99,
                 'modulos_default' => $todosSinRestaurante],
         ];

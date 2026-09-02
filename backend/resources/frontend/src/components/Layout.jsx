@@ -174,7 +174,8 @@ const MENU = [
   },
 ]
 
-// Rutas permitidas para el rol Mecanico: solo su trabajo, sin dinero ni facturación.
+// Rutas permitidas para los roles operativos restringidos (Mecanico, Lavador,
+// Instalador...): solo su trabajo, sin dinero ni facturación.
 const RUTAS_MECANICO = ['/', '/taller', '/productos', '/notificaciones', '/perfil']
 
 // Sección visible únicamente para el Super Administrador.
@@ -235,7 +236,8 @@ export default function Layout() {
   const tipoNegocio = user?.empresa_info?.tipo_negocio?.clave
   const esMecanico = user?.rol?.nombre === 'Mecanico'
   const esLavadorRol = user?.rol?.nombre === 'Lavador'
-  const esOperarioRol = esMecanico || esLavadorRol
+  const esInstaladorRol = user?.rol?.nombre === 'Instalador'
+  const esOperarioRol = esMecanico || esLavadorRol || esInstaladorRol
   // Dueño del negocio: quien puede gestionar el equipo (crear empleados y asignarles rol).
   const esDueno = !!user?.es_admin_empresa || ['Administrador', 'Usuario'].includes(user?.rol?.nombre)
   // "Taller / Órdenes" cambia de nombre según el tipo de negocio (misma ruta /taller).
@@ -246,6 +248,7 @@ export default function Layout() {
     lavadero: { label: 'Servicios de Lavado', icon: '🧼' },
     barberia: { label: 'Órdenes', icon: '💈' },
     tatuajes: { label: 'Sesiones', icon: ICONO_MAQUINA_TATUAR },
+    accesorios_motos: { label: 'Órdenes', icon: '🔧' },
   }
   // El ícono de "Servicios" (catálogo de estilos/tratamientos) también cambia
   // según el rubro — antes siempre mostraba 💈 (barbería) sin importar el tipo.

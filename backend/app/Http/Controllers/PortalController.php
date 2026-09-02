@@ -119,6 +119,7 @@ class PortalController extends Controller
             'barberia' => ['barbero'],
             'spa' => ['esteticien', 'barbero'],
             'tatuajes' => ['tatuador'],
+            'accesorios_motos' => ['instalador'],
             default => ['barbero', 'esteticien', 'tatuador'],
         };
 

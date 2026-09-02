@@ -19,6 +19,7 @@ class RoleSeeder extends Seeder
             'Empleado' => 'Gestiona agenda, citas y clientes asignados.',
             'Mecanico' => 'Mecánico/Técnico del taller: solo ve sus órdenes asignadas, registra trabajos y repuestos; sin acceso a facturación ni precios.',
             'Lavador' => 'Operario del lavadero: solo ve las citas que tiene asignadas; sin acceso a facturación ni precios.',
+            'Instalador' => 'Instalador de accesorios de motos (ej. luces): solo ve sus órdenes asignadas, registra el trabajo; sin acceso a facturación ni precios.',
             'Cliente' => 'Acceso al portal: reservar y consultar sus propias citas.',
         ];
 
@@ -57,6 +58,7 @@ class RoleSeeder extends Seeder
             'Empleado' => ['agenda.ver', 'agenda.gestionar', 'clientes.ver', 'clientes.gestionar', 'productos.ver'],
             'Mecanico' => ['productos.ver'],
             'Lavador' => ['agenda.ver'],
+            'Instalador' => ['productos.ver'],
             'Cliente' => [], // el portal usa endpoints propios, no permisos administrativos
         ];
 
