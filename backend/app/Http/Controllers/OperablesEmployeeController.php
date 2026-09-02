@@ -81,10 +81,14 @@ class OperablesEmployeeController extends Controller
         $tipoNegocio = $request->user()?->empresaDeCobro()?->tipoNegocio?->clave;
 
         if ($tipoNegocio === 'accesorios_motos') {
+            // Se quitan lavador/barbero/tatuador/esteticien (no aplican a este
+            // rubro); el resto queda igual, más "Instalador" al inicio.
             return response()->json(['tipos' => [
                 ['valor' => 'instalador', 'etiqueta' => 'Instalador'],
                 ['valor' => 'mecanico', 'etiqueta' => 'Mecánico'],
                 ['valor' => 'electricista', 'etiqueta' => 'Electricista'],
+                ['valor' => 'tecnico', 'etiqueta' => 'Técnico'],
+                ['valor' => 'asesor', 'etiqueta' => 'Asesor'],
                 ['valor' => 'otro', 'etiqueta' => 'Otro'],
             ]]);
         }
