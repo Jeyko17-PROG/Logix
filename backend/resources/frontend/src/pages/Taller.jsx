@@ -1015,6 +1015,11 @@ function ModalEmpleado({ empleado, esLavadero, esBarberia, esTatuajes, esAccesor
                 <input value={form.especialidad} onChange={set('especialidad')} placeholder="Ej. Instalación de luces, alarmas, escapes…" className="input mt-1" />
               </label>
             )}
+            {esAccesoriosMotos && form.tipo_operario === 'otro' && (
+              <label className="block text-sm text-slate-300">¿Cuál es el oficio?
+                <input value={form.especialidad} onChange={set('especialidad')} placeholder="Ej. Soldador, pintor, decorador…" className="input mt-1" />
+              </label>
+            )}
             <label className="block text-sm text-slate-300">Comisión por defecto
               <div className="flex gap-1 mt-1">
                 <input type="number" min="0" step="any" value={form.comision_default} onChange={set('comision_default')} className="input !mt-0" placeholder="0" />

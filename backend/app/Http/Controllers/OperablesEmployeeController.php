@@ -72,14 +72,24 @@ class OperablesEmployeeController extends Controller
     }
 
     /**
-     * Obtener tipos de operarios disponibles. Para "Accesorios de motos" se
-     * antepone "Instalador" (con especialidad libre, ej. "Instalación de
-     * luces") sin quitar ninguna opción; cualquier otro rubro ve exactamente
-     * la misma lista de siempre.
+     * Obtener tipos de operarios disponibles. "Accesorios de motos" ve una
+     * lista reducida (solo lo que aplica a ese rubro); cualquier otro tipo de
+     * negocio ve exactamente la misma lista completa de siempre, sin tocar.
      */
     public function tipos(Request $request): JsonResponse
     {
-        $tipos = [
+        $tipoNegocio = $request->user()?->empresaDeCobro()?->tipoNegocio?->clave;
+
+        if ($tipoNegocio === 'accesorios_motos') {
+            return response()->json(['tipos' => [
+                ['valor' => 'instalador', 'etiqueta' => 'Instalador'],
+                ['valor' => 'mecanico', 'etiqueta' => 'Mecánico'],
+                ['valor' => 'electricista', 'etiqueta' => 'Electricista'],
+                ['valor' => 'otro', 'etiqueta' => 'Otro'],
+            ]]);
+        }
+
+        return response()->json(['tipos' => [
             ['valor' => 'mecanico', 'etiqueta' => 'Mecánico'],
             ['valor' => 'lavador', 'etiqueta' => 'Lavador'],
             ['valor' => 'barbero', 'etiqueta' => 'Barbero / Estilista'],
@@ -89,14 +99,7 @@ class OperablesEmployeeController extends Controller
             ['valor' => 'tecnico', 'etiqueta' => 'Técnico'],
             ['valor' => 'asesor', 'etiqueta' => 'Asesor'],
             ['valor' => 'otro', 'etiqueta' => 'Otro'],
-        ];
-
-        $tipoNegocio = $request->user()?->empresaDeCobro()?->tipoNegocio?->clave;
-        if ($tipoNegocio === 'accesorios_motos') {
-            array_unshift($tipos, ['valor' => 'instalador', 'etiqueta' => 'Instalador']);
-        }
-
-        return response()->json(['tipos' => $tipos]);
+        ]]);
     }
 
     /**
