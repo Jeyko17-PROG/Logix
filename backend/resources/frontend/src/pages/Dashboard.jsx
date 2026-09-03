@@ -96,6 +96,39 @@ function PanelCuenta({ cuenta, slug }) {
   )
 }
 
+// Banner para descargar el APK de Android directo desde el dashboard (sin
+// pasar por la Play Store). Se oculta solo si el archivo aún no existe en
+// el servidor (por ejemplo, antes de subir el primer build) para no dejar
+// un botón roto a la vista.
+const APK_URL = '/descargas/fenix.apk'
+function AppMovilBanner() {
+  const [disponible, setDisponible] = useState(false)
+
+  useEffect(() => {
+    fetch(APK_URL, { method: 'HEAD' })
+      .then((r) => setDisponible(r.ok))
+      .catch(() => setDisponible(false))
+  }, [])
+
+  if (!disponible) return null
+
+  return (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-800/40 bg-orange-500/5 p-4">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl">📱</span>
+        <div>
+          <p className="font-semibold">App de Fénix para Android</p>
+          <p className="text-sm text-slate-400">Instálala en tu celular para trabajar desde ahí.</p>
+        </div>
+      </div>
+      <a href={APK_URL} download="Fenix.apk"
+        className="rounded-lg bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 hover:opacity-90 px-4 py-2 text-sm font-semibold whitespace-nowrap">
+        ⬇ Descargar APK
+      </a>
+    </div>
+  )
+}
+
 const TONOS = {
   slate: 'bg-slate-500/10 text-slate-300',
   sky: 'bg-sky-500/10 text-sky-400',
@@ -170,6 +203,7 @@ export default function Dashboard() {
         <p className="text-slate-500">Cargando indicadores…</p>
       ) : (
         <>
+          <AppMovilBanner />
           {data.cuenta && <PanelCuenta cuenta={data.cuenta} slug={user?.reservas_slug} />}
           <Seccion titulo="Resumen de hoy">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
