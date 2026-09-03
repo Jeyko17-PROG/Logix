@@ -106,7 +106,10 @@ function AppMovilBanner() {
 
   useEffect(() => {
     fetch(APK_URL, { method: 'HEAD' })
-      .then((r) => setDisponible(r.ok))
+      // Si el .apk todavía no existe, Laravel lo intercepta con la ruta de
+      // respaldo del SPA y devuelve 200 con el HTML de la app — por eso no
+      // basta con mirar el status, hay que descartar esa respuesta explícita.
+      .then((r) => setDisponible(r.ok && !(r.headers.get('content-type') || '').includes('text/html')))
       .catch(() => setDisponible(false))
   }, [])
 
