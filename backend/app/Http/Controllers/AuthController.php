@@ -169,7 +169,7 @@ class AuthController extends Controller
         $user->activarPendiente();
         $user->forceFill(['ultimo_acceso' => now(), 'veces_login' => 1])->save();
 
-        $token = $user->createToken('logix')->plainTextToken;
+        $token = $this->crearToken($user, $request);
 
         return response()->json([
             'user' => $user->load('rol', 'plan'),
@@ -341,7 +341,7 @@ class AuthController extends Controller
 
         $user->forceFill(['ultimo_acceso' => now()])->increment('veces_login');
 
-        $token = $user->createToken('logix')->plainTextToken;
+        $token = $this->crearToken($user, $request);
 
         return response()->json([
             'user' => $user->load('rol', 'plan'),
@@ -391,6 +391,21 @@ class AuthController extends Controller
         }
 
         return response()->json($user);
+    }
+
+    /**
+     * Emite el token de acceso. Los tokens web/PWA siguen sin expirar nunca
+     * (como hasta ahora, no hay refresh-token para ellos); si el cliente
+     * manda `plataforma: "movil"` (la app nativa), el token vence a los 60
+     * días, para que una sesión perdida/robada del celular no quede válida
+     * para siempre.
+     */
+    private function crearToken(User $user, Request $request): string
+    {
+        $expira = $request->input('plataforma') === 'movil' ? now()->addDays(60) : null;
+        $nombre = $expira ? 'logix-movil' : 'logix';
+
+        return $user->createToken($nombre, ['*'], $expira)->plainTextToken;
     }
 
     /**
