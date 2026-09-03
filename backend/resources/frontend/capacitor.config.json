@@ -1,8 +1,12 @@
 {
-  "appId": "com.logix.app",
-  "appName": "Logix",
-  "webDir": "dist",
+  "appId": "com.fenixpos.app",
+  "appName": "Fénix",
+  "webDir": "../../public/build",
   "backgroundColor": "#0f172a",
+  "server": {
+    "url": "https://fenixpos.lat",
+    "cleartext": false
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 1500,
