@@ -279,7 +279,12 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
       {/* Barra superior */}
-      <header className="fixed top-0 inset-x-0 z-50 bg-slate-950 border-b border-slate-800 px-3 sm:px-4 py-3 overflow-hidden">
+      {/* pt usa env(safe-area-inset-top) además del padding normal: en un
+          celular con notch/cámara punch-hole, instalado como PWA standalone
+          (sin barra del navegador), el header fijo si no reserva ese espacio
+          queda tapado por el notch. main/aside abajo compensan con el mismo
+          extra para que el contenido no arranque debajo del header. */}
+      <header className="fixed top-0 inset-x-0 z-50 bg-slate-950 border-b border-slate-800 px-3 sm:px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] overflow-hidden">
         <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {/* Colapsar/expandir el sidebar en escritorio: más ancho para tablas de Inventario/Agenda. */}
           <button onClick={() => setIsCollapsed(!isCollapsed)} aria-label={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
@@ -328,7 +333,7 @@ export default function Layout() {
       {abierto && <div onClick={() => setAbierto(false)} className="fixed inset-0 z-30 bg-black/50 md:hidden" />}
 
       {/* Menú lateral deslizante (oculto por defecto, se abre con el botón ☰) */}
-      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-28 md:pt-16 px-3 pb-4 overflow-y-auto transition-all duration-200 shadow-2xl
+      <aside id="mobile-sidebar" className={`fixed top-0 left-0 z-40 h-full w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 pt-[calc(7rem+env(safe-area-inset-top))] md:pt-16 px-3 pb-4 overflow-y-auto transition-all duration-200 shadow-2xl
         ${abierto ? 'translate-x-0' : '-translate-x-full'}
         ${isCollapsed ? 'md:-translate-x-full md:w-0 md:px-0 md:border-0 md:overflow-hidden' : 'md:translate-x-0 md:w-64'} md:max-w-none`}>
         <div className="mb-3 flex items-center justify-between px-1 md:hidden">
@@ -356,7 +361,7 @@ export default function Layout() {
       </aside>
 
       {/* Contenido: en escritorio deja espacio al sidebar fijo (o lo reclama si está colapsado); en móvil baja bajo el header de dos filas */}
-      <main className={`pt-28 md:pt-14 transition-[padding] duration-200 ${isCollapsed ? 'md:pl-0' : 'md:pl-64'}`}>
+      <main className={`pt-[calc(7rem+env(safe-area-inset-top))] md:pt-[calc(3.5rem+env(safe-area-inset-top))] transition-[padding] duration-200 ${isCollapsed ? 'md:pl-0' : 'md:pl-64'}`}>
         <div className={`mx-auto px-4 py-8 transition-[max-width] duration-200 ${isCollapsed ? 'max-w-full' : 'max-w-6xl'}`}>
           <Outlet />
         </div>
