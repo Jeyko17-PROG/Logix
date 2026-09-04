@@ -6,6 +6,7 @@ import { useFeatures } from '../context/FeaturesContext'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const METODO_PAGO_VACIO = { tipo: 'Nequi', nombre: '', numero_cuenta: '', enlace: '' }
+const TIPOS_PAGO = ['Nequi', 'Daviplata', 'Tarjeta', 'Transferencia', 'Bancolombia', 'Bold', 'Link de pago', 'Otro']
 
 export default function Configuracion() {
   const { user, setUser } = useAuth()
@@ -25,6 +26,7 @@ export default function Configuracion() {
   // --- Métodos de pago manuales (Nequi, Daviplata, Bancolombia, link de pago...) ---
   const [metodosPago, setMetodosPago] = useState([])
   const [formMetodo, setFormMetodo] = useState({ ...METODO_PAGO_VACIO })
+  const [tipoOtro, setTipoOtro] = useState(false) // "Otro" elegido en el desplegable: muestra el campo de texto libre
   const [qrImagen, setQrImagen] = useState(null)
   const [editandoMetodo, setEditandoMetodo] = useState(null) // id del método en edición, o null = nuevo
   const [guardandoMetodo, setGuardandoMetodo] = useState(false)
@@ -61,12 +63,14 @@ export default function Configuracion() {
   function editarMetodoPago(m) {
     setEditandoMetodo(m.id)
     setFormMetodo({ tipo: m.tipo, nombre: m.nombre ?? '', numero_cuenta: m.numero_cuenta ?? '', enlace: m.enlace ?? '' })
+    setTipoOtro(!TIPOS_PAGO.includes(m.tipo)) // tipo guardado que no está en la lista (ej. viejo/manual) -> muestra el texto libre
     setQrImagen(null); setErrorMetodo('')
   }
 
   function cancelarMetodoPago() {
     setEditandoMetodo(null)
     setFormMetodo({ ...METODO_PAGO_VACIO })
+    setTipoOtro(false)
     setQrImagen(null); setErrorMetodo('')
   }
 
@@ -253,13 +257,16 @@ export default function Configuracion() {
           {errorMetodo && <p className="text-sm text-red-300">{errorMetodo}</p>}
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="text-sm">Tipo *
-              <input required list="tipos-pago-sugeridos" value={formMetodo.tipo}
-                onChange={(e) => setFormMetodo({ ...formMetodo, tipo: e.target.value })} className="input mt-1" placeholder="Nequi, Daviplata, Bancolombia…" />
-              <datalist id="tipos-pago-sugeridos">
-                <option value="Nequi" /><option value="Daviplata" /><option value="Tarjeta" />
-                <option value="Transferencia" /><option value="Bancolombia" /><option value="Bold" />
-                <option value="Link de pago" />
-              </datalist>
+              <select required value={tipoOtro ? 'Otro' : formMetodo.tipo} onChange={(e) => {
+                if (e.target.value === 'Otro') { setTipoOtro(true); setFormMetodo({ ...formMetodo, tipo: '' }) }
+                else { setTipoOtro(false); setFormMetodo({ ...formMetodo, tipo: e.target.value }) }
+              }} className="input mt-1">
+                {TIPOS_PAGO.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {tipoOtro && (
+                <input required value={formMetodo.tipo} onChange={(e) => setFormMetodo({ ...formMetodo, tipo: e.target.value })}
+                  className="input mt-2" placeholder="Escribe el tipo de pago" />
+              )}
             </label>
             <label className="text-sm">Etiqueta (opcional)
               <input value={formMetodo.nombre} onChange={(e) => setFormMetodo({ ...formMetodo, nombre: e.target.value })}
