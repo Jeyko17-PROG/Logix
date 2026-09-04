@@ -32,9 +32,18 @@
   font-weight: 400;
 }
 
+/* Red de seguridad para celulares: si algo (una tabla ancha, texto largo,
+   escalado de fuente del sistema, etc.) empuja el contenido más allá del
+   ancho real de la pantalla, que quede recortado en vez de generar scroll
+   horizontal que "esconde" botones como el de Salir fuera de la vista. */
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   /* Fondo oscuro por defecto: si algún degradado usa transparencia
      (ej. via-color/25), deja ver esto en vez del blanco del navegador. */
   background-color: #020617; /* slate-950 */

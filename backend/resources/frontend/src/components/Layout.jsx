@@ -279,31 +279,35 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
       {/* Barra superior */}
-      <header className="fixed top-0 inset-x-0 z-50 bg-slate-950 border-b border-slate-800 px-4 py-3">
-        <div className="flex items-center gap-3">
+      <header className="fixed top-0 inset-x-0 z-50 bg-slate-950 border-b border-slate-800 px-3 sm:px-4 py-3 overflow-hidden">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {/* Colapsar/expandir el sidebar en escritorio: más ancho para tablas de Inventario/Agenda. */}
           <button onClick={() => setIsCollapsed(!isCollapsed)} aria-label={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
-            className="hidden md:flex p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white text-lg leading-none">
+            className="hidden md:flex p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white text-lg leading-none shrink-0">
             ☰
           </button>
-          <img src="/logo-fenix.png" alt="" className="h-7 w-7 object-contain"
+          <img src="/logo-fenix.png" alt="" className="h-7 w-7 object-contain shrink-0"
             onError={(e) => { e.currentTarget.style.display = 'none' }} />
-          <span className="font-bold text-lg">Fénix</span>
-          <div className="ml-auto flex items-center gap-2">
-            {/* Saldo de la billetera (modo prepago) o aviso de membresía vencida */}
+          <span className="font-bold text-lg shrink-0">Fénix</span>
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 min-w-0 shrink overflow-hidden">
+            {/* Saldo de la billetera (modo prepago) o aviso de membresía vencida.
+                Texto corto en celular: en pantallas angostas esto era lo que
+                más fácil empujaba el botón "Salir" fuera de la pantalla. */}
             {saas?.modo_cobro === 'prepago' && !user?.es_super_admin && (
-              <NavLink to="/planes" className="hidden sm:flex items-center gap-1 text-xs rounded-full bg-sky-500/15 text-sky-300 px-3 py-1.5 hover:bg-sky-500/25">
+              <NavLink to="/planes" className="hidden sm:flex items-center gap-1 text-xs rounded-full bg-sky-500/15 text-sky-300 px-3 py-1.5 hover:bg-sky-500/25 shrink-0">
                 💰 {saas.creditos_facturacion ?? 0} facturas
               </NavLink>
             )}
             {saas?.membresia_vencida && !user?.es_super_admin && (
-              <NavLink to="/planes?vencida=1" className="flex items-center gap-1 text-xs rounded-full bg-red-500/20 text-red-300 px-3 py-1.5 hover:bg-red-500/30">
-                ⚠️ Membresía vencida
+              <NavLink to="/planes?vencida=1" className="flex items-center gap-1 text-xs rounded-full bg-red-500/20 text-red-300 px-2 sm:px-3 py-1.5 shrink-0 whitespace-nowrap hover:bg-red-500/30">
+                ⚠️ <span className="hidden sm:inline">Membresía vencida</span><span className="sm:hidden">Vencida</span>
               </NavLink>
             )}
             <Campana />
-            <span className="text-sm text-slate-400 hidden sm:block">{user?.name} · {user?.rol?.nombre ?? 'Sin rol'}</span>
-            <button onClick={handleLogout} className="text-sm rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-1.5">Salir</button>
+            <span className="text-sm text-slate-400 hidden sm:block truncate max-w-[10rem]">{user?.name} · {user?.rol?.nombre ?? 'Sin rol'}</span>
+            <button onClick={handleLogout} className="text-sm rounded-lg bg-slate-800 hover:bg-slate-700 px-2 sm:px-3 py-1.5 shrink-0 whitespace-nowrap" aria-label="Cerrar sesión">
+              <span className="sm:hidden">🚪</span><span className="hidden sm:inline">Salir</span>
+            </button>
           </div>
         </div>
 
