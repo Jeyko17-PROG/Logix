@@ -256,8 +256,9 @@ export default function Configuracion() {
               <input required list="tipos-pago-sugeridos" value={formMetodo.tipo}
                 onChange={(e) => setFormMetodo({ ...formMetodo, tipo: e.target.value })} className="input mt-1" placeholder="Nequi, Daviplata, Bancolombia…" />
               <datalist id="tipos-pago-sugeridos">
-                <option value="Nequi" /><option value="Daviplata" /><option value="Bancolombia" />
-                <option value="Transferencia bancaria" /><option value="Link de pago" />
+                <option value="Nequi" /><option value="Daviplata" /><option value="Tarjeta" />
+                <option value="Transferencia" /><option value="Bancolombia" /><option value="Bold" />
+                <option value="Link de pago" />
               </datalist>
             </label>
             <label className="text-sm">Etiqueta (opcional)
