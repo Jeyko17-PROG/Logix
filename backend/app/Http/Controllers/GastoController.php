@@ -85,11 +85,15 @@ class GastoController extends Controller
     {
         $fecha = $request->query('fecha', now()->toDateString());
 
-        $ventas = (float) \App\Models\Factura::whereDate('created_at', $fecha)->sum('total');
+        // Ni anuladas ni cotizaciones (BORRADOR) sin confirmar son dinero real
+        // que entró: contarlas aquí sí generaría el descuadre que este reporte
+        // existe justamente para evitar.
+        $ventas = (float) \App\Models\Factura::whereDate('created_at', $fecha)->whereNotIn('estado', ['ANULADA', 'BORRADOR'])->sum('total');
         $gastos = (float) Gasto::whereDate('fecha', $fecha)->sum('monto');
 
         // Desglose por medio de pago del día (reporte de cierre).
         $porMetodo = \App\Models\Factura::whereDate('created_at', $fecha)
+            ->whereNotIn('estado', ['ANULADA', 'BORRADOR'])
             ->selectRaw('metodo_pago, SUM(total) as total, COUNT(*) as facturas')
             ->groupBy('metodo_pago')
             ->get()

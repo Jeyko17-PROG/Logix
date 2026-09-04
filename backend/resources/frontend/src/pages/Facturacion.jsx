@@ -6,7 +6,10 @@ import { aNumero } from '../utils/numero'
 
 const FIRMA_KEY = 'logix_firma'
 
-const ESTADO_COLOR = { EMITIDA: 'bg-emerald-600', PAGADA: 'bg-sky-600', ANULADA: 'bg-red-600', BORRADOR: 'bg-slate-600' }
+const ESTADO_COLOR = { EMITIDA: 'bg-emerald-600', PAGADA: 'bg-sky-600', ANULADA: 'bg-red-600', BORRADOR: 'bg-violet-600' }
+// BORRADOR es la cotización/pre-factura: no se le muestra al usuario con ese
+// nombre técnico, sino como lo que realmente es para él.
+const ESTADO_LABEL = { BORRADOR: 'Cotización' }
 const IVA_FIJOS = [0, 5, 19]
 const LINEA_VACIA = { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: '', impuesto_porcentaje: 19, ivaCustom: false }
 
@@ -28,6 +31,9 @@ export default function Facturacion() {
   const [lineas, setLineas] = useState([{ ...LINEA_VACIA }])
   const [firma, setFirma] = useState(null)
   const [ventaRapidaActiva, setVentaRapidaActiva] = useState(false)
+  // Cotización/pre-factura: no descuenta inventario ni cuenta en caja/reportes
+  // hasta que se le registre el primer abono real (ver registrarPago en el backend).
+  const [esCotizacion, setEsCotizacion] = useState(false)
   const [editId, setEditId] = useState(null) // null = factura nueva; id = editando una existente
   const scanRef = useRef(null)
 
@@ -107,6 +113,7 @@ export default function Facturacion() {
     setMedioPago('EFECTIVO')
     setCurrency('COP'); setExchangeRate('')
     setVentaRapidaActiva(false)
+    setEsCotizacion(false)
     setError('')
     setAbierto(true)
   }
@@ -201,6 +208,7 @@ export default function Facturacion() {
           metodo_pago: medioPago,
           lineas: lineasBody,
           firma: firma || null,
+          es_cotizacion: esCotizacion,
         } })
       }
       setAbierto(false); cargar()
@@ -306,6 +314,18 @@ export default function Facturacion() {
                 <input type="date" value={cab.fecha} onChange={(e) => setCab({ ...cab, fecha: e.target.value })} className="input" />
               </label>
             </div>
+
+            {!editId && (
+              <label className="mt-3 flex items-start gap-2 rounded-lg border border-violet-800/40 bg-violet-500/5 p-3 text-sm">
+                <input type="checkbox" checked={esCotizacion} onChange={(e) => setEsCotizacion(e.target.checked)} className="mt-0.5" />
+                <span>
+                  <span className="font-medium text-violet-300">Enviar como cotización (no contabilizar todavía)</span>
+                  <span className="block text-xs text-slate-400 mt-0.5">
+                    No descuenta inventario ni aparece en caja/reportes hasta que le registres el primer abono. Ideal para mandarle un presupuesto al cliente sin afectar tus números.
+                  </span>
+                </span>
+              </label>
+            )}
 
             {/* Medio de pago (obligatorio para el cierre de caja por método) */}
             <div className="mt-3">
@@ -475,7 +495,7 @@ export default function Facturacion() {
                     <div className="text-xs text-amber-400">Saldo: {money(f.saldo_pendiente)}</div>
                   )}
                 </td>
-                <td className="p-3"><span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[f.estado]}`}>{f.estado}</span></td>
+                <td className="p-3"><span className={`text-xs rounded-full px-2 py-0.5 ${ESTADO_COLOR[f.estado]}`}>{ESTADO_LABEL[f.estado] ?? f.estado}</span></td>
                 <td className="p-3 text-right whitespace-nowrap">
                   {esEditable(f) && <button onClick={() => editar(f)} className="text-amber-400 hover:underline mr-3">Editar</button>}
                   <button onClick={() => verPagos(f)} className="text-violet-400 hover:underline mr-3">Pagos</button>

@@ -572,6 +572,10 @@ function ModalOrden({ id, esMecanico, onClose }) {
   const esBarberia = tipoNegocio === 'barberia'
   const esTatuajes = tipoNegocio === 'tatuajes'
   const esAccesoriosMotos = tipoNegocio === 'accesorios_motos'
+  // Solo estos 3 rubros: aquí sí tiene sentido avisar "ven a retirar tu
+  // vehículo" (taller_general incluye a "otro" en otras partes de este
+  // archivo, pero aquí se pidió específicamente sin ese genérico).
+  const esTallerGenerico = ['taller_motos', 'taller_carros', 'taller_general'].includes(tipoNegocio)
   const iconoOperario = esLavadero ? '🧼' : esBarberia ? '💈' : esTatuajes ? '🎨' : esAccesoriosMotos ? '🔧' : '👨‍🔧'
   const [orden, setOrden] = useState(null)
   const [productos, setProductos] = useState([])
@@ -679,7 +683,18 @@ function ModalOrden({ id, esMecanico, onClose }) {
                 {ESTADOS[e].label}
               </button>
             ))}
-            <button onClick={completar} className="ml-auto text-xs rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-semibold">
+            {esTallerGenerico && orden.cliente?.telefono && (
+              <a
+                href={`https://wa.me/${orden.cliente.telefono.replace(/\D+/g, '')}?text=${encodeURIComponent(
+                  `Hola ${orden.cliente?.nombre_completo ?? ''}, tu ${orden.asset_vehicle ? `${orden.asset_vehicle.marca} ${orden.asset_vehicle.modelo}${orden.asset_vehicle.placa_identificador ? ` (${orden.asset_vehicle.placa_identificador})` : ''}` : 'vehículo'} ya quedó listo, puedes venir a retirarlo. 🔧`
+                )}`}
+                target="_blank" rel="noreferrer"
+                className="ml-auto text-xs rounded-lg bg-green-700 hover:bg-green-600 px-3 py-1.5 font-semibold"
+              >
+                💬 Avisar por WhatsApp
+              </a>
+            )}
+            <button onClick={completar} className={`text-xs rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-semibold ${esTallerGenerico && orden.cliente?.telefono ? '' : 'ml-auto'}`}>
               ✓ Completar (registra hoja de vida)
             </button>
           </div>

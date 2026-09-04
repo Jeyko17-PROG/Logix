@@ -79,6 +79,25 @@ class FacturaController extends Controller
         }
 
         $pago = DB::transaction(function () use ($data, $factura, $request) {
+            // Cotización (BORRADOR): el primer abono real es lo que la convierte
+            // en una venta de verdad - recién aquí se descuenta el inventario y
+            // se cobra el crédito de facturación (si aplica), no antes. Así,
+            // mientras solo era una cotización enviada al cliente, nunca afectó
+            // caja/reportes/inventario.
+            if ($factura->estado === 'BORRADOR') {
+                $this->cobrarUsoPorFactura($request->user());
+                foreach ($factura->detalles as $d) {
+                    if (! empty($d->producto_id)) {
+                        $this->kardex->salida(
+                            (int) $d->producto_id, $factura->bodega_id, (float) $d->cantidad,
+                            $request->user()->id, 'VENTA_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id],
+                        );
+                    }
+                }
+                $factura->update(['estado' => 'EMITIDA']);
+                Auditoria::registrar($request->user()->id, null, 'FACTURA', 'CONFIRMAR_COTIZACION', null, $factura->numero, $factura->bodega_id);
+            }
+
             $pago = $factura->pagos()->create([
                 'monto' => $data['monto'],
                 'metodo_pago' => $data['metodo_pago'] ?? null,
@@ -123,14 +142,24 @@ class FacturaController extends Controller
             // Medio de pago (para el cierre de caja desglosado por método).
             'metodo_pago' => ['nullable', 'in:EFECTIVO,TARJETA,TRANSFERENCIA,NEQUI,DAVIPLATA'],
             'propina' => ['nullable', 'numeric', 'min:0'],
+            // Cotización/pre-factura: se le puede enviar al cliente (PDF/correo)
+            // sin que cuente todavía como venta real - no descuenta inventario
+            // ni cobra crédito de facturación, y no aparece en caja/reportes.
+            // Se "activa" sola (ver registrarPago) apenas se registre el
+            // primer abono real.
+            'es_cotizacion' => ['nullable', 'boolean'],
         ]);
+        $esCotizacion = (bool) ($data['es_cotizacion'] ?? false);
 
-        $factura = DB::transaction(function () use ($data, $request) {
+        $factura = DB::transaction(function () use ($data, $request, $esCotizacion) {
             $bodegaId = $this->resolverBodegaFactura($request, $data['bodega_id'] ?? null);
 
             // Pago por uso: en modo prepago cada factura consume 1 crédito ($500 COP).
             // Si no hay saldo, la venta se detiene aquí (422) y no se crea nada.
-            $this->cobrarUsoPorFactura($request->user());
+            // Una cotización no cobra crédito todavía - eso pasa al confirmarla.
+            if (! $esCotizacion) {
+                $this->cobrarUsoPorFactura($request->user());
+            }
 
             // IVA general usado como respaldo cuando una linea no define el suyo.
             $pctGeneral = $data['impuesto_porcentaje'] ?? 0;
@@ -168,7 +197,7 @@ class FacturaController extends Controller
                 'total' => $subtotal + $impuestos,
                 'currency' => $data['currency'] ?? 'COP',
                 'exchange_rate' => $data['exchange_rate'] ?? null,
-                'estado' => 'EMITIDA',
+                'estado' => $esCotizacion ? 'BORRADOR' : 'EMITIDA',
                 'metodo_pago' => $data['metodo_pago'] ?? 'EFECTIVO',
                 'propina' => $data['propina'] ?? null,
                 'notas' => $data['notas'] ?? null,
@@ -177,7 +206,9 @@ class FacturaController extends Controller
 
             foreach ($detalles as $d) {
                 $factura->detalles()->create($d);
-                if (! empty($d['producto_id'])) {
+                // Una cotización todavía no vendió nada de verdad: el stock se
+                // descuenta cuando se active (primer abono registrado), no ahora.
+                if (! $esCotizacion && ! empty($d['producto_id'])) {
                     $this->kardex->salida(
                         (int) $d['producto_id'],
                         $bodegaId,
@@ -197,10 +228,11 @@ class FacturaController extends Controller
             }
 
             // Notificación interna SOLO para el dueño de la factura (su workspace).
+            $etiqueta = $esCotizacion ? 'Cotización' : 'Factura';
             $this->notificador->aUsuario($factura->owner_id, 'FACTURA',
-                "Factura {$factura->numero} generada", "Total: \${$factura->total}");
+                "{$etiqueta} {$factura->numero} generada", "Total: \${$factura->total}");
 
-            Auditoria::registrar($request->user()->id, null, 'FACTURA', 'EMITIR', null, $factura->numero, $bodegaId);
+            Auditoria::registrar($request->user()->id, null, 'FACTURA', $esCotizacion ? 'COTIZAR' : 'EMITIR', null, $factura->numero, $bodegaId);
 
             return $factura->load(['cliente:id,nombre_completo,email,telefono', 'detalles']);
         });
@@ -270,31 +302,37 @@ class FacturaController extends Controller
                     ];
                 }
 
-                // Mapear cantidades por producto (solo aquellos con producto_id)
-                $oldMap = [];
-                foreach ($factura->detalles as $d) {
-                    if ($d->producto_id) {
-                        $oldMap[$d->producto_id] = ($oldMap[$d->producto_id] ?? 0) + (float) $d->cantidad;
+                // Una cotización (BORRADOR) nunca descontó stock al crearse, así
+                // que tampoco hay que ajustarlo aquí por editar sus líneas -
+                // el descuento real pasa una sola vez, al activarse (ver
+                // registrarPago).
+                if ($factura->estado !== 'BORRADOR') {
+                    // Mapear cantidades por producto (solo aquellos con producto_id)
+                    $oldMap = [];
+                    foreach ($factura->detalles as $d) {
+                        if ($d->producto_id) {
+                            $oldMap[$d->producto_id] = ($oldMap[$d->producto_id] ?? 0) + (float) $d->cantidad;
+                        }
                     }
-                }
 
-                $newMap = [];
-                foreach ($nuevas as $d) {
-                    if (! empty($d['producto_id'])) {
-                        $newMap[$d['producto_id']] = ($newMap[$d['producto_id']] ?? 0) + (float) $d['cantidad'];
+                    $newMap = [];
+                    foreach ($nuevas as $d) {
+                        if (! empty($d['producto_id'])) {
+                            $newMap[$d['producto_id']] = ($newMap[$d['producto_id']] ?? 0) + (float) $d['cantidad'];
+                        }
                     }
-                }
 
-                // Ajustes por producto: si diff>0 => salida, diff<0 => entrada
-                $productoIds = array_unique(array_merge(array_keys($oldMap), array_keys($newMap)));
-                foreach ($productoIds as $pid) {
-                    $oldCant = $oldMap[$pid] ?? 0.0;
-                    $newCant = $newMap[$pid] ?? 0.0;
-                    $diff = $newCant - $oldCant;
-                    if ($diff > 0) {
-                        $this->kardex->salida((int) $pid, $bodegaId, (float) $diff, $request->user()->id, 'VENTA_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
-                    } elseif ($diff < 0) {
-                        $this->kardex->revertirSalida((int) $pid, $bodegaId, (float) abs($diff), $request->user()->id, 'DEVOLUCION_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                    // Ajustes por producto: si diff>0 => salida, diff<0 => entrada
+                    $productoIds = array_unique(array_merge(array_keys($oldMap), array_keys($newMap)));
+                    foreach ($productoIds as $pid) {
+                        $oldCant = $oldMap[$pid] ?? 0.0;
+                        $newCant = $newMap[$pid] ?? 0.0;
+                        $diff = $newCant - $oldCant;
+                        if ($diff > 0) {
+                            $this->kardex->salida((int) $pid, $bodegaId, (float) $diff, $request->user()->id, 'VENTA_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                        } elseif ($diff < 0) {
+                            $this->kardex->revertirSalida((int) $pid, $bodegaId, (float) abs($diff), $request->user()->id, 'DEVOLUCION_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                        }
                     }
                 }
 
@@ -350,9 +388,12 @@ class FacturaController extends Controller
         return DB::transaction(function () use ($request, $factura) {
             $bodegaId = $factura->bodega_id;
 
-            foreach ($factura->detalles as $d) {
-                if (! empty($d->producto_id) && (float) $d->cantidad > 0) {
-                    $this->kardex->revertirSalida((int) $d->producto_id, $bodegaId, (float) $d->cantidad, $request->user()->id, 'REVERSO_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+            // Una cotización (BORRADOR) nunca descontó stock - nada que devolver.
+            if ($factura->estado !== 'BORRADOR') {
+                foreach ($factura->detalles as $d) {
+                    if (! empty($d->producto_id) && (float) $d->cantidad > 0) {
+                        $this->kardex->revertirSalida((int) $d->producto_id, $bodegaId, (float) $d->cantidad, $request->user()->id, 'REVERSO_FACTURA', ['tipo' => 'FACTURA', 'id' => $factura->id]);
+                    }
                 }
             }
 
@@ -473,7 +514,8 @@ class FacturaController extends Controller
         // /storage ni del disco efímero de Render (los /storage/... daban 404
         // tras cada redeploy porque los archivos se pierden).
         $urlPdf = $this->urlPdfPublica($factura);
-        $mensaje = "Hola, adjuntamos tu factura numero {$factura->numero}: {$urlPdf}";
+        $etiqueta = $factura->estado === 'BORRADOR' ? 'cotización' : 'factura';
+        $mensaje = "Hola, te compartimos tu {$etiqueta} numero {$factura->numero}: {$urlPdf}";
 
         return response()->json([
             'whatsapp_url' => 'https://wa.me/' . $telefono . '?text=' . rawurlencode($mensaje),

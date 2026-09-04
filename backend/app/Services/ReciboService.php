@@ -70,13 +70,20 @@ class ReciboService
             // sale a nombre de ella (From/Reply-To) en vez del remitente genérico.
             $empresa = $factura->empresa;
 
+            // Cotización (BORRADOR): mismo PDF, pero el texto del correo no debe
+            // sonar a "ya compraste" - todavía no cuenta como venta.
+            $esCotizacion = $factura->estado === 'BORRADOR';
+            $etiqueta = $esCotizacion ? 'Cotización' : 'Factura';
+
             $this->notificador->correo(
                 $email,
-                "Factura {$factura->numero} - Fénix",
-                "Factura {$factura->numero}",
+                "{$etiqueta} {$factura->numero} - Fénix",
+                "{$etiqueta} {$factura->numero}",
                 [
                     "Hola {$factura->cliente->nombre_completo},",
-                    "Gracias por tu compra. Adjuntamos tu factura {$factura->numero} por un total de \${$factura->total}.",
+                    $esCotizacion
+                        ? "Te compartimos la cotización {$factura->numero} por un total de \${$factura->total}."
+                        : "Gracias por tu compra. Adjuntamos tu factura {$factura->numero} por un total de \${$factura->total}.",
                     'Si tienes alguna duda, responde a este correo.',
                 ],
                 $adjunto,

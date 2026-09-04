@@ -126,7 +126,8 @@ class ClienteController extends Controller
             'cliente' => $cliente->only(['id', 'nombre_completo', 'tipo_documento', 'numero_documento', 'telefono', 'email']),
             'vehiculo' => $vehiculo?->only(['id', 'placa_identificador', 'marca', 'modelo']),
             'visitas' => \App\Models\ServiceOrder::where('cliente_id', $cliente->id)->count(),
-            'total_comprado' => (float) \App\Models\Factura::where('cliente_id', $cliente->id)->sum('total'),
+            // Ni anuladas ni cotizaciones (BORRADOR) sin confirmar son compras reales.
+            'total_comprado' => (float) \App\Models\Factura::where('cliente_id', $cliente->id)->whereNotIn('estado', ['ANULADA', 'BORRADOR'])->sum('total'),
             'mecanicos' => $mecanicos,
             'ordenes' => $ordenes,
             'facturas' => $facturas,

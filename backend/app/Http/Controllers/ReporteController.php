@@ -64,8 +64,9 @@ class ReporteController extends Controller
         $citasPendientes = Cita::where('estado', 'PENDIENTE')->count();
         $clientesNuevosMes = Cliente::where('created_at', '>=', $inicioMes)->count();
         $clientesActivos = Cliente::where('estado', 'ACTIVO')->count();
-        $facturacionHoy = Factura::whereDate('fecha', $hoy)->where('estado', '!=', 'ANULADA')->sum('total');
-        $facturacionMes = Factura::where('fecha', '>=', $inicioMes)->where('estado', '!=', 'ANULADA')->sum('total');
+        // Ni anuladas ni cotizaciones (BORRADOR) sin confirmar cuentan como venta real.
+        $facturacionHoy = Factura::whereDate('fecha', $hoy)->whereNotIn('estado', ['ANULADA', 'BORRADOR'])->sum('total');
+        $facturacionMes = Factura::where('fecha', '>=', $inicioMes)->whereNotIn('estado', ['ANULADA', 'BORRADOR'])->sum('total');
 
         // Ocupación de agenda hoy: minutos reservados vs. minutos laborales del día.
         $ocupacion = $this->ocupacionHoy($hoy);
