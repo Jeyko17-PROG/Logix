@@ -55,6 +55,18 @@ export default function Empresas() {
     accion(() => api(`/admin/empresas/${e.id}/limite`, { method: 'POST', body: { limite_clientes: v === '' ? null : Number(v) } }))
   }
 
+  // Fecha manual hasta la que la empresa tiene acceso (activa/extiende sin
+  // depender del ciclo de pago normal): esto es lo que de verdad revisa
+  // VerificarMembresia — cambiar solo el "Estado" (Activar/Suspender) no
+  // alcanza si esta fecha sigue vencida.
+  async function cambiarMembresia(e) {
+    const actual = e.membresia_vence_at ? e.membresia_vence_at.slice(0, 10) : ''
+    const v = prompt(`Fecha hasta la que ${e.nombre} tiene acceso (AAAA-MM-DD):`, actual)
+    if (v === null || v === '') return
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { alert('Formato de fecha inválido. Usa AAAA-MM-DD, ej: 2026-10-15.'); return }
+    accion(() => api(`/admin/empresas/${e.id}/membresia`, { method: 'POST', body: { membresia_vence_at: v } }))
+  }
+
   const regenerarCodigo = (e) => {
     if (!confirm(`¿Generar un nuevo código de activación para ${e.nombre}? El código anterior dejará de funcionar.`)) return
     accion(() => api(`/admin/empresas/${e.id}/regenerar-codigo`, { method: 'POST' }))
@@ -131,6 +143,7 @@ export default function Empresas() {
                           {new Date(e.membresia_vence_at).toLocaleDateString('es-CO')}{e.membresia_vencida ? ' ⚠️ vencida' : ''}
                         </span>
                       : <span className="text-slate-500">sin control</span>}
+                    <button onClick={() => cambiarMembresia(e)} className="ml-2 text-xs text-sky-400 hover:underline">editar</button>
                   </td>
                   <td className="p-3">
                     <span className={e.limite_clientes && e.clientes_usados >= e.limite_clientes ? 'text-red-400' : 'text-slate-300'}>

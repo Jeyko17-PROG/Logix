@@ -129,6 +129,38 @@ class EmpresaAdminController extends Controller
     }
 
     /**
+     * Fija manualmente hasta cuándo tiene acceso la empresa (independiente
+     * del ciclo mensual estándar de renovación): sirve tanto para extender
+     * a un cliente que pagó por fuera de la pasarela, como para el caso real
+     * que motivó esto — una empresa con la prueba/membresía vencida seguía
+     * bloqueada por VerificarMembresia aunque el super-admin la pusiera en
+     * estado ACTIVO, porque el bloqueo se decide por esta fecha, no por el
+     * estado. Aplica al "gobernante" del grupo de negocios vinculados (la
+     * membresía se comparte entre ellos, igual que el límite de clientes).
+     */
+    public function cambiarMembresia(Request $request, Empresa $empresa): JsonResponse
+    {
+        $data = $request->validate([
+            'membresia_vence_at' => ['required', 'date'],
+        ]);
+        $gobernante = $empresa->empresaGobernante();
+
+        $anterior = $gobernante->membresia_vence_at?->toDateString();
+        $gobernante->forceFill([
+            'membresia_vence_at' => $data['membresia_vence_at'],
+            // Si se extiende, que vuelva a avisar al super-admin cuando de
+            // verdad venza otra vez (si no, esta bandera ya disparada antes
+            // dejaría la nueva fecha vencida en silencio).
+            'prueba_alerta_enviada' => false,
+        ])->save();
+        $gobernante->owner?->forceFill(['membresia_vence_at' => $data['membresia_vence_at']])->save(); // espejo legado
+
+        Auditoria::registrar($request->user()->id, $gobernante->owner_user_id, 'EMPRESA_MEMBRESIA', null, $anterior, $data['membresia_vence_at']);
+
+        return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
+    }
+
+    /**
      * Genera un nuevo código de activación de 6 dígitos para el dueño de la
      * empresa (p. ej. si agotó los 5 intentos o perdió el que tenía).
      */
