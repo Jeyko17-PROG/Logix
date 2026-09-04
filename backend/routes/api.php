@@ -13,6 +13,7 @@ use App\Http\Controllers\GaleriaController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\ExtraccionController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\MetodoPagoCobroController;
 use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\FirmaController;
 use App\Http\Controllers\NotaController;
@@ -379,6 +380,17 @@ Route::middleware(['auth:sanctum', 'membresia'])->group(function () {
             Route::post('facturas/{factura}/enviar', [FacturaController::class, 'enviar'])->middleware('feature:correos');
             Route::post('facturas/{factura}/whatsapp', [FacturaController::class, 'whatsapp'])->middleware('feature:pdf');
             Route::post('facturas/{factura}/pagos', [FacturaController::class, 'registrarPago']);
+        });
+
+        // Métodos de pago manuales del negocio (Nequi, Daviplata, Bancolombia,
+        // link de pago...): se muestran en el modal de cobro para que el
+        // cliente escanee el QR o vea los datos de transferencia.
+        Route::get('metodos-pago', [MetodoPagoCobroController::class, 'index']);
+        Route::middleware('role:Administrador')->group(function () {
+            Route::post('metodos-pago', [MetodoPagoCobroController::class, 'store']);
+            Route::post('metodos-pago/{metodoPago}/update', [MetodoPagoCobroController::class, 'update']); // multipart (QR)
+            Route::put('metodos-pago/{metodoPago}', [MetodoPagoCobroController::class, 'update']);
+            Route::delete('metodos-pago/{metodoPago}', [MetodoPagoCobroController::class, 'destroy']);
         });
     });
 

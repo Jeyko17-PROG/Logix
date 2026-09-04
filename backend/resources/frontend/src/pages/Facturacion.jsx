@@ -20,6 +20,7 @@ export default function Facturacion() {
   const [facturas, setFacturas] = useState([])
   const [clientes, setClientes] = useState([])
   const [productos, setProductos] = useState([])
+  const [metodosPago, setMetodosPago] = useState([]) // formas de cobro manual configuradas en Configuración (QR, cuenta, enlace)
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -76,7 +77,14 @@ export default function Facturacion() {
     cargar()
     api('/clientes').then((d) => setClientes(d.data ?? d))
     api('/productos').then((d) => setProductos(d.data ?? d)).catch(() => setProductos([]))
+    api('/metodos-pago').then(setMetodosPago).catch(() => setMetodosPago([]))
   }, [])
+
+  // Métodos de pago del negocio (QR/cuenta) que coinciden con la forma de
+  // pago elegida en el modal de abono — ej. seleccionar "Nequi" muestra el
+  // QR/número de Nequi configurado, para que el cliente pague ahí mismo.
+  const metodosCoincidentes = (metodoSeleccionado) => metodosPago.filter((m) =>
+    m.activo && metodoSeleccionado && m.tipo?.toUpperCase().includes(metodoSeleccionado))
 
   // --- Manejo de líneas ---
   const updateLinea = (i, patch) => setLineas(lineas.map((l, j) => (j === i ? { ...l, ...patch } : l)))
@@ -563,6 +571,20 @@ export default function Facturacion() {
                     <option value="DAVIPLATA">Daviplata</option>
                   </select>
                 </div>
+
+                {/* QR/cuenta configurados en Configuración para esta forma de pago:
+                    muéstraselo al cliente para que escanee o vea a dónde transferir. */}
+                {metodosCoincidentes(nuevoPago.metodo_pago).map((m) => (
+                  <div key={m.id} className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 flex items-center gap-3">
+                    {m.qr_url && <img src={m.qr_url} alt={`QR ${m.tipo}`} className="h-20 w-20 rounded-lg object-contain bg-white shrink-0" />}
+                    <div className="min-w-0 text-sm">
+                      <p className="font-semibold">{m.nombre || m.tipo}</p>
+                      {m.numero_cuenta && <p className="text-slate-300">{m.numero_cuenta}</p>}
+                      {m.enlace && <a href={m.enlace} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline break-all">{m.enlace}</a>}
+                    </div>
+                  </div>
+                ))}
+
                 <input type="text" placeholder="Nota (opcional)" value={nuevoPago.nota} onChange={(e) => setNuevoPago({ ...nuevoPago, nota: e.target.value })} className="input" />
                 <button disabled={guardandoPago} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-semibold disabled:opacity-50">
                   {guardandoPago ? 'Guardando…' : 'Registrar abono'}

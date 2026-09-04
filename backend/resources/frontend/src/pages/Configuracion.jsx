@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { useFeatures } from '../context/FeaturesContext'
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const METODO_PAGO_VACIO = { tipo: 'Nequi', nombre: '', numero_cuenta: '', enlace: '' }
 
 export default function Configuracion() {
   const { user, setUser } = useAuth()
+  const { activa } = useFeatures()
   const [perfilPublico, setPerfilPublico] = useState({
     politicas: '', instagram_url: '', tiktok_url: '', facebook_url: '', whatsapp_url: '',
   })
@@ -19,9 +22,71 @@ export default function Configuracion() {
   const [bloqueo, setBloqueo] = useState({ inicio: '', fin: '', motivo: '' })
   const [msg, setMsg] = useState('')
 
+  // --- Métodos de pago manuales (Nequi, Daviplata, Bancolombia, link de pago...) ---
+  const [metodosPago, setMetodosPago] = useState([])
+  const [formMetodo, setFormMetodo] = useState({ ...METODO_PAGO_VACIO })
+  const [qrImagen, setQrImagen] = useState(null)
+  const [editandoMetodo, setEditandoMetodo] = useState(null) // id del método en edición, o null = nuevo
+  const [guardandoMetodo, setGuardandoMetodo] = useState(false)
+  const [errorMetodo, setErrorMetodo] = useState('')
+
   useEffect(() => {
     api('/bodegas').then(setSucursales).catch(() => {}) // multisucursal; si no aplica, queda vacío
+    cargarMetodosPago()
   }, [])
+
+  function cargarMetodosPago() {
+    api('/metodos-pago').then(setMetodosPago).catch(() => {})
+  }
+
+  async function guardarMetodoPago(e) {
+    e.preventDefault(); setErrorMetodo(''); setGuardandoMetodo(true)
+    try {
+      const fd = new FormData()
+      Object.entries(formMetodo).forEach(([k, v]) => { if (v) fd.append(k, v) })
+      if (qrImagen) fd.append('qr_imagen', qrImagen)
+
+      if (editandoMetodo) await api(`/metodos-pago/${editandoMetodo}/update`, { method: 'POST', body: fd, isForm: true })
+      else await api('/metodos-pago', { method: 'POST', body: fd, isForm: true })
+
+      cancelarMetodoPago()
+      cargarMetodosPago()
+    } catch (err) {
+      setErrorMetodo(err.message || 'No se pudo guardar.')
+    } finally {
+      setGuardandoMetodo(false)
+    }
+  }
+
+  function editarMetodoPago(m) {
+    setEditandoMetodo(m.id)
+    setFormMetodo({ tipo: m.tipo, nombre: m.nombre ?? '', numero_cuenta: m.numero_cuenta ?? '', enlace: m.enlace ?? '' })
+    setQrImagen(null); setErrorMetodo('')
+  }
+
+  function cancelarMetodoPago() {
+    setEditandoMetodo(null)
+    setFormMetodo({ ...METODO_PAGO_VACIO })
+    setQrImagen(null); setErrorMetodo('')
+  }
+
+  async function eliminarMetodoPago(id) {
+    if (!confirm('¿Eliminar este método de pago?')) return
+    await api(`/metodos-pago/${id}`, { method: 'DELETE' })
+    if (editandoMetodo === id) cancelarMetodoPago()
+    cargarMetodosPago()
+  }
+
+  async function toggleMetodoPagoActivo(m) {
+    const fd = new FormData()
+    fd.append('tipo', m.tipo)
+    if (m.nombre) fd.append('nombre', m.nombre)
+    if (m.numero_cuenta) fd.append('numero_cuenta', m.numero_cuenta)
+    if (m.enlace) fd.append('enlace', m.enlace)
+    fd.append('activo', m.activo ? '0' : '1')
+    await api(`/metodos-pago/${m.id}/update`, { method: 'POST', body: fd, isForm: true })
+    cargarMetodosPago()
+  }
 
   // Precarga las políticas/redes sociales del negocio desde /me.
   useEffect(() => {
@@ -151,6 +216,76 @@ export default function Configuracion() {
           <Link to="/servicios" className="text-emerald-400 hover:underline">Servicios</Link> en el menú.
         </p>
       </section>
+
+      {/* Métodos de pago manuales: se muestran al cobrar (QR/cuenta) para que
+          el cliente transfiera sin salir del POS. Solo aplica si el negocio
+          tiene facturación (ahí vive el modal de cobro que los usa). */}
+      {activa('facturacion') && (
+      <section>
+        <h2 className="font-semibold mb-2">Métodos de pago</h2>
+        <p className="text-sm text-slate-400 mb-3">
+          Configura tus cuentas Nequi, Daviplata, Bancolombia, links de pago, etc. Aparecen en el momento de cobrar
+          para que el cliente escanee el QR o vea a dónde transferir.
+        </p>
+
+        <ul className="rounded-xl border border-slate-800 divide-y divide-slate-800 mb-4">
+          {metodosPago.map((m) => (
+            <li key={m.id} className="p-3 flex items-center gap-3">
+              {m.qr_url
+                ? <img src={m.qr_url} alt={`QR ${m.tipo}`} className="h-12 w-12 rounded-lg object-contain bg-white shrink-0" />
+                : <span className="h-12 w-12 rounded-lg bg-slate-800 flex items-center justify-center text-lg shrink-0">💳</span>}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{m.nombre || m.tipo} <span className="text-xs text-slate-500">· {m.tipo}</span></p>
+                <p className="text-xs text-slate-400 truncate">{m.numero_cuenta}{m.enlace ? (m.numero_cuenta ? ' · ' : '') + m.enlace : ''}</p>
+              </div>
+              <button onClick={() => toggleMetodoPagoActivo(m)}
+                className={`text-xs rounded-full px-2 py-0.5 shrink-0 ${m.activo ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                {m.activo ? 'Activo' : 'Inactivo'}
+              </button>
+              <button onClick={() => editarMetodoPago(m)} className="text-xs text-sky-400 hover:underline shrink-0">Editar</button>
+              <button onClick={() => eliminarMetodoPago(m.id)} className="text-xs text-red-400 hover:underline shrink-0">Eliminar</button>
+            </li>
+          ))}
+          {metodosPago.length === 0 && <li className="p-4 text-slate-500 text-sm">Sin métodos de pago configurados.</li>}
+        </ul>
+
+        <form onSubmit={guardarMetodoPago} className="rounded-xl border border-slate-800 bg-slate-800/30 p-4 space-y-3">
+          {errorMetodo && <p className="text-sm text-red-300">{errorMetodo}</p>}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="text-sm">Tipo *
+              <input required list="tipos-pago-sugeridos" value={formMetodo.tipo}
+                onChange={(e) => setFormMetodo({ ...formMetodo, tipo: e.target.value })} className="input mt-1" placeholder="Nequi, Daviplata, Bancolombia…" />
+              <datalist id="tipos-pago-sugeridos">
+                <option value="Nequi" /><option value="Daviplata" /><option value="Bancolombia" />
+                <option value="Transferencia bancaria" /><option value="Link de pago" />
+              </datalist>
+            </label>
+            <label className="text-sm">Etiqueta (opcional)
+              <input value={formMetodo.nombre} onChange={(e) => setFormMetodo({ ...formMetodo, nombre: e.target.value })}
+                className="input mt-1" placeholder="Ej: Nequi del negocio" />
+            </label>
+            <label className="text-sm">Número de cuenta / teléfono
+              <input value={formMetodo.numero_cuenta} onChange={(e) => setFormMetodo({ ...formMetodo, numero_cuenta: e.target.value })}
+                className="input mt-1" placeholder="3001234567" />
+            </label>
+            <label className="text-sm">Enlace de pago (opcional)
+              <input value={formMetodo.enlace} onChange={(e) => setFormMetodo({ ...formMetodo, enlace: e.target.value })}
+                className="input mt-1" placeholder="https://…" />
+            </label>
+          </div>
+          <label className="text-sm block">Código QR (opcional)
+            <input type="file" accept="image/*" onChange={(e) => setQrImagen(e.target.files?.[0] ?? null)} className="input mt-1" />
+            {editandoMetodo && !qrImagen && <p className="text-xs text-slate-500 mt-1">Deja esto vacío para conservar el QR actual.</p>}
+          </label>
+          <div className="flex gap-2">
+            <button disabled={guardandoMetodo} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold">
+              {guardandoMetodo ? 'Guardando…' : editandoMetodo ? 'Guardar cambios' : 'Agregar método de pago'}
+            </button>
+            {editandoMetodo && <button type="button" onClick={cancelarMetodoPago} className="rounded-lg bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm">Cancelar</button>}
+          </div>
+        </form>
+      </section>
+      )}
 
       {/* Portal público: políticas y redes sociales (aparecen en el enlace del QR) */}
       <section>
