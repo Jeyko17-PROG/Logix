@@ -55,8 +55,16 @@ class PlanSeeder extends Seeder
             ],
         ];
 
+        // IMPORTANTE: estos valores solo se aplican al CREAR el plan (primera
+        // vez, instalación nueva). Si el plan ya existe, se respeta lo que el
+        // super-admin haya editado desde /planes (precio, límites, funcio-
+        // nalidades, etc.) — este seeder corre en CADA deploy (db:seed
+        // --force en docker/start.sh), así que un updateOrCreate aquí
+        // resetearía silenciosamente cualquier edición manual cada vez que
+        // se sube un cambio nuevo (mismo problema que ya se evitó en
+        // TipoNegocioSeeder).
         foreach ($planes as $p) {
-            Plan::updateOrCreate(['nombre' => $p['nombre']], $p);
+            Plan::firstOrCreate(['nombre' => $p['nombre']], $p);
         }
     }
 }
