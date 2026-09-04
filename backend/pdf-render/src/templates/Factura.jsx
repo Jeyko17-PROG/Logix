@@ -66,15 +66,19 @@ export default function Factura({ factura, firma, logo }) {
   const currency = factura?.currency ?? 'COP';
   const cliente = factura?.cliente ?? {};
   const detalles = factura?.detalles ?? [];
+  // BORRADOR = cotización (aún no contabilizada, ver ReciboService::enviarPorCorreo).
+  // El PDF debe dejarlo igual de claro que el correo y el WhatsApp.
+  const esCotizacion = factura?.estado === 'BORRADOR';
+  const etiqueta = esCotizacion ? 'Cotización' : 'Factura';
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.h1}>Factura {factura?.numero}</Text>
+            <Text style={styles.h1}>{etiqueta} {factura?.numero}</Text>
             <Text style={styles.muted}>
-              Logix · {formatDate(factura?.fecha)} · {factura?.estado}
+              Logix · {formatDate(factura?.fecha)} · {esCotizacion ? 'COTIZACIÓN' : factura?.estado}
             </Text>
           </View>
           {logo ? <Image src={logo} style={styles.logo} /> : null}

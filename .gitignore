@@ -9,3 +9,4 @@ Thumbs.db
 # Docker Compose de producción: secretos reales y config generada localmente.
 /.env
 /docker/nginx/app.conf
+FenixPOSMobile/

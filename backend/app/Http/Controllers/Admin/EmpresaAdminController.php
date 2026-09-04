@@ -161,6 +161,28 @@ class EmpresaAdminController extends Controller
     }
 
     /**
+     * El super-admin elige si la empresa sigue en la prueba gratis de 15 días
+     * o si ya pasa a membresía/prepago (p. ej. porque le vendió un plan por
+     * fuera de la app). Si se saca de 'prueba', el badge "🎁 prueba gratis"
+     * del panel desaparece de inmediato y pasa a verse como cualquier otro
+     * cliente pago — para eso están los planes. Aplica al gobernante del
+     * grupo, igual que el resto de estos ajustes.
+     */
+    public function cambiarModoCobro(Request $request, Empresa $empresa): JsonResponse
+    {
+        $data = $request->validate(['modo_cobro' => ['required', 'in:prueba,membresia,prepago']]);
+        $gobernante = $empresa->empresaGobernante();
+
+        $anterior = $gobernante->modo_cobro;
+        $gobernante->update(['modo_cobro' => $data['modo_cobro']]);
+        $gobernante->owner?->update(['modo_cobro' => $data['modo_cobro']]); // espejo legado
+
+        Auditoria::registrar($request->user()->id, $gobernante->owner_user_id, 'EMPRESA_MODO_COBRO', null, $anterior, $data['modo_cobro']);
+
+        return response()->json($this->serializar($empresa->fresh(['owner', 'plan', 'tipoNegocio'])));
+    }
+
+    /**
      * Genera un nuevo código de activación de 6 dígitos para el dueño de la
      * empresa (p. ej. si agotó los 5 intentos o perdió el que tenía).
      */

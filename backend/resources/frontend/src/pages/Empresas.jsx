@@ -48,6 +48,7 @@ export default function Empresas() {
 
   const cambiarPlan = (e, plan_id) => accion(() => api(`/admin/empresas/${e.id}/plan`, { method: 'POST', body: { plan_id: Number(plan_id) } }))
   const cambiarEstado = (e, estado) => accion(() => api(`/admin/empresas/${e.id}/estado`, { method: 'POST', body: { estado } }))
+  const cambiarModoCobro = (e, modo_cobro) => accion(() => api(`/admin/empresas/${e.id}/modo-cobro`, { method: 'POST', body: { modo_cobro } }))
 
   async function cambiarLimite(e) {
     const v = prompt(`Límite manual de clientes para ${e.nombre} (vacío = usar el del plan):`, e.limite_manual ?? '')
@@ -133,9 +134,12 @@ export default function Empresas() {
                       <option value="" disabled>—</option>
                       {planes.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                     </select>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {e.modo_cobro === 'prepago' ? '💰 pago por uso' : e.modo_cobro === 'prueba' ? '🎁 prueba gratis (15 días)' : '📅 membresía'}
-                    </p>
+                    <select value={e.modo_cobro ?? 'membresia'} onChange={(ev) => cambiarModoCobro(e, ev.target.value)}
+                      className="bg-transparent border-none text-xs text-slate-500 mt-1 p-0 focus:ring-0 cursor-pointer hover:text-slate-300">
+                      <option value="prueba">🎁 prueba gratis (15 días)</option>
+                      <option value="membresia">📅 membresía</option>
+                      <option value="prepago">💰 pago por uso</option>
+                    </select>
                   </td>
                   <td className="p-3">
                     {e.membresia_vence_at
