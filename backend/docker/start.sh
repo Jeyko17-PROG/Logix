@@ -60,5 +60,17 @@ echo "Lanzando worker de correos (queue:work)..."
   done
 ) &
 
+# Scheduler de Laravel (routes/console.php): sin esto, tareas programadas
+# como el recordatorio de membresía por vencer (8am/4pm) nunca se disparan
+# — no hay cron del sistema operativo dentro del contenedor.
+echo "Lanzando scheduler de Laravel (schedule:work)..."
+(
+  while true; do
+    php artisan schedule:work || true
+    echo "schedule:work terminó; reiniciando en 5s..."
+    sleep 5
+  done
+) &
+
 echo "=== Tareas completadas con éxito — Lanzando Apache ==="
 exec apache2-foreground
